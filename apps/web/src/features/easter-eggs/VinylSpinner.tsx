@@ -1,3 +1,11 @@
+/**
+ * The loading disc.
+ *
+ * Deliberately the same mark as the favicon in `public/disc.svg` rather than a second,
+ * prettier record drawn only for this: a loader that is recognisably the app's own icon reads
+ * as "Chorusify is working" instead of as generic spinner furniture. If the icon changes, this
+ * path is what has to change with it.
+ */
 export function VinylSpinner({ size = 40, text = 'Loading...' }: { size?: number; text?: string }) {
   return (
     <div className="flex flex-col items-center gap-3 cursor-vinyl">
@@ -8,36 +16,19 @@ export function VinylSpinner({ size = 40, text = 'Loading...' }: { size?: number
        * rather than a turntable.
        */}
       <svg
-        className="animate-spin motion-reduce:animate-none"
+        // text-white rather than bare currentColor: these sit inside slate-400 blocks, so
+        // inheriting would tint the disc grey against the dark background.
+        className="animate-spin text-white motion-reduce:animate-none"
         style={{ animationDuration: '1.5s' }}
         width={size}
         height={size}
-        viewBox="0 0 40 40"
+        viewBox="0 0 512 512"
+        fill="currentColor"
+        // The groove arc is off-centre, so a still frame looks lopsided rather than like a
+        // logo. Announced as a status image instead, and labelled by the text below.
+        role="presentation"
       >
-        {/* Outer disc */}
-        <circle cx="20" cy="20" r="19" fill="#1a1a1a" stroke="#333" strokeWidth="0.5" />
-        {/* Grooves */}
-        <circle cx="20" cy="20" r="16" fill="none" stroke="#252525" strokeWidth="0.4" />
-        <circle cx="20" cy="20" r="13" fill="none" stroke="#222" strokeWidth="0.4" />
-        <circle cx="20" cy="20" r="10" fill="none" stroke="#252525" strokeWidth="0.4" />
-        {/* Highlight */}
-        <path
-          d="M20 1 A19 19 0 0 1 39 20"
-          fill="none"
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth="1"
-        />
-        {/* Center label */}
-        <circle cx="20" cy="20" r="6" fill="#7c3aed" />
-        <circle cx="20" cy="20" r="6" fill="url(#vinyl-label-grad)" />
-        {/* Spindle hole */}
-        <circle cx="20" cy="20" r="2" fill="#111" />
-        <defs>
-          <radialGradient id="vinyl-label-grad" cx="40%" cy="40%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />
-            <stop offset="100%" stopColor="transparent" />
-          </radialGradient>
-        </defs>
+        <path d="M0 256a256 256 0 1 1 512 0A256 256 0 1 1 0 256zm256 32a32 32 0 1 1 0-64 32 32 0 1 1 0 64zm-96-32a96 96 0 1 0 192 0 96 96 0 1 0 -192 0zM96 240c0-35 17.5-71.1 45.2-98.8S205 96 240 96c8.8 0 16-7.2 16-16s-7.2-16-16-16c-45.4 0-89.2 22.3-121.5 54.5S64 194.6 64 240c0 8.8 7.2 16 16 16s16-7.2 16-16z" />
       </svg>
       {text && <span className="text-sm text-slate-400 animate-pulse">{text}</span>}
     </div>
