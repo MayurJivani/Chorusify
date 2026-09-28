@@ -38,7 +38,15 @@ import { HttpError } from '../middleware/errorHandler';
 
 export const categoriesRouter = Router();
 
-const categoryIdParamsSchema = z.object({ categoryId: z.string().min(1).max(64) });
+// A categoryId is either one slug or several joined with `+` (see CATEGORY_ID_SEPARATOR),
+// so the pattern and length allow for a handful of combined categories, not just one.
+const categoryIdParamsSchema = z.object({
+  categoryId: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[a-z0-9+-]+$/),
+});
 const challengeQuerySchema = z.object({
   playAgain: z
     .enum(['true', 'false'])
@@ -81,12 +89,12 @@ categoriesRouter.get('/', (_req, res) => {
   });
 });
 
-/** Resolves the slug, turning an unknown one into a 404 rather than a 500. */
+/** Resolves the slug (or combined slugs), turning a bad one into a 404 rather than a 500. */
 function sourceFor(categoryId: string) {
   try {
     return resolveCategorySource(categoryId);
-  } catch {
-    throw new HttpError(404, 'Unknown category');
+  } catch (err) {
+    throw new HttpError(404, err instanceof Error ? err.message : 'Unknown category');
   }
 }
 
