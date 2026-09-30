@@ -76,3 +76,39 @@ function formatShareDuration(seconds: number): string {
   const s = seconds % 60;
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
+
+/**
+ * A finished room's scoreboard.
+ *
+ * The one result in the game with a built-in audience: everyone in the room just played it, and
+ * up to now there was no way to post it. Ranked lines rather than an emoji grid because the
+ * story of a race is the standings, not one player's accuracy.
+ *
+ * No song titles, same as every other share here - a scoreboard that spoils the set list stops
+ * the person reading it from playing the same room.
+ */
+export function buildRoomShareText(input: {
+  /** "Queen", "Rock Essentials" - what the room raced over. */
+  subject: string;
+  standings: { displayName: string; score: number }[];
+  /** Highlighted in the list, so a reader can see how the sharer did. */
+  selfName?: string;
+  url?: string;
+}): string {
+  // Three medals then plain numbers; a 100-player room would otherwise be unpostable.
+  const MEDALS = ['🥇', '🥈', '🥉'];
+  const lines = input.standings.slice(0, 10).map((player, i) => {
+    const marker = MEDALS[i] ?? `${i + 1}.`;
+    const you = player.displayName === input.selfName ? ' ←' : '';
+    return `${marker} ${player.displayName} ${player.score}${you}`;
+  });
+
+  const others = input.standings.length - lines.length;
+  if (others > 0) lines.push(`+${others} more`);
+
+  return [
+    `Chorusify · ${input.subject} 🎵 ${input.standings.length} players`,
+    ...lines,
+    ...(input.url ? [input.url] : []),
+  ].join('\n');
+}

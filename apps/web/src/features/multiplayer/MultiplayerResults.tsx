@@ -5,6 +5,8 @@ import type { MultiplayerGameOver } from './useMultiplayerGame';
 import { MultiplayerScoreboard } from './MultiplayerScoreboard';
 import { SongPreviewButton } from '../game/SongPreviewButton';
 import { SourcePicker, type PickedSource } from './SourcePicker';
+import { buildRoomShareText } from '../stats/shareText';
+import { shareOrCopy } from '../stats/shareOrCopy';
 
 interface MultiplayerResultsProps {
   gameOver: MultiplayerGameOver;
@@ -30,6 +32,7 @@ export function MultiplayerResults({
   const [picking, setPicking] = useState(false);
   const [showSongs, setShowSongs] = useState(false);
   const [picked, setPicked] = useState<PickedSource | null>(null);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     if (!iWon) return;
@@ -40,6 +43,20 @@ export function MultiplayerResults({
       colors: ['#7c5cff', '#22d3ee', '#22c55e'],
     });
   }, [iWon]);
+
+  const handleShare = async () => {
+    const ok = await shareOrCopy(
+      buildRoomShareText({
+        subject: label,
+        standings: gameOver.scores,
+        selfName: gameOver.scores.find((s) => s.playerId === selfId)?.displayName,
+        url: 'https://chorusify.com',
+      }),
+    );
+    if (!ok) return;
+    setShared(true);
+    setTimeout(() => setShared(false), 2000);
+  };
 
   const confirmSource = () => {
     if (!picked) return;
@@ -153,6 +170,20 @@ export function MultiplayerResults({
       )}
 
       <div className="flex w-full max-w-xl flex-col gap-3">
+        {/*
+          Offered to everyone, not just the host. A finished room is the one result in the game
+          with an audience already assembled, and until now there was no way for any of them to
+          post it.
+        */}
+        <button
+          type="button"
+          onClick={handleShare}
+          className="btn-secondary w-full !rounded-xl"
+          aria-live="polite"
+        >
+          {shared ? 'Copied ✓' : 'Share the standings'}
+        </button>
+
         {canPlayAgain && !picking && (
           <>
             <button type="button" onClick={onPlayAgain} className="btn-primary w-full !rounded-xl">

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildShareText, buildRunShareText, buildSurvivalShareText } from './shareText';
+import {
+  buildShareText,
+  buildRunShareText,
+  buildSurvivalShareText,
+  buildRoomShareText,
+} from './shareText';
 import type { GuessAttempt } from '../game/useGameState';
 
 describe('buildShareText', () => {
@@ -114,5 +119,44 @@ describe('buildSurvivalShareText', () => {
   it('scales the flames with the streak, capped so it stays readable', () => {
     expect(buildSurvivalShareText(3)).toContain('🔥');
     expect([...buildSurvivalShareText(100)].filter((c) => c === '🔥')).toHaveLength(5);
+  });
+});
+
+describe('buildRoomShareText', () => {
+  const standings = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ displayName: `P${i + 1}`, score: 100 - i }));
+
+  it('medals the top three and marks the sharer', () => {
+    const text = buildRoomShareText({
+      subject: 'Queen',
+      standings: standings(4),
+      selfName: 'P3',
+    });
+
+    expect(text).toBe(
+      ['Chorusify · Queen 🎵 4 players', '🥇 P1 100', '🥈 P2 99', '🥉 P3 98 ←', '4. P4 97'].join(
+        '\n',
+      ),
+    );
+  });
+
+  it('caps a big room at ten and counts the rest', () => {
+    // A streamer's room would otherwise produce an unpostable wall of names.
+    const text = buildRoomShareText({ subject: 'Rock Essentials', standings: standings(100) });
+    const lines = text.split('\n');
+
+    expect(lines[0]).toContain('100 players');
+    expect(lines).toHaveLength(12); // header + 10 + "more"
+    expect(lines.at(-1)).toBe('+90 more');
+  });
+
+  it('never includes a song title, so the standings do not spoil the set list', () => {
+    const text = buildRoomShareText({
+      subject: 'Top Hits 2024',
+      standings: standings(2),
+      url: 'https://chorusify.com',
+    });
+    expect(text).toContain('https://chorusify.com');
+    expect(text).not.toMatch(/Espresso|Track/i);
   });
 });
