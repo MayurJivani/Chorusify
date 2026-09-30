@@ -15,9 +15,6 @@
 ![Postgres](https://img.shields.io/badge/Postgres-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 [![Last commit](https://img.shields.io/github/last-commit/MayurJivani/Chorus?style=flat-square)](https://github.com/MayurJivani/Chorus/commits/main)
-[![Stars](https://img.shields.io/github/stars/MayurJivani/Chorus?style=flat-square)](https://github.com/MayurJivani/Chorus/stargazers)
-[![Issues](https://img.shields.io/github/issues/MayurJivani/Chorus?style=flat-square)](https://github.com/MayurJivani/Chorus/issues)
-![Code size](https://img.shields.io/github/languages/code-size/MayurJivani/Chorus?style=flat-square)
 
 </div>
 
