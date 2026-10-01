@@ -20,6 +20,7 @@ describe('GET /api/stats/me', () => {
       maxStreak: 0,
       gamesPlayed: 0,
       gamesWon: 0,
+      perfectDays: 0,
       guessDistribution: [0, 0, 0, 0, 0, 0],
       lastPlayedDate: null,
       // Timing aggregates are null rather than 0 for someone with no history — a "0s fastest
@@ -42,8 +43,13 @@ describe('GET /api/stats/me', () => {
     await recordGameResult({
       ownerKey: guestId,
       puzzleDate: '2026-01-01',
-      won: true,
-      guessesUsed: 3,
+      slots: [
+        { won: true, guessesUsed: 3 },
+        { won: false, guessesUsed: 6 },
+        { won: false, guessesUsed: 6 },
+        { won: false, guessesUsed: 6 },
+        { won: false, guessesUsed: 6 },
+      ],
     });
 
     const res = await agent.get('/api/stats/me');
@@ -51,6 +57,7 @@ describe('GET /api/stats/me', () => {
     expect(res.body.currentStreak).toBe(1);
     expect(res.body.gamesPlayed).toBe(1);
     expect(res.body.gamesWon).toBe(1);
+    expect(res.body.perfectDays).toBe(0);
     expect(res.body.guessDistribution).toEqual([0, 0, 1, 0, 0, 0]);
   });
 });

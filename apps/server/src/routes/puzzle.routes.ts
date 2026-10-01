@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
-import { gameResults } from '../db/schema';
+import { gameResults, type DailyPuzzle } from '../db/schema';
 import {
-  getOrCreateDailyPuzzle,
+  getOrCreateDailyPuzzles,
   getElapsedPuzzleSeconds,
   getSongById,
   getUtcDateString,
@@ -13,7 +13,7 @@ import {
   MAX_GUESSES_LIMIT,
 } from '../services/puzzleService';
 import { isCorrectGuess, isFinalAttempt } from '../services/guessService';
-import { recordGameResult } from '../services/statsService';
+import { recordGameResult, getStats } from '../services/statsService';
 import { getFreshPreviewUrl } from '../services/deezerService';
 import { ensureDailyPlaylistsFresh } from '../services/dailyPlaylistService';
 import { validate } from '../middleware/validate';
@@ -26,22 +26,30 @@ import type { Request } from 'express';
 
 export const puzzleRouter = Router();
 
-async function findCompletedResult(puzzleId: number, req: Request) {
+/** Postgres's SQLSTATE for a unique-constraint violation. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505';
+}
+
+/** This player's results for today, keyed by which slot they belong to. */
+async function loadTodaysResults(puzzles: DailyPuzzle[], req: Request) {
   const { userId, guestId } = getIdentity(req);
-  if (userId) {
-    const rows = await db
-      .select()
-      .from(gameResults)
-      .where(and(eq(gameResults.puzzleId, puzzleId), eq(gameResults.userId, userId)))
-      .limit(1);
-    return rows[0];
-  }
+  const ownerFilter = userId
+    ? eq(gameResults.userId, userId)
+    : eq(gameResults.guestId, guestId ?? '');
   const rows = await db
     .select()
     .from(gameResults)
-    .where(and(eq(gameResults.puzzleId, puzzleId), eq(gameResults.guestId, guestId ?? '')))
-    .limit(1);
-  return rows[0];
+    .where(
+      and(
+        inArray(
+          gameResults.puzzleId,
+          puzzles.map((p) => p.id),
+        ),
+        ownerFilter,
+      ),
+    );
+  return new Map(rows.map((r) => [r.puzzleId, r]));
 }
 
 /** Whether a wrong guess at least picked a song by the same artist as the answer. Artist names
@@ -69,30 +77,45 @@ puzzleRouter.get(
   asyncHandler(async (req, res) => {
     await ensureDailyPlaylistsFresh();
     const puzzleDate = getUtcDateString();
-    const puzzle = await getOrCreateDailyPuzzle(puzzleDate);
-    const completed = await findCompletedResult(puzzle.id, req);
+    const puzzles = await getOrCreateDailyPuzzles(puzzleDate);
+    const resultsByPuzzleId = await loadTodaysResults(puzzles, req);
 
-    if (completed) {
+    const completedSlots = await Promise.all(
+      puzzles
+        .filter((p) => resultsByPuzzleId.has(p.id))
+        .map(async (p) => {
+          const result = resultsByPuzzleId.get(p.id)!;
+          return {
+            position: p.position,
+            won: result.won,
+            guessesUsed: result.guessesUsed,
+            song: await revealSong(p.songId),
+          };
+        }),
+    );
+
+    const current = puzzles.find((p) => !resultsByPuzzleId.has(p.id));
+
+    if (!current) {
       res.json({
-        puzzleId: puzzle.id,
         puzzleDate,
         completed: true,
-        won: completed.won,
-        guessesUsed: completed.guessesUsed,
-        song: await revealSong(puzzle.songId),
+        slots: completedSlots,
+        correctCount: completedSlots.filter((s) => s.won).length,
+        totalSlots: puzzles.length,
         snippetSchedule: await getSnippetSchedule(),
       });
       return;
     }
 
-    const song = await getSongById(puzzle.songId);
+    const song = await getSongById(current.songId);
     if (!song) {
       throw new HttpError(500, 'Puzzle song is missing from the song bank');
     }
 
-    // Start the clock the first time this player is handed a playable puzzle.
+    // Start the clock the first time this player is handed this slot.
     const { userId, guestId } = getIdentity(req);
-    await markPuzzleStarted(userId ?? guestId ?? req.session.guestId, puzzle.id);
+    await markPuzzleStarted(userId ?? guestId ?? req.session.guestId, current.id);
 
     // The stored preview_url is a curation-time snapshot — Deezer's signed preview links
     // expire in minutes, so the URL actually handed to a player is always fetched live.
@@ -102,9 +125,12 @@ puzzleRouter.get(
     }
 
     res.json({
-      puzzleId: puzzle.id,
+      puzzleId: current.id,
       puzzleDate,
       completed: false,
+      position: current.position,
+      totalSlots: puzzles.length,
+      completedSlots,
       previewUrl: fresh.previewUrl,
       snippetSchedule: await getSnippetSchedule(),
       maxGuesses: (await getSnippetSchedule()).length,
@@ -127,9 +153,13 @@ puzzleRouter.post(
   asyncHandler(async (req, res) => {
     await ensureDailyPlaylistsFresh();
     const puzzleDate = getUtcDateString();
-    const puzzle = await getOrCreateDailyPuzzle(puzzleDate);
+    const puzzles = await getOrCreateDailyPuzzles(puzzleDate);
+    const resultsByPuzzleId = await loadTodaysResults(puzzles, req);
+    // Never trust a client-supplied slot: the current slot is always the first one this player
+    // hasn't got a result for yet, so there's nothing to skip ahead to or replay.
+    const current = puzzles.find((p) => !resultsByPuzzleId.has(p.id));
 
-    if (await findCompletedResult(puzzle.id, req)) {
+    if (!current) {
       res.status(409).json({ error: "Today's puzzle has already been completed" });
       return;
     }
@@ -140,42 +170,72 @@ puzzleRouter.post(
       throw new HttpError(400, 'That guess number is past the end of the snippet schedule');
     }
 
-    const correct = songId !== undefined && isCorrectGuess(songId, puzzle.songId);
+    const correct = songId !== undefined && isCorrectGuess(songId, current.songId);
     const final = isFinalAttempt(guessNumber, correct, snippetSchedule.length);
+
+    let dayComplete = false;
+    let daySummary:
+      | { correctCount: number; totalSlots: number; currentStreak: number; maxStreak: number }
+      | undefined;
 
     if (final) {
       const { userId, guestId } = getIdentity(req);
       const ownerKey = userId ?? guestId ?? req.session.guestId;
-      const timeTakenSeconds = await getElapsedPuzzleSeconds(ownerKey, puzzle.id);
+      const timeTakenSeconds = await getElapsedPuzzleSeconds(ownerKey, current.id);
 
-      await recordGameResult({
-        ownerKey,
-        puzzleDate,
-        won: correct,
-        guessesUsed: guessNumber,
-      });
+      try {
+        await db.insert(gameResults).values({
+          userId,
+          guestId,
+          puzzleId: current.id,
+          won: correct,
+          guessesUsed: guessNumber,
+          snippetStageReached: guessNumber - 1,
+          timeTakenSeconds,
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          res.status(409).json({ error: "Today's puzzle has already been completed" });
+          return;
+        }
+        throw err;
+      }
 
-      await db.insert(gameResults).values({
-        userId,
-        guestId,
-        puzzleId: puzzle.id,
-        won: correct,
-        guessesUsed: guessNumber,
-        snippetStageReached: guessNumber - 1,
-        timeTakenSeconds,
-      });
+      // Only the request that inserts the day's last remaining slot ever sees every slot
+      // filled, so this fires the day-level stats update exactly once per day.
+      const todaysResults = await loadTodaysResults(puzzles, req);
+      if (todaysResults.size === puzzles.length) {
+        dayComplete = true;
+        const rows = [...todaysResults.values()];
+        await recordGameResult({
+          ownerKey,
+          puzzleDate,
+          slots: rows.map((r) => ({ won: r.won, guessesUsed: r.guessesUsed })),
+        });
+        const stats = await getStats(ownerKey);
+        daySummary = {
+          correctCount: rows.filter((r) => r.won).length,
+          totalSlots: puzzles.length,
+          currentStreak: stats?.currentStreak ?? 0,
+          maxStreak: stats?.maxStreak ?? 0,
+        };
+      }
     }
 
     res.json({
       correct,
       isFinal: final,
+      position: current.position,
+      totalSlots: puzzles.length,
       // "You had the right artist" is the one piece of feedback a snippet game can give that
       // actually narrows the search, and it costs nothing to compute. It is derived on the
       // server rather than by comparing artist strings in the browser, because the client is
-      // never told the answer's artist until the puzzle is over — sending it would hand over
+      // never told the answer's artist until the slot is over — sending it would hand over
       // the answer to anyone opening the network tab.
-      sameArtist: !correct && !final ? await isSameArtist(songId, puzzle.songId) : undefined,
-      song: final ? await revealSong(puzzle.songId) : undefined,
+      sameArtist: !correct && !final ? await isSameArtist(songId, current.songId) : undefined,
+      song: final ? await revealSong(current.songId) : undefined,
+      dayComplete: final ? dayComplete : undefined,
+      daySummary,
     });
   }),
 );

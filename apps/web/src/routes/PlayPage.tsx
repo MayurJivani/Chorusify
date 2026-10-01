@@ -3,6 +3,7 @@ import { useGameState } from '../features/game/useGameState';
 import { SnippetPlayer } from '../features/game/SnippetPlayer';
 import { SnippetProgressBar } from '../features/game/SnippetProgressBar';
 import { AttemptPips } from '../features/game/AttemptPips';
+import { SlotProgress } from '../features/game/SlotProgress';
 import { GuessHistory } from '../features/game/GuessHistory';
 import { GuessInput } from '../features/game/GuessInput';
 import { WinLoseOverlay } from '../features/game/WinLoseOverlay';
@@ -16,9 +17,13 @@ export function PlayPage() {
   const {
     status,
     puzzle,
+    position,
+    totalSlots,
+    completedSlots,
+    correctCount,
+    streak,
     attemptNumber,
     history,
-    revealedSong,
     errorMessage,
     submitting,
     guess,
@@ -62,7 +67,7 @@ export function PlayPage() {
     return <Centered>{errorMessage ?? 'Something went wrong.'}</Centered>;
   }
 
-  const isOver = status === 'won' || status === 'lost';
+  const isOver = status === 'day-complete';
   const lastAttempt = history[history.length - 1];
   const previewUrl = puzzle.completed ? null : puzzle.previewUrl;
   const stageSeconds = snippetSchedule[Math.min(attemptNumber, snippetSchedule.length) - 1] ?? 1;
@@ -79,6 +84,19 @@ export function PlayPage() {
           <span className="h-4 w-px bg-white/15" />
           <p className="text-xs text-slate-500 font-mono">{puzzle.puzzleDate}</p>
         </div>
+
+        {!isOver && (
+          <div className="flex flex-col items-center gap-1.5">
+            <p className="text-xs text-slate-500">
+              Song {position} of {totalSlots}
+            </p>
+            <SlotProgress
+              position={position}
+              totalSlots={totalSlots}
+              completedSlots={completedSlots}
+            />
+          </div>
+        )}
 
         <SnippetProgressBar stageIndex={attemptNumber - 1} />
 
@@ -119,13 +137,13 @@ export function PlayPage() {
         {errorMessage && <p className="text-sm text-chorusify-danger">{errorMessage}</p>}
       </div>
 
-      {isOver && revealedSong && (
+      {isOver && streak && (
         <WinLoseOverlay
-          won={status === 'won'}
-          song={revealedSong}
-          history={history}
+          slots={completedSlots}
+          correctCount={correctCount}
+          totalSlots={totalSlots}
           puzzleDate={puzzle.puzzleDate}
-          previewUrl={'previewUrl' in puzzle ? puzzle.previewUrl : undefined}
+          streak={streak}
         />
       )}
     </div>

@@ -7,8 +7,10 @@ import {
   gameResults,
   songs,
   survivalRuns,
+  userStats,
   users,
 } from '../../src/db/schema';
+import { recordGameResult } from '../../src/services/statsService';
 
 vi.mock('../../src/services/deezerService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/services/deezerService')>();
@@ -52,6 +54,7 @@ async function seedRun(opts: {
 
 beforeEach(async () => {
   await db.delete(gameResults);
+  await db.delete(userStats);
   await db.delete(dailyPuzzles);
   await db.delete(songs);
   await db.delete(survivalRuns);
@@ -242,32 +245,60 @@ describe('getProgress', () => {
   });
 
   it('counts daily wins, which are worth more than one song', async () => {
-    const [song] = await db
-      .insert(songs)
-      .values({
-        title: 'S',
-        artist: 'A',
-        deezerTrackId: 'prog-1',
-        previewUrl: 'x',
-        durationSeconds: 200,
-      })
-      .returning();
-    const [puzzle] = await db
-      .insert(dailyPuzzles)
-      .values({ puzzleDate: '2030-01-01', songId: song!.id })
-      .returning();
-    await db.insert(gameResults).values({
-      guestId: guest.guestId,
-      puzzleId: puzzle!.id,
-      won: true,
-      guessesUsed: 2,
-      snippetStageReached: 2,
+    // recordGameResult is what the daily route actually calls once a day's songs are all
+    // finished — it's the source of truth for progress.daily, not a raw game_results count.
+    await recordGameResult({
+      ownerKey: guest.guestId,
+      puzzleDate: '2030-01-01',
+      slots: [{ won: true, guessesUsed: 2 }],
     });
 
     const progress = await getProgress(guest);
 
     expect(progress.daily).toMatchObject({ played: 1, won: 1 });
     expect(progress.sources.dailyWins).toBe(25);
+  });
+
+  it('counts a multi-song day as one day played, not one per song', async () => {
+    // Regression guard: Daily mode now writes up to five game_results rows for a single day
+    // (one per song). progress.daily must still read "days played" off user_stats, which
+    // recordGameResult updates once per day — not derive it from a raw game_results count,
+    // which would silently read this as 5 days and inflate the daily-XP total 5x.
+    const [song] = await db
+      .insert(songs)
+      .values({
+        title: 'S',
+        artist: 'A',
+        deezerTrackId: 'prog-multi',
+        previewUrl: 'x',
+        durationSeconds: 200,
+      })
+      .returning();
+    const puzzles = await db
+      .insert(dailyPuzzles)
+      .values(
+        Array.from({ length: 5 }, (_, i) => ({
+          puzzleDate: '2030-02-01',
+          position: i + 1,
+          songId: song!.id,
+        })),
+      )
+      .returning();
+    await db.insert(gameResults).values(
+      puzzles.map((p) => ({
+        guestId: guest.guestId,
+        puzzleId: p.id,
+        won: true,
+        guessesUsed: 2,
+        snippetStageReached: 2,
+      })),
+    );
+
+    const progress = await getProgress(guest);
+
+    // No recordGameResult call was made, so user_stats has nothing for this owner yet.
+    expect(progress.daily).toMatchObject({ played: 0, won: 0 });
+    expect(progress.sources.dailyWins).toBe(0);
   });
 
   it('counts only this player, not everyone', async () => {

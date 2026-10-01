@@ -110,6 +110,14 @@ export function StatsPage() {
         <Stat label="Best" value={stats.maxStreak} />
       </motion.div>
 
+      {/* A win only needs one song of five; a perfect day is the stricter, rarer thing worth
+          calling out on its own rather than folding into the win-rate tile above. */}
+      {stats.perfectDays > 0 && (
+        <p className="text-xs text-slate-500">
+          {stats.perfectDays} perfect {stats.perfectDays === 1 ? 'day' : 'days'} (all 5 correct)
+        </p>
+      )}
+
       {/* Timing. Hidden entirely rather than shown as a row of dashes when no finished puzzle
           has a recorded time yet - every value here would be empty. */}
       {timed && (

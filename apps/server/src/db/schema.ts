@@ -28,13 +28,16 @@ export const dailyPuzzles = pgTable(
   'daily_puzzles',
   {
     id: serial('id').primaryKey(),
-    puzzleDate: text('puzzle_date').notNull().unique(),
+    puzzleDate: text('puzzle_date').notNull(),
+    // Which of the day's songs this is (1..SLOTS_PER_DAY in puzzleService.ts). A day used to be
+    // one song, one row; it's now a small sequence, so the date alone no longer identifies a row.
+    position: integer('position').notNull().default(1),
     songId: integer('song_id')
       .notNull()
       .references(() => songs.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('daily_puzzles_date_idx').on(table.puzzleDate)],
+  (table) => [uniqueIndex('daily_puzzles_date_position_idx').on(table.puzzleDate, table.position)],
 );
 
 export const users = pgTable('users', {
@@ -135,6 +138,10 @@ export const userStats = pgTable('user_stats', {
   maxStreak: integer('max_streak').notNull().default(0),
   gamesPlayed: integer('games_played').notNull().default(0),
   gamesWon: integer('games_won').notNull().default(0),
+  // A day where every one of SLOTS_PER_DAY songs was guessed correctly. A subset of gamesWon
+  // (which only requires >=1 correct), tracked separately so "partial win" (gamesWon -
+  // perfectDays) and "perfect day" are both visible without a third stored counter.
+  perfectDays: integer('perfect_days').notNull().default(0),
   guessDist1: integer('guess_dist_1').notNull().default(0),
   guessDist2: integer('guess_dist_2').notNull().default(0),
   guessDist3: integer('guess_dist_3').notNull().default(0),

@@ -12,11 +12,11 @@
  */
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { artistTrackPools, dailyPuzzles, gameResults, songs, users } from '../db/schema';
 import { CATEGORIES, findCategory, isSoundtrackCategory } from '../services/categories';
-import { getUtcDateString, previewUpcomingPuzzles } from '../services/puzzleService';
+import { getUtcDateString, previewUpcomingPuzzles, SLOTS_PER_DAY } from '../services/puzzleService';
 import {
   describeSettings,
   resetSetting,
@@ -42,6 +42,11 @@ const dateParamsSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected a YYYY-MM-DD date'),
 });
 
+// A date now holds up to SLOTS_PER_DAY songs, so editing one needs to say which.
+const slotParamsSchema = dateParamsSchema.extend({
+  position: z.coerce.number().int().min(1).max(SLOTS_PER_DAY),
+});
+
 const listQuerySchema = z.object({
   from: z
     .string()
@@ -64,6 +69,7 @@ adminRouter.get(
       .select({
         id: dailyPuzzles.id,
         puzzleDate: dailyPuzzles.puzzleDate,
+        position: dailyPuzzles.position,
         songId: songs.id,
         title: songs.title,
         artist: songs.artist,
@@ -77,7 +83,7 @@ adminRouter.get(
       .from(dailyPuzzles)
       .innerJoin(songs, eq(songs.id, dailyPuzzles.songId))
       .where(from ? gte(dailyPuzzles.puzzleDate, from) : undefined)
-      .orderBy(desc(dailyPuzzles.puzzleDate))
+      .orderBy(desc(dailyPuzzles.puzzleDate), asc(dailyPuzzles.position))
       .limit(limit);
 
     res.json({ today: getUtcDateString(), puzzles: rows });
@@ -119,10 +125,12 @@ async function countPlays(puzzleId: number): Promise<number> {
 }
 
 /**
- * Rejects any edit that would rewrite history: a past date, or a puzzle somebody has finished.
+ * Rejects any edit that would rewrite history: a past date, or a slot somebody has already
+ * played. Locking is per-slot, not per-date — each position is its own independent puzzle with
+ * its own players, so one played song shouldn't block editing an untouched one next to it.
  * Returns the existing row (if any) so callers don't have to look it up twice.
  */
-async function assertEditable(date: string) {
+async function assertEditable(date: string, position: number) {
   if (date < getUtcDateString()) {
     throw new HttpError(409, 'That date has already passed, past puzzles are read-only');
   }
@@ -130,7 +138,7 @@ async function assertEditable(date: string) {
   const rows = await db
     .select()
     .from(dailyPuzzles)
-    .where(eq(dailyPuzzles.puzzleDate, date))
+    .where(and(eq(dailyPuzzles.puzzleDate, date), eq(dailyPuzzles.position, position)))
     .limit(1);
   const existing = rows[0];
   if (!existing) return null;
@@ -139,22 +147,22 @@ async function assertEditable(date: string) {
   if (plays > 0) {
     throw new HttpError(
       409,
-      `${plays} ${plays === 1 ? 'person has' : 'people have'} already played that puzzle, it can no longer be changed`,
+      `${plays} ${plays === 1 ? 'person has' : 'people have'} already played that song, it can no longer be changed`,
     );
   }
   return existing;
 }
 
-/** Schedules (or re-points) the puzzle for a date. */
+/** Schedules (or re-points) one song slot for a date. */
 adminRouter.put(
-  '/daily-puzzles/:date',
-  validate(dateParamsSchema, 'params'),
+  '/daily-puzzles/:date/:position',
+  validate(slotParamsSchema, 'params'),
   validate(z.object({ songId: z.number().int().positive() })),
   asyncHandler(async (req, res) => {
-    const { date } = req.params as unknown as z.infer<typeof dateParamsSchema>;
+    const { date, position } = req.params as unknown as z.infer<typeof slotParamsSchema>;
     const { songId } = req.body as { songId: number };
 
-    const existing = await assertEditable(date);
+    const existing = await assertEditable(date, position);
 
     const songRows = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
     const song = songRows[0];
@@ -166,29 +174,30 @@ adminRouter.put(
     if (existing) {
       await db.update(dailyPuzzles).set({ songId }).where(eq(dailyPuzzles.id, existing.id));
     } else {
-      await db.insert(dailyPuzzles).values({ puzzleDate: date, songId });
+      await db.insert(dailyPuzzles).values({ puzzleDate: date, position, songId });
     }
 
     res.json({
       ok: true,
       puzzleDate: date,
+      position,
       song: { id: song.id, title: song.title, artist: song.artist },
     });
   }),
 );
 
 /**
- * Unschedules a date. The automatic picker fills it back in the next time anyone opens that
- * day, so this is "re-roll this day", not "delete the day".
+ * Unschedules one slot. The automatic picker fills it back in the next time anyone opens that
+ * day, so this is "re-roll this song", not "delete the day".
  */
 adminRouter.delete(
-  '/daily-puzzles/:date',
-  validate(dateParamsSchema, 'params'),
+  '/daily-puzzles/:date/:position',
+  validate(slotParamsSchema, 'params'),
   asyncHandler(async (req, res) => {
-    const { date } = req.params as unknown as z.infer<typeof dateParamsSchema>;
+    const { date, position } = req.params as unknown as z.infer<typeof slotParamsSchema>;
 
-    const existing = await assertEditable(date);
-    if (!existing) throw new HttpError(404, 'Nothing is scheduled for that date');
+    const existing = await assertEditable(date, position);
+    if (!existing) throw new HttpError(404, 'Nothing is scheduled for that slot');
 
     await db.delete(dailyPuzzles).where(eq(dailyPuzzles.id, existing.id));
     res.json({ ok: true });
@@ -254,29 +263,42 @@ adminRouter.get(
       : [];
     const byId = new Map(songRows.map((row) => [row.id, row]));
 
-    res.json({
-      today: getUtcDateString(),
-      days: upcoming.map((u) => ({
-        puzzleDate: u.puzzleDate,
-        scheduled: u.scheduled,
-        song: u.songId == null ? null : (byId.get(u.songId) ?? null),
-      })),
-    });
+    // previewUpcomingPuzzles returns one entry per slot, already in (date, position) order;
+    // grouped here so the response is still "one entry per day" the way it was before slots.
+    const byDate = new Map<string, { puzzleDate: string; slots: unknown[] }>();
+    for (const slot of upcoming) {
+      const day = byDate.get(slot.puzzleDate) ?? { puzzleDate: slot.puzzleDate, slots: [] };
+      day.slots.push({
+        position: slot.position,
+        scheduled: slot.scheduled,
+        song: slot.songId == null ? null : (byId.get(slot.songId) ?? null),
+      });
+      byDate.set(slot.puzzleDate, day);
+    }
+
+    res.json({ today: getUtcDateString(), days: [...byDate.values()] });
   }),
 );
 
 /**
- * Re-rolls a date onto a different song, chosen at random from the eligible pool.
+ * Re-rolls one slot onto a different song, chosen at random from the eligible pool.
  *
- * Deliberately excludes whatever the day currently holds, so pressing it always visibly does
- * something — a "shuffle" that can hand back the same song reads as broken.
+ * Deliberately excludes whatever the slot currently holds, and whatever the date's other slots
+ * hold, so pressing it always visibly does something — a "shuffle" that can hand back a song
+ * already sitting elsewhere that same day reads as broken.
  */
 adminRouter.post(
-  '/daily-puzzles/:date/randomize',
-  validate(dateParamsSchema, 'params'),
+  '/daily-puzzles/:date/:position/randomize',
+  validate(slotParamsSchema, 'params'),
   asyncHandler(async (req, res) => {
-    const { date } = req.params as unknown as z.infer<typeof dateParamsSchema>;
-    const existing = await assertEditable(date);
+    const { date, position } = req.params as unknown as z.infer<typeof slotParamsSchema>;
+    const existing = await assertEditable(date, position);
+
+    const siblingRows = await db
+      .select({ songId: dailyPuzzles.songId })
+      .from(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.puzzleDate, date), ne(dailyPuzzles.position, position)));
+    const siblingIds = new Set(siblingRows.map((r) => r.songId));
 
     const eligible = await db
       .select({ id: songs.id, title: songs.title, artist: songs.artist })
@@ -291,7 +313,9 @@ adminRouter.post(
             .from(songs)
             .where(eq(songs.active, true));
 
-    const candidates = pool.filter((song) => song.id !== existing?.songId);
+    const candidates = pool.filter(
+      (song) => song.id !== existing?.songId && !siblingIds.has(song.id),
+    );
     if (candidates.length === 0) {
       throw new HttpError(409, 'There is no other song available to swap in');
     }
@@ -304,10 +328,10 @@ adminRouter.post(
         .set({ songId: chosen.id })
         .where(eq(dailyPuzzles.id, existing.id));
     } else {
-      await db.insert(dailyPuzzles).values({ puzzleDate: date, songId: chosen.id });
+      await db.insert(dailyPuzzles).values({ puzzleDate: date, position, songId: chosen.id });
     }
 
-    res.json({ ok: true, puzzleDate: date, song: chosen });
+    res.json({ ok: true, puzzleDate: date, position, song: chosen });
   }),
 );
 

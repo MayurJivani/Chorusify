@@ -1,8 +1,11 @@
 import { and, asc, desc, eq, gte } from 'drizzle-orm';
 import { db } from '../db/client';
-import { dailyPuzzles, dailyPuzzleStarts, songs } from '../db/schema';
+import { dailyPuzzles, dailyPuzzleStarts, songs, type DailyPuzzle } from '../db/schema';
 import { hashString } from '../utils/deterministic';
 import { getSettings } from './settingsService';
+
+/** A daily session is this many songs, Songless-style, not one. */
+export const SLOTS_PER_DAY = 5;
 
 /**
  * The default snippet schedule: seconds of audio revealed at each guess stage, Heardle-style.
@@ -55,14 +58,16 @@ async function selectPool(curatedOnly: boolean) {
 }
 
 /**
- * Which song the automatic picker would choose for a date, given what has been used recently.
+ * Which song the automatic picker would choose for a given seed, given what has been used
+ * recently. The seed is a date for a single-slot pick, or `${date}#${position}` for one slot of
+ * a multi-song day — the function only hashes it, so it doesn't need to know which.
  *
- * Pulled out of `getOrCreateDailyPuzzle` so the admin page can *project* upcoming days without
+ * Pulled out of `getOrCreateDailyPuzzles` so the admin page can *project* upcoming days without
  * creating rows for them. Creating a row to find out what it would be is not a preview: it
- * pins the answer and, worse, feeds the recently-used window for every day after it.
+ * pins the answer and, worse, feeds the recently-used window for every slot after it.
  */
 export function pickSongForDate(
-  puzzleDate: string,
+  seed: string,
   activeSongIds: readonly number[],
   recentlyUsedIds: ReadonlySet<number>,
 ): number | null {
@@ -71,7 +76,7 @@ export function pickSongForDate(
   const candidates = activeSongIds.filter((id) => !recentlyUsedIds.has(id));
   const pool = candidates.length > 0 ? candidates : activeSongIds;
 
-  return pool[hashString(puzzleDate) % pool.length] ?? null;
+  return pool[hashString(seed) % pool.length] ?? null;
 }
 
 /** The eligible song ids, honouring the curated-only setting with its degrade-not-fail fallback. */
@@ -82,23 +87,24 @@ async function eligibleSongIds(): Promise<number[]> {
   return active.map((s) => s.id);
 }
 
-export interface UpcomingPuzzle {
+export interface UpcomingSlot {
   puzzleDate: string;
+  position: number;
   songId: number | null;
-  /** True when a row already exists, i.e. someone played that day or an admin pinned it.
+  /** True when a row already exists, i.e. someone played that slot or an admin pinned it.
    *  False means this is what the picker *would* choose, and is still free to change. */
   scheduled: boolean;
 }
 
 /**
- * What the next `days` days will play, projected forward from today.
+ * What the next `days` days will play, projected forward from today, one entry per song slot.
  *
- * The projection has to be sequential, not per-date: each day the picker excludes recently used
- * songs, so day three's answer depends on what days one and two took. Simulating them in order
+ * The projection has to be sequential, not per-slot: each slot the picker excludes recently used
+ * songs, so day three's answers depend on what days one and two took. Simulating them in order
  * with a running window is the only way to preview honestly — asking "what would day three be"
- * in isolation would ignore the two days about to be created before it.
+ * in isolation would ignore the slots about to be created before it.
  */
-export async function previewUpcomingPuzzles(days = 14): Promise<UpcomingPuzzle[]> {
+export async function previewUpcomingPuzzles(days = 14): Promise<UpcomingSlot[]> {
   const activeSongIds = await eligibleSongIds();
   const recentWindow = Math.max(0, activeSongIds.length - 1);
 
@@ -107,49 +113,67 @@ export async function previewUpcomingPuzzles(days = 14): Promise<UpcomingPuzzle[
       ? await db
           .select({ songId: dailyPuzzles.songId })
           .from(dailyPuzzles)
-          .orderBy(desc(dailyPuzzles.puzzleDate))
+          .orderBy(desc(dailyPuzzles.puzzleDate), desc(dailyPuzzles.position))
           .limit(recentWindow)
       : [];
 
   // A queue rather than a set, so the window can drop its oldest entry as the projection walks
-  // forward — exactly what the real picker's `LIMIT recentWindow` does day to day.
+  // forward — exactly what the real picker's `LIMIT recentWindow` does slot to slot.
   const window: number[] = alreadyUsed.map((r) => r.songId);
 
   const today = new Date(`${getUtcDateString()}T00:00:00Z`);
   const pinned = await db
-    .select({ puzzleDate: dailyPuzzles.puzzleDate, songId: dailyPuzzles.songId })
+    .select({
+      puzzleDate: dailyPuzzles.puzzleDate,
+      position: dailyPuzzles.position,
+      songId: dailyPuzzles.songId,
+    })
     .from(dailyPuzzles)
     .where(gte(dailyPuzzles.puzzleDate, getUtcDateString()));
-  const pinnedByDate = new Map(pinned.map((p) => [p.puzzleDate, p.songId]));
+  const pinnedByKey = new Map(pinned.map((p) => [`${p.puzzleDate}#${p.position}`, p.songId]));
 
-  const result: UpcomingPuzzle[] = [];
+  const result: UpcomingSlot[] = [];
   for (let offset = 0; offset < days; offset += 1) {
     const date = new Date(today.getTime() + offset * 24 * 60 * 60 * 1000);
     const puzzleDate = getUtcDateString(date);
+    // A day's own slots can't repeat each other, same as the real picker.
+    const pickedThisDay = new Set<number>();
 
-    const existing = pinnedByDate.get(puzzleDate);
-    const songId =
-      existing ??
-      pickSongForDate(puzzleDate, activeSongIds, new Set(window.slice(0, recentWindow)));
+    for (let position = 1; position <= SLOTS_PER_DAY; position += 1) {
+      const seed = `${puzzleDate}#${position}`;
+      const existing = pinnedByKey.get(seed);
+      const exclude = new Set([...window.slice(0, recentWindow), ...pickedThisDay]);
+      const songId = existing ?? pickSongForDate(seed, activeSongIds, exclude);
 
-    result.push({ puzzleDate, songId: songId ?? null, scheduled: existing != null });
+      result.push({ puzzleDate, position, songId: songId ?? null, scheduled: existing != null });
 
-    // Whatever that day takes becomes the newest entry of the window the next day sees.
-    if (songId != null) window.unshift(songId);
+      // Whatever that slot takes becomes the newest entry of the window the next slot sees.
+      if (songId != null) {
+        window.unshift(songId);
+        pickedThisDay.add(songId);
+      }
+    }
   }
 
   return result;
 }
 
-export async function getOrCreateDailyPuzzle(puzzleDate: string) {
+/**
+ * The day's songs, in position order, creating any that don't exist yet.
+ *
+ * Each missing position is filled independently (same race-safe `onConflictDoNothing` pattern
+ * the single-song version used), excluding both the cross-day "recently used" window below and
+ * whatever this same call has already picked for an earlier position today — a day's five songs
+ * must be distinct from each other, not just from recent days.
+ */
+export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<DailyPuzzle[]> {
   const existingRows = await db
     .select()
     .from(dailyPuzzles)
     .where(eq(dailyPuzzles.puzzleDate, puzzleDate))
-    .limit(1);
-  const existing = existingRows[0];
-  if (existing) {
-    return existing;
+    .orderBy(asc(dailyPuzzles.position));
+  if (existingRows.length >= SLOTS_PER_DAY) {
+    return existingRows;
   }
 
   // The bank holds two very different populations: a hand-curated all-time list
@@ -165,7 +189,7 @@ export async function getOrCreateDailyPuzzle(puzzleDate: string) {
   }
 
   // Never repeat a song until every other active song has had a turn: exclude whatever was
-  // used in the most recent (activeCount - 1) days from today's candidate pool. This window
+  // used in the most recent (activeCount - 1) slots from today's candidate pool. This window
   // is recomputed from the *current* active count every call, so it self-heals as songs are
   // added/deactivated by the curation scripts over time.
   const recentWindow = Math.max(0, activeSongIds.length - 1);
@@ -174,40 +198,50 @@ export async function getOrCreateDailyPuzzle(puzzleDate: string) {
       ? await db
           .select({ songId: dailyPuzzles.songId })
           .from(dailyPuzzles)
-          .orderBy(desc(dailyPuzzles.puzzleDate))
+          .orderBy(desc(dailyPuzzles.puzzleDate), desc(dailyPuzzles.position))
           .limit(recentWindow)
       : [];
   const recentlyUsedIds = new Set(recentlyUsed.map((r) => r.songId));
 
-  const chosenId = pickSongForDate(puzzleDate, activeSongIds, recentlyUsedIds);
-  if (chosenId == null) {
-    throw new Error('Failed to select a song for the daily puzzle');
+  const existingPositions = new Set(existingRows.map((r) => r.position));
+  const pickedThisDay = new Set(existingRows.map((r) => r.songId));
+  const rows: DailyPuzzle[] = [...existingRows];
+
+  for (let position = 1; position <= SLOTS_PER_DAY; position += 1) {
+    if (existingPositions.has(position)) continue;
+
+    const exclude = new Set([...recentlyUsedIds, ...pickedThisDay]);
+    const chosenId = pickSongForDate(`${puzzleDate}#${position}`, activeSongIds, exclude);
+    if (chosenId == null) {
+      throw new Error('Failed to select a song for the daily puzzle');
+    }
+
+    // At the UTC rollover several players hit this path at once. The (date, position) pair is
+    // unique, so only one insert per slot can win; the losers get no row back and simply read
+    // the winner's pick instead of erroring — everyone still ends up on the same five songs.
+    const insertedRows = await db
+      .insert(dailyPuzzles)
+      .values({ puzzleDate, position, songId: chosenId })
+      .onConflictDoNothing({ target: [dailyPuzzles.puzzleDate, dailyPuzzles.position] })
+      .returning();
+    const row =
+      insertedRows[0] ??
+      (
+        await db
+          .select()
+          .from(dailyPuzzles)
+          .where(and(eq(dailyPuzzles.puzzleDate, puzzleDate), eq(dailyPuzzles.position, position)))
+          .limit(1)
+      )[0];
+    if (!row) {
+      throw new Error('Failed to create the daily puzzle');
+    }
+
+    rows.push(row);
+    pickedThisDay.add(row.songId);
   }
 
-  // At the UTC rollover several players hit this path at once. `puzzle_date` is unique, so
-  // only one insert can win; the losers get no row back and simply read the winner's puzzle
-  // instead of erroring — everyone still ends up on the same song.
-  const insertedRows = await db
-    .insert(dailyPuzzles)
-    .values({ puzzleDate, songId: chosenId })
-    .onConflictDoNothing({ target: dailyPuzzles.puzzleDate })
-    .returning();
-  const inserted = insertedRows[0];
-  if (inserted) {
-    return inserted;
-  }
-
-  const racedRows = await db
-    .select()
-    .from(dailyPuzzles)
-    .where(eq(dailyPuzzles.puzzleDate, puzzleDate))
-    .limit(1);
-  const raced = racedRows[0];
-  if (!raced) {
-    throw new Error('Failed to create the daily puzzle');
-  }
-
-  return raced;
+  return rows.sort((a, b) => a.position - b.position);
 }
 
 /**

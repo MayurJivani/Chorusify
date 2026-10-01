@@ -25,22 +25,33 @@ export interface RevealedSong {
   albumArtUrl: string | null;
 }
 
+/** One of today's finished songs, for the running recap and the day-end share grid. */
+export interface DailySlotRecap {
+  position: number;
+  won: boolean;
+  guessesUsed: number;
+  song: RevealedSong;
+}
+
 export interface PuzzleInProgress {
   puzzleId: number;
   puzzleDate: string;
   completed: false;
+  position: number;
+  totalSlots: number;
+  /** Today's songs finished so far, in position order. */
+  completedSlots: DailySlotRecap[];
   previewUrl: string;
   snippetSchedule: readonly number[];
   maxGuesses: number;
 }
 
 export interface PuzzleCompleted {
-  puzzleId: number;
   puzzleDate: string;
   completed: true;
-  won: boolean;
-  guessesUsed: number;
-  song: RevealedSong;
+  slots: DailySlotRecap[];
+  correctCount: number;
+  totalSlots: number;
   snippetSchedule: readonly number[];
 }
 
@@ -49,9 +60,19 @@ export type PuzzleResponse = PuzzleInProgress | PuzzleCompleted;
 export interface GuessResult {
   correct: boolean;
   isFinal: boolean;
+  position: number;
+  totalSlots: number;
   /** Set on a non-final wrong guess: the guess named a different song by the right artist. */
   sameArtist?: boolean;
   song?: RevealedSong;
+  /** True once this guess finished the day's last remaining slot. */
+  dayComplete?: boolean;
+  daySummary?: {
+    correctCount: number;
+    totalSlots: number;
+    currentStreak: number;
+    maxStreak: number;
+  };
 }
 
 export interface SongSearchResult {
@@ -69,6 +90,9 @@ export interface StatsResponse {
   maxStreak: number;
   gamesPlayed: number;
   gamesWon: number;
+  /** Subset of gamesWon: days where every song was correct. "Partial win" days are
+   *  gamesWon - perfectDays, derived rather than stored separately. */
+  perfectDays: number;
   guessDistribution: number[];
   lastPlayedDate: string | null;
   /** Null until at least one puzzle has been finished with timing recorded. */
@@ -565,6 +589,8 @@ export interface AdminDailyPuzzle {
   /** The puzzle row's id; the song it points at is `songId`. */
   id: number;
   puzzleDate: string;
+  /** Which of the day's songs this is, 1..SLOTS_PER_DAY. */
+  position: number;
   songId: number;
   title: string;
   artist: string;
@@ -607,11 +633,16 @@ export interface SettingDescriptor {
   control: SettingControl;
 }
 
-export interface UpcomingDay {
-  puzzleDate: string;
+export interface UpcomingSlot {
+  position: number;
   /** True when a row exists (played or pinned); false means it is still just a projection. */
   scheduled: boolean;
   song: { id: number; title: string; artist: string; albumArtUrl: string | null } | null;
+}
+
+export interface UpcomingDay {
+  puzzleDate: string;
+  slots: UpcomingSlot[];
 }
 
 export interface UpcomingSchedule {

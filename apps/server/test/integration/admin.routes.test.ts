@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { createApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import {
@@ -112,12 +112,17 @@ describe('admin route access', () => {
 });
 
 describe('GET /api/admin/daily-puzzles', () => {
-  it('lists the schedule with each puzzle’s play count', async () => {
+  it('lists the schedule with each song’s position and play count', async () => {
     const { agent, userId } = await signIn('boss@example.test', true);
     await seedSong(1, 'Scheduled Song');
+    await seedSong(2, 'Second Song');
+    const date = dateOffsetDays(1);
     const inserted = await db
       .insert(dailyPuzzles)
-      .values({ puzzleDate: dateOffsetDays(1), songId: 1 })
+      .values([
+        { puzzleDate: date, position: 1, songId: 1 },
+        { puzzleDate: date, position: 2, songId: 2 },
+      ])
       .returning();
     await db.insert(gameResults).values({
       userId,
@@ -131,59 +136,62 @@ describe('GET /api/admin/daily-puzzles', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.today).toBe(getUtcDateString());
-    expect(res.body.puzzles).toHaveLength(1);
-    expect(res.body.puzzles[0]).toMatchObject({
-      title: 'Scheduled Song',
-      songId: 1,
-      plays: 1,
-    });
+    expect(res.body.puzzles).toHaveLength(2);
+    expect(res.body.puzzles[0]).toMatchObject({ position: 1, title: 'Scheduled Song', plays: 1 });
+    expect(res.body.puzzles[1]).toMatchObject({ position: 2, title: 'Second Song', plays: 0 });
     // COUNT(*) comes back as a string from postgres-js unless it is cast, and the UI does
     // arithmetic on this.
     expect(typeof res.body.puzzles[0].plays).toBe('number');
   });
 });
 
-describe('PUT /api/admin/daily-puzzles/:date', () => {
-  it('schedules a future date', async () => {
+describe('PUT /api/admin/daily-puzzles/:date/:position', () => {
+  it('schedules a slot on a future date', async () => {
     const { agent, csrf } = await signIn('boss@example.test', true);
     await seedSong(1, 'Tomorrow’s Song');
     const date = dateOffsetDays(3);
 
     const res = await agent
-      .put(`/api/admin/daily-puzzles/${date}`)
+      .put(`/api/admin/daily-puzzles/${date}/1`)
       .set('X-CSRF-Token', csrf)
       .send({ songId: 1 });
 
     expect(res.status).toBe(200);
-    const rows = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.puzzleDate, date));
+    const rows = await db
+      .select()
+      .from(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.puzzleDate, date), eq(dailyPuzzles.position, 1)));
     expect(rows[0]?.songId).toBe(1);
   });
 
-  it('replaces the song on an unplayed future date', async () => {
+  it('replaces the song on an unplayed slot', async () => {
     const { agent, csrf } = await signIn('boss@example.test', true);
     await seedSong(1, 'First');
     await seedSong(2, 'Second');
     const date = dateOffsetDays(3);
-    await db.insert(dailyPuzzles).values({ puzzleDate: date, songId: 1 });
+    await db.insert(dailyPuzzles).values({ puzzleDate: date, position: 1, songId: 1 });
 
     const res = await agent
-      .put(`/api/admin/daily-puzzles/${date}`)
+      .put(`/api/admin/daily-puzzles/${date}/1`)
       .set('X-CSRF-Token', csrf)
       .send({ songId: 2 });
 
     expect(res.status).toBe(200);
-    const rows = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.puzzleDate, date));
+    const rows = await db
+      .select()
+      .from(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.puzzleDate, date), eq(dailyPuzzles.position, 1)));
     expect(rows[0]?.songId).toBe(2);
   });
 
-  it('refuses to rewrite a puzzle people have already played', async () => {
+  it('refuses to rewrite a song people have already played', async () => {
     const { agent, csrf, userId } = await signIn('boss@example.test', true);
     await seedSong(1, 'Played');
     await seedSong(2, 'Replacement');
     const date = dateOffsetDays(1);
     const inserted = await db
       .insert(dailyPuzzles)
-      .values({ puzzleDate: date, songId: 1 })
+      .values({ puzzleDate: date, position: 1, songId: 1 })
       .returning();
     await db.insert(gameResults).values({
       userId,
@@ -194,13 +202,51 @@ describe('PUT /api/admin/daily-puzzles/:date', () => {
     });
 
     const res = await agent
-      .put(`/api/admin/daily-puzzles/${date}`)
+      .put(`/api/admin/daily-puzzles/${date}/1`)
       .set('X-CSRF-Token', csrf)
       .send({ songId: 2 });
 
     expect(res.status).toBe(409);
-    const rows = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.puzzleDate, date));
+    const rows = await db
+      .select()
+      .from(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.puzzleDate, date), eq(dailyPuzzles.position, 1)));
     expect(rows[0]?.songId).toBe(1);
+  });
+
+  it('leaves a sibling slot on the same date editable when one slot is locked', async () => {
+    const { agent, csrf, userId } = await signIn('boss@example.test', true);
+    await seedSong(1, 'Played');
+    await seedSong(2, 'Untouched');
+    await seedSong(3, 'Replacement');
+    const date = dateOffsetDays(1);
+    const inserted = await db
+      .insert(dailyPuzzles)
+      .values([
+        { puzzleDate: date, position: 1, songId: 1 },
+        { puzzleDate: date, position: 2, songId: 2 },
+      ])
+      .returning();
+    await db.insert(gameResults).values({
+      userId,
+      puzzleId: inserted[0]!.id,
+      won: true,
+      guessesUsed: 1,
+      snippetStageReached: 1,
+    });
+
+    // Position 1 is locked (played), but position 2 on the same date never was.
+    const res = await agent
+      .put(`/api/admin/daily-puzzles/${date}/2`)
+      .set('X-CSRF-Token', csrf)
+      .send({ songId: 3 });
+
+    expect(res.status).toBe(200);
+    const rows = await db
+      .select()
+      .from(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.puzzleDate, date), eq(dailyPuzzles.position, 2)));
+    expect(rows[0]?.songId).toBe(3);
   });
 
   it('refuses to touch a past date', async () => {
@@ -208,7 +254,7 @@ describe('PUT /api/admin/daily-puzzles/:date', () => {
     await seedSong(1, 'Yesterday');
 
     const res = await agent
-      .put(`/api/admin/daily-puzzles/${dateOffsetDays(-1)}`)
+      .put(`/api/admin/daily-puzzles/${dateOffsetDays(-1)}/1`)
       .set('X-CSRF-Token', csrf)
       .send({ songId: 1 });
 
@@ -220,22 +266,34 @@ describe('PUT /api/admin/daily-puzzles/:date', () => {
     await seedSong(1, 'Withdrawn', true, false);
 
     const res = await agent
-      .put(`/api/admin/daily-puzzles/${dateOffsetDays(2)}`)
+      .put(`/api/admin/daily-puzzles/${dateOffsetDays(2)}/1`)
       .set('X-CSRF-Token', csrf)
       .send({ songId: 1 });
 
     expect(res.status).toBe(409);
   });
+
+  it('rejects a position outside 1..SLOTS_PER_DAY', async () => {
+    const { agent, csrf } = await signIn('boss@example.test', true);
+    await seedSong(1, 'Song');
+
+    const res = await agent
+      .put(`/api/admin/daily-puzzles/${dateOffsetDays(2)}/6`)
+      .set('X-CSRF-Token', csrf)
+      .send({ songId: 1 });
+
+    expect(res.status).toBe(400);
+  });
 });
 
-describe('DELETE /api/admin/daily-puzzles/:date', () => {
-  it('unschedules an unplayed future date', async () => {
+describe('DELETE /api/admin/daily-puzzles/:date/:position', () => {
+  it('unschedules an unplayed slot', async () => {
     const { agent, csrf } = await signIn('boss@example.test', true);
     await seedSong(1, 'Doomed');
     const date = dateOffsetDays(2);
-    await db.insert(dailyPuzzles).values({ puzzleDate: date, songId: 1 });
+    await db.insert(dailyPuzzles).values({ puzzleDate: date, position: 1, songId: 1 });
 
-    const res = await agent.delete(`/api/admin/daily-puzzles/${date}`).set('X-CSRF-Token', csrf);
+    const res = await agent.delete(`/api/admin/daily-puzzles/${date}/1`).set('X-CSRF-Token', csrf);
 
     expect(res.status).toBe(200);
     expect(await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.puzzleDate, date))).toEqual(
@@ -243,13 +301,13 @@ describe('DELETE /api/admin/daily-puzzles/:date', () => {
     );
   });
 
-  it('refuses to delete a played puzzle, which would orphan its results', async () => {
+  it('refuses to delete a played slot, which would orphan its results', async () => {
     const { agent, csrf, userId } = await signIn('boss@example.test', true);
     await seedSong(1, 'Played');
     const date = dateOffsetDays(1);
     const inserted = await db
       .insert(dailyPuzzles)
-      .values({ puzzleDate: date, songId: 1 })
+      .values({ puzzleDate: date, position: 1, songId: 1 })
       .returning();
     await db.insert(gameResults).values({
       userId,
@@ -259,7 +317,7 @@ describe('DELETE /api/admin/daily-puzzles/:date', () => {
       snippetStageReached: 6,
     });
 
-    const res = await agent.delete(`/api/admin/daily-puzzles/${date}`).set('X-CSRF-Token', csrf);
+    const res = await agent.delete(`/api/admin/daily-puzzles/${date}/1`).set('X-CSRF-Token', csrf);
 
     expect(res.status).toBe(409);
     expect(

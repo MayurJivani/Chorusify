@@ -16,82 +16,116 @@ beforeEach(async () => {
   await db.delete(users);
 });
 
+// Five-slot day results built from a terse win/loss pattern, e.g. 'wwlll'.
+function dayOf(pattern: string): { won: boolean; guessesUsed: number }[] {
+  return [...pattern].map((c) => ({ won: c === 'w', guessesUsed: c === 'w' ? 3 : 6 }));
+}
+
 describe('recordGameResult', () => {
-  it('starts a streak of 1 on a first win', async () => {
+  it('starts a streak of 1 on completing a first day, regardless of score', async () => {
     await recordGameResult({
       ownerKey: 'guest-1',
       puzzleDate: '2026-01-01',
-      won: true,
-      guessesUsed: 3,
+      slots: dayOf('wwwll'),
     });
 
     const stats = await getStats('guest-1');
     expect(stats?.currentStreak).toBe(1);
     expect(stats?.maxStreak).toBe(1);
     expect(stats?.gamesPlayed).toBe(1);
-    expect(stats?.gamesWon).toBe(1);
-    expect(stats?.guessDist3).toBe(1);
+    expect(stats?.gamesWon).toBe(1); // >=1 correct
+    expect(stats?.perfectDays).toBe(0); // not all 5
+    expect(stats?.guessDist3).toBe(3); // one bump per correct slot
   });
 
-  it('continues the streak when the previous day was also played and won', async () => {
+  it('continues the streak on a day with zero correct guesses, as long as it was completed', async () => {
     await recordGameResult({
       ownerKey: 'guest-2',
       puzzleDate: '2026-01-01',
-      won: true,
-      guessesUsed: 2,
+      slots: dayOf('wwwww'),
     });
     await recordGameResult({
       ownerKey: 'guest-2',
       puzzleDate: '2026-01-02',
-      won: true,
-      guessesUsed: 4,
+      slots: dayOf('lllll'),
     });
 
     const stats = await getStats('guest-2');
     expect(stats?.currentStreak).toBe(2);
     expect(stats?.maxStreak).toBe(2);
-    expect(stats?.guessDist2).toBe(1);
-    expect(stats?.guessDist4).toBe(1);
+    expect(stats?.gamesWon).toBe(1); // only the first day had a correct guess
+    expect(stats?.perfectDays).toBe(1);
   });
 
-  it('resets the streak to 0 on a loss but keeps max streak', async () => {
+  it('marks a perfect day only when every slot is correct', async () => {
     await recordGameResult({
       ownerKey: 'guest-3',
       puzzleDate: '2026-01-01',
-      won: true,
-      guessesUsed: 1,
-    });
-    await recordGameResult({
-      ownerKey: 'guest-3',
-      puzzleDate: '2026-01-02',
-      won: false,
-      guessesUsed: 6,
+      slots: dayOf('wwwww'),
     });
 
     const stats = await getStats('guest-3');
-    expect(stats?.currentStreak).toBe(0);
-    expect(stats?.maxStreak).toBe(1);
-    expect(stats?.gamesPlayed).toBe(2);
     expect(stats?.gamesWon).toBe(1);
+    expect(stats?.perfectDays).toBe(1);
   });
 
-  it('resets the streak to 1 (not continues) when a day was skipped', async () => {
+  it('resets the streak to 1 (not continues) when a day was skipped entirely', async () => {
     await recordGameResult({
       ownerKey: 'guest-4',
       puzzleDate: '2026-01-01',
-      won: true,
-      guessesUsed: 1,
+      slots: dayOf('wwwww'),
     });
     await recordGameResult({
       ownerKey: 'guest-4',
       puzzleDate: '2026-01-05',
-      won: true,
-      guessesUsed: 1,
+      slots: dayOf('wwwww'),
     });
 
     const stats = await getStats('guest-4');
     expect(stats?.currentStreak).toBe(1);
     expect(stats?.maxStreak).toBe(1);
+  });
+
+  it('is a no-op on a second call for a date already recorded, rather than double-counting', async () => {
+    // Simulates a deploy that adds more songs to a day someone already finished under the old
+    // single-song puzzle: recordGameResult fires once pre-deploy, then again post-deploy for
+    // the same date once the newly-added songs are finished too.
+    await recordGameResult({
+      ownerKey: 'guest-6',
+      puzzleDate: '2026-01-01',
+      slots: dayOf('w'),
+    });
+    await recordGameResult({
+      ownerKey: 'guest-6',
+      puzzleDate: '2026-01-01',
+      slots: dayOf('wwww'),
+    });
+
+    const stats = await getStats('guest-6');
+    expect(stats?.gamesPlayed).toBe(1);
+    expect(stats?.currentStreak).toBe(1);
+  });
+
+  it('keeps max streak after it is broken by a skipped day', async () => {
+    await recordGameResult({
+      ownerKey: 'guest-5',
+      puzzleDate: '2026-01-01',
+      slots: dayOf('wwwww'),
+    });
+    await recordGameResult({
+      ownerKey: 'guest-5',
+      puzzleDate: '2026-01-02',
+      slots: dayOf('wwwww'),
+    });
+    await recordGameResult({
+      ownerKey: 'guest-5',
+      puzzleDate: '2026-01-10',
+      slots: dayOf('wwwww'),
+    });
+
+    const stats = await getStats('guest-5');
+    expect(stats?.currentStreak).toBe(1);
+    expect(stats?.maxStreak).toBe(2);
   });
 });
 
@@ -125,23 +159,22 @@ describe('mergeGuestStatsIntoUser', () => {
     });
 
     await recordGameResult({
-      ownerKey: 'guest-5',
+      ownerKey: 'merge-guest',
       puzzleDate: '2026-01-01',
-      won: true,
-      guessesUsed: 2,
+      slots: dayOf('wwwww'),
     });
     await db.insert(gameResults).values({
       userId: null,
-      guestId: 'guest-5',
+      guestId: 'merge-guest',
       puzzleId: puzzle!.id,
       won: true,
       guessesUsed: 2,
       snippetStageReached: 1,
     });
 
-    await mergeGuestStatsIntoUser('guest-5', 'user-5');
+    await mergeGuestStatsIntoUser('merge-guest', 'user-5');
 
-    expect(await getStats('guest-5')).toBeNull();
+    expect(await getStats('merge-guest')).toBeNull();
     expect((await getStats('user-5'))?.gamesWon).toBe(1);
 
     const results = await db.select().from(gameResults);

@@ -18,14 +18,23 @@ function yesterday(dateStr: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-export interface RecordResultInput {
+export interface RecordDayResultInput {
   ownerKey: string; // userId if authenticated, else guestId
   puzzleDate: string; // 'YYYY-MM-DD'
-  won: boolean;
-  guessesUsed: number; // 1-6 when won, otherwise the number of attempts used before giving up
+  /** This day's results, one per completed song slot (SLOTS_PER_DAY of them). */
+  slots: { won: boolean; guessesUsed: number }[];
 }
 
-export async function recordGameResult(input: RecordResultInput): Promise<void> {
+/**
+ * Called once a day, when the last of that day's song slots is finished — never per song.
+ *
+ * The streak tracks day *completion*, not correctness: finishing all of today's songs continues
+ * it even on a day where every guess was wrong. `gamesWon` is looser than a streak-worthy day —
+ * it only needs one correct song — while `perfectDays` is the strict all-correct subset of it,
+ * so "partial win" (some but not all correct) is always `gamesWon - perfectDays`, not a counter
+ * of its own.
+ */
+export async function recordGameResult(input: RecordDayResultInput): Promise<void> {
   await db.transaction(async (tx) => {
     const existingRows = await tx
       .select()
@@ -34,28 +43,36 @@ export async function recordGameResult(input: RecordResultInput): Promise<void> 
       .limit(1);
     const existing = existingRows[0];
 
+    // Idempotent per day: a date whose slot count changes mid-day (e.g. a deploy that adds
+    // songs to a day someone already finished under the old single-song puzzle) could
+    // otherwise re-trigger this a second time for the same date, wrongly resetting the streak
+    // and double-counting gamesPlayed. Once a day is recorded, a second call for it is a no-op.
+    if (existing?.lastPlayedDate === input.puzzleDate) return;
+
     const continuesStreak = existing?.lastPlayedDate === yesterday(input.puzzleDate);
-    const currentStreak = input.won
-      ? continuesStreak
-        ? (existing?.currentStreak ?? 0) + 1
-        : 1
-      : 0;
+    const currentStreak = continuesStreak ? (existing?.currentStreak ?? 0) + 1 : 1;
     const maxStreak = Math.max(currentStreak, existing?.maxStreak ?? 0);
+
+    const correctCount = input.slots.filter((s) => s.won).length;
+    const wonDay = correctCount >= 1;
+    const perfectDay = correctCount === input.slots.length;
 
     const base = {
       currentStreak,
       maxStreak,
       gamesPlayed: (existing?.gamesPlayed ?? 0) + 1,
-      gamesWon: (existing?.gamesWon ?? 0) + (input.won ? 1 : 0),
+      gamesWon: (existing?.gamesWon ?? 0) + (wonDay ? 1 : 0),
+      perfectDays: (existing?.perfectDays ?? 0) + (perfectDay ? 1 : 0),
       lastPlayedDate: input.puzzleDate,
       updatedAt: new Date(),
     };
 
-    const distColumn =
-      input.won && input.guessesUsed >= 1 && input.guessesUsed <= 6
-        ? GUESS_DIST_COLUMNS[input.guessesUsed - 1]
-        : undefined;
-    const distUpdate = distColumn ? { [distColumn]: (existing?.[distColumn] ?? 0) + 1 } : {};
+    const distUpdate: Partial<Record<(typeof GUESS_DIST_COLUMNS)[number], number>> = {};
+    for (const slot of input.slots) {
+      if (!slot.won || slot.guessesUsed < 1 || slot.guessesUsed > 6) continue;
+      const column = GUESS_DIST_COLUMNS[slot.guessesUsed - 1]!;
+      distUpdate[column] = (distUpdate[column] ?? existing?.[column] ?? 0) + 1;
+    }
 
     if (existing) {
       await tx

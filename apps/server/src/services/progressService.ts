@@ -138,12 +138,14 @@ export async function getProgress(identity: Identity): Promise<ProgressSummary> 
       WHERE ended_at IS NOT NULL
         AND COALESCE(user_id, guest_id) = ${key}
     `),
+    // Daily mode is now a multi-song session (up to SLOTS_PER_DAY game_results rows per day),
+    // so "days played/won" has to come from user_stats' day-level counters rather than a raw
+    // game_results count — counting rows directly here would count songs, not days, and would
+    // silently inflate this 5x (which also feeds the XP total below via dailyWins).
     db.execute(sql`
-      SELECT
-        COUNT(*)::int                              AS "played",
-        COUNT(*) FILTER (WHERE won)::int           AS "won"
-      FROM game_results
-      WHERE COALESCE(user_id, guest_id) = ${key}
+      SELECT games_played AS "played", games_won AS "won"
+      FROM user_stats
+      WHERE owner_key = ${key}
     `),
     userId
       ? db.execute(sql`

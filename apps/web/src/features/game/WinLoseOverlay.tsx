@@ -1,33 +1,30 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import type { RevealedSong } from '../../types/api';
-import type { GuessAttempt } from './useGameState';
-import { SongPreviewButton } from './SongPreviewButton';
-import { buildShareText } from '../stats/shareText';
+import type { DailySlotRecap } from '../../types/api';
+import { buildRunShareText } from '../stats/shareText';
 import { renderResultCard, shareResultCard } from '../stats/resultCard';
-import { useGameConfig } from '../../hooks/useGameConfig';
 
 interface WinLoseOverlayProps {
-  won: boolean;
-  song: RevealedSong;
-  history: GuessAttempt[];
+  slots: DailySlotRecap[];
+  correctCount: number;
+  totalSlots: number;
   puzzleDate: string;
-  previewUrl?: string | null;
+  streak: { current: number; max: number };
 }
 
 export function WinLoseOverlay({
-  won,
-  song,
-  history,
+  slots,
+  correctCount,
+  totalSlots,
   puzzleDate,
-  previewUrl,
+  streak,
 }: WinLoseOverlayProps) {
-  const { maxGuesses } = useGameConfig();
   const [copied, setCopied] = useState(false);
+  const perfectDay = correctCount === totalSlots;
 
   useEffect(() => {
-    if (won) {
+    if (perfectDay) {
       void confetti({
         particleCount: 140,
         spread: 90,
@@ -35,16 +32,23 @@ export function WinLoseOverlay({
         colors: ['#7c5cff', '#22d3ee', '#22c55e'],
       });
     }
-  }, [won]);
+  }, [perfectDay]);
 
   const handleShare = async () => {
-    const text = buildShareText(history, won, puzzleDate, maxGuesses);
+    const text =
+      buildRunShareText({
+        subject: `Daily · ${puzzleDate}`,
+        history: slots.map((s) => s.won),
+        songsCorrect: correctCount,
+        totalRounds: totalSlots,
+      }) + `\n🔥 ${streak.current} day streak`;
+
     const blob = await renderResultCard({
       subject: `Daily ${puzzleDate}`,
-      headline: won ? `${history.length}/${maxGuesses}` : `X/${maxGuesses}`,
-      caption: won ? 'guesses' : 'better luck next time',
-      history: history.map((h) => h.correct),
-      totalRounds: maxGuesses,
+      headline: `${correctCount}/${totalSlots}`,
+      caption: `🔥 ${streak.current} day streak`,
+      history: slots.map((s) => s.won),
+      totalRounds: totalSlots,
     });
 
     if (blob) {
@@ -74,31 +78,37 @@ export function WinLoseOverlay({
       transition={{ duration: 0.4, ease: 'easeOut' }}
       className="glass flex w-full max-w-md flex-col items-center gap-5 rounded-2xl p-6 text-center"
     >
-      <h2 className={`text-2xl font-extrabold ${won ? 'gradient-text' : 'text-chorusify-danger'}`}>
-        {won ? '🎉 You got it!' : '😔 So close, next time!'}
+      <h2 className={`text-2xl font-extrabold ${perfectDay ? 'gradient-text' : 'text-slate-100'}`}>
+        {perfectDay ? '🎉 Perfect day!' : `${correctCount}/${totalSlots} today`}
       </h2>
 
-      {/* Song card */}
-      <div className="flex items-center gap-4">
-        {song.albumArtUrl && (
-          <img
-            src={song.albumArtUrl}
-            alt=""
-            className={
-              'h-20 w-20 flex-shrink-0 rounded-xl object-cover shadow-xl ' +
-              (won
-                ? 'shadow-chorusify-accent/30 ring-2 ring-chorusify-accent/40'
-                : 'shadow-chorusify-danger/20')
-            }
-          />
-        )}
-        <div className="text-left">
-          <p className="text-lg font-bold text-slate-100 leading-snug">{song.title}</p>
-          <p className="text-sm text-slate-400">{song.artist}</p>
-        </div>
-      </div>
+      <p className="text-sm text-slate-400">
+        🔥 {streak.current} day streak{streak.max > streak.current && ` · best ${streak.max}`}
+      </p>
 
-      {previewUrl && <SongPreviewButton previewUrl={previewUrl} />}
+      <ul className="flex w-full flex-col gap-2 text-left">
+        {slots.map((slot) => (
+          <li
+            key={slot.position}
+            className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-2"
+          >
+            {slot.song.albumArtUrl && (
+              <img
+                src={slot.song.albumArtUrl}
+                alt=""
+                className="h-10 w-10 flex-shrink-0 rounded-lg object-cover"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-100">{slot.song.title}</p>
+              <p className="truncate text-xs text-slate-400">{slot.song.artist}</p>
+            </div>
+            <span className={slot.won ? 'text-chorusify-success' : 'text-chorusify-danger'}>
+              {slot.won ? '✓' : '✕'}
+            </span>
+          </li>
+        ))}
+      </ul>
 
       <button type="button" onClick={handleShare} className="btn-primary w-full !rounded-xl">
         {copied ? '✓ Copied!' : 'Share result'}

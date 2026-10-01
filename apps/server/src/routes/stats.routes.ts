@@ -22,6 +22,7 @@ statsRouter.get(
         maxStreak: 0,
         gamesPlayed: 0,
         gamesWon: 0,
+        perfectDays: 0,
         guessDistribution: [0, 0, 0, 0, 0, 0],
         lastPlayedDate: null,
         ...solveTimes,
@@ -34,6 +35,7 @@ statsRouter.get(
       maxStreak: stats.maxStreak,
       gamesPlayed: stats.gamesPlayed,
       gamesWon: stats.gamesWon,
+      perfectDays: stats.perfectDays,
       guessDistribution: [
         stats.guessDist1,
         stats.guessDist2,

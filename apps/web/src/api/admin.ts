@@ -25,12 +25,19 @@ export async function searchAdminSongs(q: string): Promise<AdminSong[]> {
   return res.songs;
 }
 
-export function setDailyPuzzle(date: string, songId: number): Promise<{ ok: true }> {
-  return apiRequest(`/admin/daily-puzzles/${date}`, { method: 'PUT', body: { songId } });
+export function setDailyPuzzle(
+  date: string,
+  position: number,
+  songId: number,
+): Promise<{ ok: true }> {
+  return apiRequest(`/admin/daily-puzzles/${date}/${position}`, {
+    method: 'PUT',
+    body: { songId },
+  });
 }
 
-export function unscheduleDailyPuzzle(date: string): Promise<{ ok: true }> {
-  return apiRequest(`/admin/daily-puzzles/${date}`, { method: 'DELETE' });
+export function unscheduleDailyPuzzle(date: string, position: number): Promise<{ ok: true }> {
+  return apiRequest(`/admin/daily-puzzles/${date}/${position}`, { method: 'DELETE' });
 }
 
 export function updateSongFlags(
@@ -72,9 +79,9 @@ export function getUpcomingSchedule(days = 14): Promise<UpcomingSchedule> {
   return apiRequest<UpcomingSchedule>(`/admin/daily-puzzles/upcoming?days=${days}`);
 }
 
-/** Swaps a date onto a different random song. Never returns the one it already had. */
-export function randomizeDailyPuzzle(date: string): Promise<{ ok: true }> {
-  return apiRequest(`/admin/daily-puzzles/${date}/randomize`, { method: 'POST' });
+/** Swaps one slot onto a different random song. Never returns a song already used that day. */
+export function randomizeDailyPuzzle(date: string, position: number): Promise<{ ok: true }> {
+  return apiRequest(`/admin/daily-puzzles/${date}/${position}/randomize`, { method: 'POST' });
 }
 
 // --- Users -------------------------------------------------------------------------------
