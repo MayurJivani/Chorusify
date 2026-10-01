@@ -9,6 +9,9 @@ import { LeaderboardPage } from './routes/LeaderboardPage';
 import { LoginPage } from './routes/LoginPage';
 import { RegisterPage } from './routes/RegisterPage';
 import { AboutPage } from './routes/AboutPage';
+import { PrivacyPage } from './routes/PrivacyPage';
+import { TermsPage } from './routes/TermsPage';
+import { CookiePolicyPage } from './routes/CookiePolicyPage';
 import { ArtistSearchPage } from './routes/ArtistSearchPage';
 import { ArtistPlayPage } from './routes/ArtistPlayPage';
 import { CategoryPickerPage } from './routes/CategoryPickerPage';
@@ -41,6 +44,9 @@ const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       { path: '/about', element: <AboutPage /> },
+      { path: '/privacy', element: <PrivacyPage /> },
+      { path: '/terms', element: <TermsPage /> },
+      { path: '/cookies', element: <CookiePolicyPage /> },
       { path: '/artist', element: <ArtistSearchPage /> },
       { path: '/artist/:artistId/play', element: <ArtistPlayPage /> },
       { path: '/categories', element: <CategoryPickerPage /> },

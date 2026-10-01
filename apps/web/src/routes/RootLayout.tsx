@@ -283,9 +283,18 @@ export function RootLayout() {
 
       <footer className="shrink-0 border-t border-white/[0.06] py-4">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-4 sm:flex-row sm:justify-between sm:px-6">
-          <span className="text-xs text-slate-500">
-            &copy; {new Date().getFullYear()} Chorusify
-          </span>
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-500 sm:justify-start">
+            <span>&copy; {new Date().getFullYear()} Chorusify</span>
+            <Link to="/privacy" className="hover:text-slate-300">
+              Privacy
+            </Link>
+            <Link to="/terms" className="hover:text-slate-300">
+              Terms
+            </Link>
+            <Link to="/cookies" className="hover:text-slate-300">
+              Cookies
+            </Link>
+          </div>
           {/* Deezer attribution - required by Deezer API brand guidelines */}
           <a
             href="https://www.deezer.com"
