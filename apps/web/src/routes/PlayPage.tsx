@@ -7,6 +7,7 @@ import { SlotProgress } from '../features/game/SlotProgress';
 import { GuessHistory } from '../features/game/GuessHistory';
 import { GuessInput } from '../features/game/GuessInput';
 import { WinLoseOverlay } from '../features/game/WinLoseOverlay';
+import { SlotRevealCard } from '../features/game/SlotRevealCard';
 import { useGameConfig } from '../hooks/useGameConfig';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
@@ -24,10 +25,13 @@ export function PlayPage() {
     streak,
     attemptNumber,
     history,
+    revealedSlot,
+    isLastSlot,
     errorMessage,
     submitting,
     guess,
     skip,
+    continueAfterReveal,
   } = useGameState();
   const { snippetSchedule } = useGameConfig();
 
@@ -67,6 +71,9 @@ export function PlayPage() {
     return <Centered>{errorMessage ?? 'Something went wrong.'}</Centered>;
   }
 
+  // 'revealing' (between songs) and 'day-complete' both pause the live-play UI the same way;
+  // only the overlay shown below the card differs.
+  const isPaused = status === 'revealing' || status === 'day-complete';
   const isOver = status === 'day-complete';
   const lastAttempt = history[history.length - 1];
   const previewUrl = puzzle.completed ? null : puzzle.previewUrl;
@@ -85,7 +92,7 @@ export function PlayPage() {
           <p className="text-xs text-slate-500 font-mono">{puzzle.puzzleDate}</p>
         </div>
 
-        {!isOver && (
+        {!isPaused && (
           <div className="flex flex-col items-center gap-1.5">
             <p className="text-xs text-slate-500">
               Song {position} of {totalSlots}
@@ -100,7 +107,7 @@ export function PlayPage() {
 
         <SnippetProgressBar stageIndex={attemptNumber - 1} />
 
-        {previewUrl && !isOver && (
+        {previewUrl && !isPaused && (
           <SnippetPlayer
             previewUrl={previewUrl}
             stageSeconds={stageSeconds}
@@ -110,13 +117,13 @@ export function PlayPage() {
 
         <AttemptPips history={history} />
 
-        {!isOver && lastAttempt?.sameArtist && (
+        {!isPaused && lastAttempt?.sameArtist && (
           <p className="text-sm font-semibold text-amber-400" role="status">
             Right artist, wrong song. Keep going.
           </p>
         )}
 
-        {!isOver && (
+        {!isPaused && (
           <GuessInput
             onGuess={guess}
             onSkip={skip}
@@ -132,10 +139,19 @@ export function PlayPage() {
           />
         )}
 
-        {!isOver && <GuessHistory history={history} />}
+        {!isPaused && <GuessHistory history={history} />}
 
         {errorMessage && <p className="text-sm text-chorusify-danger">{errorMessage}</p>}
       </div>
+
+      {status === 'revealing' && revealedSlot && (
+        <SlotRevealCard
+          slot={revealedSlot}
+          totalSlots={totalSlots}
+          isLastSlot={isLastSlot}
+          onContinue={() => void continueAfterReveal()}
+        />
+      )}
 
       {isOver && streak && (
         <WinLoseOverlay
