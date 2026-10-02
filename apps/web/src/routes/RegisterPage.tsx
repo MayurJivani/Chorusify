@@ -24,6 +24,18 @@ export function RegisterPage() {
 
         <RegisterForm />
 
+        <p className="text-center text-xs text-slate-500">
+          By creating an account, you agree to our{' '}
+          <Link to="/terms" className="font-medium text-chorusify-accent2 hover:underline">
+            Terms
+          </Link>{' '}
+          and{' '}
+          <Link to="/privacy" className="font-medium text-chorusify-accent2 hover:underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+
         <p className="text-center text-sm text-slate-400">
           Already have an account?{' '}
           <Link to="/login" className="font-medium text-chorusify-accent2 hover:underline">
