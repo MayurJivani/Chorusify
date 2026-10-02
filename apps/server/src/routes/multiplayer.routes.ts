@@ -11,7 +11,14 @@ export const multiplayerRouter = Router();
 const createRoomSchema = z
   .object({
     artistId: z.coerce.number().int().positive().optional(),
-    categoryId: z.string().min(1).max(64).optional(),
+    // A categoryId is either one slug or several joined with `+` (see CATEGORY_ID_SEPARATOR
+    // in challengeSource.ts), so this needs room for a handful of combined categories.
+    categoryId: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[a-z0-9+-]+$/)
+      .optional(),
     guessMode: z.enum(['search', 'choice']).optional().default('search'),
     gameMode: z.enum(['classic', 'speed']).optional().default('classic'),
     hostOnlyAudio: z.boolean().optional().default(false),

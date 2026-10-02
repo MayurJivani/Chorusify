@@ -65,7 +65,12 @@ export function MultiplayerResults({
         ? { artistId: picked.artist.id }
         : picked.kind === 'soundtrack'
           ? { categoryId: picked.collection.id }
-          : { categoryId: picked.category.id },
+          : {
+              categoryId: picked.categories
+                .map((c) => c.id)
+                .sort()
+                .join('+'),
+            },
     );
     setPicking(false);
     setPicked(null);
@@ -219,7 +224,7 @@ export function MultiplayerResults({
                 ? 'Everyone stays in the room - scores reset for the new race.'
                 : 'Browse while the host decides. Shout if you see something good.'}
             </p>
-            <SourcePicker value={picked} onChange={setPicked} compact />
+            <SourcePicker value={picked} onChange={setPicked} compact multiSelectCategories />
             {canPlayAgain && (
               <div className="flex gap-2">
                 <button
@@ -250,7 +255,7 @@ export function MultiplayerResults({
                     ? picked.artist.name
                     : picked.kind === 'soundtrack'
                       ? picked.collection.label
-                      : picked.category.label}
+                      : picked.categories.map((c) => c.label).join(' + ')}
                 </span>
                 ? Only the host can start it.
               </p>

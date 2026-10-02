@@ -22,8 +22,13 @@ export type SourceKind = 'artist' | 'category' | 'soundtrack';
 
 export type PickedSource =
   | { kind: 'artist'; artist: ArtistSearchResult }
-  | { kind: 'category'; category: Category }
+  // Always non-empty. Most callers (duels) only ever put one category in here; multiplayer's
+  // room creation and "race something else" opt into picking several via `multiSelectCategories`.
+  | { kind: 'category'; categories: Category[] }
   | { kind: 'soundtrack'; collection: SoundtrackCollection };
+
+/** Mirrors MAX_COMBINED_CATEGORIES in the server's challengeSource.ts. */
+const MAX_SELECTED_CATEGORIES = 5;
 
 interface SourcePickerProps {
   value: PickedSource | null;
@@ -36,6 +41,13 @@ interface SourcePickerProps {
    * of dropping the player on an artist search with their choice forgotten.
    */
   preselectSoundtrackId?: string;
+  /**
+   * Lets the Category tab pick up to MAX_SELECTED_CATEGORIES at once, merged into one pool —
+   * the same composite-id trick the solo Category picker uses. Off by default: duels queue
+   * players by an exact source key, and mixing categories there would need its own rating
+   * ladder per combination rather than reusing the single-category ones.
+   */
+  multiSelectCategories?: boolean;
 }
 
 export function SourcePicker({
@@ -43,6 +55,7 @@ export function SourcePicker({
   onChange,
   compact = false,
   preselectSoundtrackId,
+  multiSelectCategories = false,
 }: SourcePickerProps) {
   const [kind, setKind] = useState<SourceKind>(
     preselectSoundtrackId ? 'soundtrack' : (value?.kind ?? 'artist'),
@@ -77,12 +90,25 @@ export function SourcePicker({
     if (match) onChange({ kind: 'soundtrack', collection: match });
   }, [preselectSoundtrackId, movies, value, onChange]);
 
-  const selectedId =
-    value?.kind === 'category'
-      ? value.category.id
-      : value?.kind === 'soundtrack'
-        ? value.collection.id
-        : null;
+  const selectedCategoryIds =
+    value?.kind === 'category' ? new Set(value.categories.map((c) => c.id)) : null;
+  const selectedId = value?.kind === 'soundtrack' ? value.collection.id : null;
+
+  const pickCategory = (category: Category) => {
+    if (!multiSelectCategories) {
+      onChange({ kind: 'category', categories: [category] });
+      return;
+    }
+    const current = value?.kind === 'category' ? value.categories : [];
+    const isSelected = current.some((c) => c.id === category.id);
+    if (isSelected) {
+      const next = current.filter((c) => c.id !== category.id);
+      onChange(next.length > 0 ? { kind: 'category', categories: next } : null);
+      return;
+    }
+    if (current.length >= MAX_SELECTED_CATEGORIES) return;
+    onChange({ kind: 'category', categories: [...current, category] });
+  };
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -140,23 +166,25 @@ export function SourcePicker({
                 id: c.id,
                 label: c.label,
                 here: (c.playing ?? 0) + (c.queued ?? 0),
-                pick: () => onChange({ kind: 'category' as const, category: c }),
+                pick: () => pickCategory(c),
+                selected: selectedCategoryIds?.has(c.id) ?? false,
               }))
             : movies.map((m) => ({
                 id: m.id,
                 label: m.label,
                 here: (m.playing ?? 0) + (m.queued ?? 0),
                 pick: () => onChange({ kind: 'soundtrack' as const, collection: m }),
+                selected: selectedId === m.id,
               }))
           ).map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={item.pick}
-              aria-pressed={selectedId === item.id}
+              aria-pressed={item.selected}
               className={
                 'rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-all ' +
-                (selectedId === item.id
+                (item.selected
                   ? 'border-chorusify-accent/60 bg-chorusify-accent/15 text-white'
                   : 'border-white/5 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]')
               }

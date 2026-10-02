@@ -62,6 +62,22 @@ describe('POST /api/multiplayer/rooms', () => {
     });
   });
 
+  it('creates a room over several merged categories', async () => {
+    const agent = request.agent(app);
+    const csrfToken = await getCsrfToken(agent);
+    const res = await agent
+      .post('/api/multiplayer/rooms')
+      .set('X-CSRF-Token', csrfToken)
+      .send({ categoryId: 'year-2020+year-2021' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      sourceType: 'category',
+      sourceId: 'year-2020+year-2021',
+      label: 'Top Hits 2020 + Top Hits 2021',
+    });
+  });
+
   it('rejects a request naming both an artist and a category', async () => {
     // Ambiguous rather than harmless: the room would race over whichever the code checked
     // first, which need not be the one the player meant.

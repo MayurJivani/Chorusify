@@ -50,13 +50,19 @@ export function MultiplayerHomePage() {
     setError(null);
     try {
       // Movie collections are category sources on the server, so a room is created the same
-      // way; only the duel ladder distinguishes them.
+      // way; only the duel ladder distinguishes them. Several categories merge into one pool
+      // via the same sorted "+"-joined id the solo Category picker uses.
       const payload =
         source.kind === 'artist'
           ? { artistId: source.artist.id }
           : source.kind === 'soundtrack'
             ? { categoryId: source.collection.id }
-            : { categoryId: source.category.id };
+            : {
+                categoryId: source.categories
+                  .map((c) => c.id)
+                  .sort()
+                  .join('+'),
+              };
       const { code } = await createMultiplayerRoom(
         payload,
         guessMode,
@@ -100,6 +106,7 @@ export function MultiplayerHomePage() {
         value={source}
         onChange={setSource}
         preselectSoundtrackId={preselectSoundtrackId}
+        multiSelectCategories
       />
 
       {!source && (
@@ -220,7 +227,7 @@ export function MultiplayerHomePage() {
                   ? source.artist.name
                   : source.kind === 'soundtrack'
                     ? source.collection.label
-                    : source.category.label}
+                    : source.categories.map((c) => c.label).join(' + ')}
               </h2>
               <p className="text-xs text-slate-400">{rounds}-song real-time race</p>
             </div>

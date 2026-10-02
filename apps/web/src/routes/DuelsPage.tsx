@@ -84,7 +84,11 @@ export function DuelsPage() {
               collectionId: source.collection.id,
               label: source.collection.label,
             }
-          : { kind: 'category', categoryId: source.category.id, label: source.category.label };
+          : {
+              kind: 'category',
+              categoryId: source.categories[0]!.id,
+              label: source.categories[0]!.label,
+            };
 
   const randomRequest: DuelQueueRequest = { kind: 'random', label: 'Any artist' };
   const queueing = queue.status === 'queued';
