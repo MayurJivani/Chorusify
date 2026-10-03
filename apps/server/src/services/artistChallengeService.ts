@@ -640,7 +640,20 @@ export function buildRoundOptions(
     return true;
   });
 
-  const decoys = shuffle(decoyCandidates)
+  // When the pool is a merge of several categories (see mergeCatalogs), keep decoys from the
+  // same one the answer came from - a pool spanning categories isn't necessarily one language,
+  // and mixed-language options make the answer guessable without knowing the song. Falls back
+  // to the whole pool for a single-category/artist run (untagged) or if that category alone
+  // can't fill every decoy slot.
+  const correctCategoryId = candidatePool.find(
+    (t) => t.deezerTrackId === correct.deezerTrackId,
+  )?.categoryId;
+  const sameOriginDecoys = correctCategoryId
+    ? decoyCandidates.filter((t) => t.categoryId === correctCategoryId)
+    : decoyCandidates;
+  const decoyPool = sameOriginDecoys.length >= optionCount - 1 ? sameOriginDecoys : decoyCandidates;
+
+  const decoys = shuffle(decoyPool)
     .slice(0, Math.max(1, optionCount - 1))
     .map((t) => ({
       deezerTrackId: t.deezerTrackId,

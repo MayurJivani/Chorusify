@@ -257,6 +257,10 @@ export interface ArtistTrack {
   /** Only set for Era mode, where it is the answer. Deezer's track listings don't carry a
    *  release date, so this is inferred from which "Top Hits <year>" list a track came from. */
   releaseYear?: number;
+  /** Only set when the pool is a merge of several categories (see mergeCatalogs in
+   *  challengeSource.ts) - which original category this track came from, so multiple-choice
+   *  decoys can be kept from the same category as the answer rather than the whole merge. */
+  categoryId?: string;
 }
 
 interface DeezerAlbum {

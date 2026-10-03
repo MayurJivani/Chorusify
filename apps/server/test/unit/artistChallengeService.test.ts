@@ -354,6 +354,69 @@ describe('buildRoundOptions', () => {
 
     expect(seenDecoyIds.size).toBeGreaterThan(2);
   });
+
+  it('keeps decoys within the answer’s own category when the pool is a merge of several', () => {
+    const mergedPool = [
+      { ...correct, categoryId: 'year-2020' },
+      { ...pool[1]!, categoryId: 'year-2020' },
+      { ...pool[2]!, categoryId: 'year-2020' },
+      {
+        deezerTrackId: 'dz-hindi-1',
+        title: 'Tum Hi Ho',
+        artist: 'Arijit Singh',
+        albumArtUrl: null,
+        durationSeconds: 200,
+        categoryId: 'bollywood-romance',
+      },
+      {
+        deezerTrackId: 'dz-hindi-2',
+        title: 'Kesariya',
+        artist: 'Arijit Singh',
+        albumArtUrl: null,
+        durationSeconds: 200,
+        categoryId: 'bollywood-romance',
+      },
+    ];
+
+    for (let i = 0; i < 20; i += 1) {
+      const options = buildRoundOptions(correct, mergedPool);
+      const decoyIds = options
+        .filter((o) => o.deezerTrackId !== correct.deezerTrackId)
+        .map((o) => o.deezerTrackId);
+      expect(decoyIds).not.toContain('dz-hindi-1');
+      expect(decoyIds).not.toContain('dz-hindi-2');
+    }
+  });
+
+  it('falls back to the whole pool when the answer’s own category can’t fill every decoy', () => {
+    const mergedPool = [
+      { ...correct, categoryId: 'year-2020' }, // the only year-2020 track
+      {
+        deezerTrackId: 'dz-hindi-1',
+        title: 'Tum Hi Ho',
+        artist: 'Arijit Singh',
+        albumArtUrl: null,
+        durationSeconds: 200,
+        categoryId: 'bollywood-romance',
+      },
+      {
+        deezerTrackId: 'dz-hindi-2',
+        title: 'Kesariya',
+        artist: 'Arijit Singh',
+        albumArtUrl: null,
+        durationSeconds: 200,
+        categoryId: 'bollywood-romance',
+      },
+    ];
+
+    const options = buildRoundOptions(correct, mergedPool, 3);
+    expect(options).toHaveLength(3);
+  });
+
+  it('leaves untagged pools unchanged: a single-category/artist pool mixes freely', () => {
+    const options = buildRoundOptions(correct, pool); // `pool` has no categoryId on any track
+    expect(options).toHaveLength(3);
+  });
 });
 
 /** Fixtures that need a real account, since boards only list registered users. */

@@ -16,16 +16,25 @@ import { getArtistCatalog } from './artistCatalogService';
 import { getCategoryCatalog } from './categoryCatalogService';
 import { findCategory, isSoundtrackCategory, type Category } from './categories';
 
-/** Merges catalogs into one pool, deduped by Deezer track id, in a stable order. */
+/**
+ * Merges catalogs into one pool, deduped by Deezer track id, in a stable order.
+ *
+ * Each track is tagged with the category it came from (`categoryId`) so that multiple-choice
+ * decoys can later be kept within one category rather than the whole merge — otherwise mixing,
+ * say, an English chart with Bollywood would let a player spot the answer by "which option
+ * looks like a different language" instead of actually knowing the song.
+ */
 async function mergeCatalogs(categoryIds: string[]): Promise<ArtistTrack[]> {
-  const pools = await Promise.all(categoryIds.map((id) => getCategoryCatalog(id)));
+  const pools = await Promise.all(
+    categoryIds.map(async (id) => ({ id, tracks: await getCategoryCatalog(id) })),
+  );
   const seen = new Set<string>();
   const merged: ArtistTrack[] = [];
   for (const pool of pools) {
-    for (const track of pool) {
+    for (const track of pool.tracks) {
       if (!seen.has(track.deezerTrackId)) {
         seen.add(track.deezerTrackId);
-        merged.push(track);
+        merged.push({ ...track, categoryId: pool.id });
       }
     }
   }
