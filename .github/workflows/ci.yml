@@ -57,3 +57,51 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=high
         continue-on-error: true
+
+  deploy:
+    # Only after the suite is green, and never from a pull request.
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install cloudflared
+        run: |
+          curl -fsSL -o cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          sudo install -m 0755 cloudflared /usr/local/bin/cloudflared
+
+      - name: Configure SSH to Jinx
+        env:
+          JINX_SSH_KEY: ${{ secrets.JINX_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$JINX_SSH_KEY" > ~/.ssh/jinx
+          chmod 600 ~/.ssh/jinx
+
+          # Pinned rather than accepted on sight: StrictHostKeyChecking=no would
+          # hand the deploy key to whatever answers on that hostname.
+          echo 'ssh.futile.studio ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK2kX9HMU4eqmZ5nZH8kouxstbAJWfZtj52kAvCRqFmP' > ~/.ssh/known_hosts
+
+          # ServerAlive* because a cold `docker compose --build` can run for
+          # several minutes without writing anything to the channel.
+          cat > ~/.ssh/config <<'EOF'
+          Host ssh.futile.studio
+              HostName ssh.futile.studio
+              User icarusfalls
+              ProxyCommand cloudflared access ssh --hostname %h
+              IdentityFile ~/.ssh/jinx
+              IdentitiesOnly yes
+              IdentityAgent none
+              ServerAliveInterval 30
+              ServerAliveCountMax 120
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Deploy
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: sh deploy/deploy.sh
