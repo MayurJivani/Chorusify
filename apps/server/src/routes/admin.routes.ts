@@ -32,6 +32,7 @@ import { requireAdmin } from '../middleware/requireAdmin';
 import { validate } from '../middleware/validate';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { HttpError } from '../middleware/errorHandler';
+import { logger } from '../logger';
 
 export const adminRouter = Router();
 
@@ -533,6 +534,22 @@ adminRouter.patch(
 
     const user = updated[0];
     if (!user) throw new HttpError(404, 'No such user');
+
+    // Granting or revoking admin is the one change here that widens who can reach these routes,
+    // so it leaves a trail naming who did it. Without this an unexplained admin account is
+    // untraceable after the fact.
+    if (patch.isAdmin !== undefined) {
+      logger.warn(
+        {
+          actorId: req.session.userId,
+          targetId: user.id,
+          targetEmail: user.email,
+          isAdmin: user.isAdmin,
+        },
+        patch.isAdmin ? 'Admin access granted' : 'Admin access revoked',
+      );
+    }
+
     res.json({ user });
   }),
 );

@@ -9,8 +9,11 @@ import { logger } from '../logger';
  *
  * The flag is read from the database on every request rather than trusted from the session or a
  * token, so revoking someone's admin rights takes effect immediately instead of whenever their
- * session happens to expire. There is no route that *grants* the flag — it is set by hand in the
- * database — so no bug in the admin API can escalate an ordinary account into an admin.
+ * session happens to expire.
+ *
+ * Note that `PATCH /users/:userId` below this gate *can* grant the flag, so admin is not a
+ * database-only privilege: one compromised admin session can promote further accounts. Promotions
+ * are logged by the route, and an unexpected admin should be treated as a session compromise.
  *
  * A non-admin gets 404, not 403: confirming that an endpoint exists but is forbidden tells an
  * attacker there is something worth attacking.

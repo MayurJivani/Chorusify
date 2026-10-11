@@ -45,9 +45,10 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   displayName: text('display_name').notNull(),
-  // Grants access to the admin tools (editing the daily puzzle schedule). Off by default and
-  // only ever set directly in the database — there is deliberately no route that grants it,
-  // so a bug in the admin API can never escalate someone into an admin.
+  // Grants access to the admin tools (editing the daily puzzle schedule). Off by default.
+  // PATCH /api/admin/users/:userId can set it, so an existing admin can promote any account:
+  // the flag is only as trustworthy as the current admin list, and a stolen admin session is
+  // enough to mint more admins. Audit this column when an unexpected admin appears.
   isAdmin: boolean('is_admin').notNull().default(false),
   /**
    * Elo rating for 1v1 duels. Everyone starts level; the number only means anything relative to
