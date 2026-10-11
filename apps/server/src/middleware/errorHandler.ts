@@ -51,7 +51,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   res.status(status).json({
     error: message,
-    ...(env.NODE_ENV !== 'production' && !canRevealMessage && err instanceof Error
+    // Explicitly development, not merely "not production": a stack trace names internal paths and
+    // query shapes, so an unconfigured deploy should withhold it rather than volunteer it.
+    ...(env.NODE_ENV === 'development' && !canRevealMessage && err instanceof Error
       ? { stack: err.stack }
       : {}),
   });

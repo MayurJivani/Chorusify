@@ -2,7 +2,12 @@ import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Defaults to production because several security decisions key off this value: secure cookies,
+  // whether error responses carry a stack, and whether a password reset token is echoed back to
+  // the caller. Defaulting to development made all three fail *open* on any deploy that forgot to
+  // set NODE_ENV. The dev and test runners set it explicitly, so only an unconfigured deploy hits
+  // this default, and that deploy should get the locked-down behaviour.
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
   PORT: z.coerce.number().int().positive().default(8888),
   DATABASE_URL: z
     .string()

@@ -120,8 +120,10 @@ authRouter.post(
     const { email } = req.body as z.infer<typeof forgotSchema>;
     const token = await createResetToken(email);
 
-    if (env.NODE_ENV !== 'production' && token) {
-      // In dev, return the token directly so it can be used without an email service.
+    // Only ever echoed back when NODE_ENV is *explicitly* development. Checking `!== production`
+    // here would fail open: NODE_ENV defaults to development, so any deploy that forgot to set it
+    // would hand a working reset token for any email to whoever asked, admins included.
+    if (env.NODE_ENV === 'development' && token) {
       res.json({ ok: true, resetToken: token });
       return;
     }

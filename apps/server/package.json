@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_ENV=development tsx watch src/index.ts",
     "build": "tsc --noEmit && tsc -p tsconfig.build.json && node -e \"require('fs').cpSync('src/db/migrations','dist/db/migrations',{recursive:true})\" && node -e \"require('fs').existsSync('public')&&require('fs').cpSync('public','dist/public',{recursive:true})\"",
     "start": "node dist/db/migrate.js && node dist/index.js",
     "lint": "eslint --no-error-on-unmatched-pattern 'src/**/*.js' 'test/**/*.js' --max-warnings 0",
