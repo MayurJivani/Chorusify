@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte } from 'drizzle-orm';
 import { db } from '../db/client';
 import { dailyPuzzles, dailyPuzzleStarts, songs, type DailyPuzzle } from '../db/schema';
 import { hashString } from '../utils/deterministic';
+import { timeDecayScore } from '../utils/scoring';
 import { getSettings } from './settingsService';
 
 /** A daily session is this many songs, Songless-style, not one. */
@@ -272,6 +273,29 @@ export async function getElapsedPuzzleSeconds(
   const startedAt = rows[0]?.startedAt;
   if (!startedAt) return null;
   return Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 1000));
+}
+
+/** A correct guess at the window's edge (or slower) still scores the floor rather than keep
+ *  falling toward zero - the point is rewarding quick answers, not punishing someone who
+ *  stepped away mid-song and came back. A wrong guess always scores 0, regardless of speed. */
+export const DAILY_SCORE_MAX = 100;
+export const DAILY_SCORE_MIN = 10;
+export const DAILY_SCORE_WINDOW_SECONDS = 60;
+
+/**
+ * Points for one song: 0 if wrong, otherwise a linear decay from DAILY_SCORE_MAX at 0 seconds
+ * down to DAILY_SCORE_MIN at DAILY_SCORE_WINDOW_SECONDS and beyond. `timeTakenSeconds` can be
+ * null for a row predating the timing feature (or a client that skipped straight to a guess);
+ * treated as the slowest case rather than the fastest, since speed can't be verified.
+ */
+export function scoreForSlot(won: boolean, timeTakenSeconds: number | null): number {
+  if (!won) return 0;
+  return timeDecayScore({
+    elapsed: timeTakenSeconds ?? DAILY_SCORE_WINDOW_SECONDS,
+    window: DAILY_SCORE_WINDOW_SECONDS,
+    max: DAILY_SCORE_MAX,
+    min: DAILY_SCORE_MIN,
+  });
 }
 
 export async function getSongById(songId: number) {

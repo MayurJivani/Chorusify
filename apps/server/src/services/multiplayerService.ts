@@ -14,6 +14,7 @@ import {
 import { recordLiveDuel, type DuelMode } from './duelService';
 import * as duelQueue from './duelQueueService';
 import { seededShuffle } from '../utils/deterministic';
+import { timeDecayScore } from '../utils/scoring';
 import { getSettings } from './settingsService';
 import { logger } from '../logger';
 
@@ -903,9 +904,12 @@ function submitGuess(playerId: string, trackId: string): void {
  * after.
  */
 function speedPointsFor(room: MpRoom, elapsedMs: number, roundDurationMs: number): number {
-  const fraction = roundDurationMs > 0 ? Math.min(1, elapsedMs / roundDurationMs) : 1;
-  const span = Math.max(0, room.speedMaxPoints - room.speedMinPoints);
-  const timeScore = Math.round(room.speedMaxPoints - span * fraction);
+  const timeScore = timeDecayScore({
+    elapsed: elapsedMs,
+    window: roundDurationMs,
+    max: room.speedMaxPoints,
+    min: room.speedMinPoints,
+  });
 
   const orderIndex = Math.min(room.speedCorrectCount, room.speedPoints.length - 1);
   const orderBonus = room.speedPoints[orderIndex] ?? 0;
