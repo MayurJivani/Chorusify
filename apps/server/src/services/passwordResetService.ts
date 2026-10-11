@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { and, eq, isNull, gt } from 'drizzle-orm';
 import { db } from '../db/client';
-import { passwordResetTokens, users } from '../db/schema';
+import { passwordResetTokens, sessions, users } from '../db/schema';
 import { hashPassword } from '../auth/password';
 
 export class ResetError extends Error {
@@ -68,8 +68,17 @@ export async function resetPassword(token: string, newPassword: string): Promise
   const passwordHash = await hashPassword(newPassword);
 
   await db.update(users).set({ passwordHash }).where(eq(users.id, row.userId));
+
+  // Consume every outstanding token for this account, not just the one presented: a reset is the
+  // point where someone proves control of the mailbox, so any older link still in flight (or held
+  // by whoever prompted the reset) must stop working.
   await db
     .update(passwordResetTokens)
     .set({ usedAt: now })
-    .where(eq(passwordResetTokens.id, row.id));
+    .where(and(eq(passwordResetTokens.userId, row.userId), isNull(passwordResetTokens.usedAt)));
+
+  // A reset is the one action that has to evict existing logins. Without this, someone who had
+  // already stolen a session keeps it after the owner changes their password, which is exactly
+  // the case a reset is meant to end.
+  await db.delete(sessions).where(eq(sessions.userId, row.userId));
 }
