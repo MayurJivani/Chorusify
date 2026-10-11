@@ -1,4 +1,5 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 import { SessionProvider } from './hooks/useSession';
 import { GameConfigProvider } from './hooks/useGameConfig';
 import { RootLayout } from './routes/RootLayout';
@@ -71,16 +72,21 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
+  // Honours prefers-reduced-motion across every framer-motion animation in the app. A handful of
+  // components check `useReducedMotion()` themselves where they need a different still frame;
+  // this covers the rest without each one having to remember.
   return (
-    <SessionProvider>
-      <GameConfigProvider>
-        <ToastProvider>
-          <KonamiVinylPlayer />
-          <SecretDJMode />
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </GameConfigProvider>
-    </SessionProvider>
+    <MotionConfig reducedMotion="user">
+      <SessionProvider>
+        <GameConfigProvider>
+          <ToastProvider>
+            <KonamiVinylPlayer />
+            <SecretDJMode />
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </GameConfigProvider>
+      </SessionProvider>
+    </MotionConfig>
   );
 }
 

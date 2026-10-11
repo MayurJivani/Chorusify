@@ -109,12 +109,16 @@ body {
     @apply text-white font-extrabold;
   }
 
-  /* Premium sleek dark buttons inspired by reference */
+  /* Premium sleek dark buttons inspired by reference.
+     Each one carries a focus-visible ring: the hover and active states below are mouse-only
+     feedback, so without this a keyboard user has no idea which control they are on. The ring is
+     offset against the dark surface rather than inset so it reads on both light and dark buttons. */
   .btn-primary {
     @apply rounded-xl bg-white px-6 py-2.5 font-semibold text-black
            shadow-md shadow-white/5
            transition-all duration-200
            hover:bg-slate-200 hover:scale-[1.02]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-chorusify-surface
            active:scale-95
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -123,6 +127,7 @@ body {
     @apply rounded-xl border border-white/15 bg-chorusify-surface-2 px-6 py-2.5 font-semibold text-slate-200
            transition-all duration-200
            hover:bg-chorusify-surface-hover hover:border-white/30 hover:text-white
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-chorusify-surface
            active:scale-95
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -131,6 +136,7 @@ body {
     @apply rounded-xl border border-white/10 px-6 py-2.5 font-semibold text-slate-300
            transition-all duration-200
            hover:border-white/25 hover:text-white hover:bg-white/5
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-chorusify-surface
            active:scale-95
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
