@@ -135,7 +135,7 @@ authRouter.post(
 );
 
 const resetSchema = z.object({
-  token: z.string().min(1),
+  token: z.string().min(1).max(128),
   password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
 });
 

@@ -51,9 +51,11 @@ export async function resetPassword(token: string, newPassword: string): Promise
   const tokenHash = hashToken(token);
   const now = new Date();
 
+  // Claim the token in the same statement that checks it. A select followed by an update let two
+  // requests racing with one token both pass the check, so "single use" held only one at a time.
   const [row] = await db
-    .select()
-    .from(passwordResetTokens)
+    .update(passwordResetTokens)
+    .set({ usedAt: now })
     .where(
       and(
         eq(passwordResetTokens.tokenHash, tokenHash),
@@ -61,7 +63,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
         gt(passwordResetTokens.expiresAt, now),
       ),
     )
-    .limit(1);
+    .returning({ userId: passwordResetTokens.userId });
 
   if (!row) throw new ResetError('Invalid or expired reset link', 401);
 

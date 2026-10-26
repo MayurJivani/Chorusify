@@ -8,6 +8,7 @@ import { sessionMiddleware } from './auth/session';
 import { doubleCsrfProtection, generateCsrfToken } from './middleware/csrf';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { logger } from './logger';
+import { searchRateLimiter } from './middleware/rateLimiters';
 import { getPublicGameConfig } from './services/settingsService';
 import { renderIndexWithPreview } from './middleware/ogTags';
 import { authRouter } from './routes/auth.routes';
@@ -27,6 +28,20 @@ import { adminRouter } from './routes/admin.routes';
 import { friendsRouter } from './routes/friends.routes';
 import { profileRouter } from './routes/profile.routes';
 import { fandomRouter } from './routes/fandom.routes';
+
+/** Deezer's own image hosts only, matched exactly so `dzcdn.net.evil.com` and the like fail. */
+export function isProxyableImageUrl(raw: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+  return (
+    parsed.protocol === 'https:' &&
+    (parsed.hostname === 'api.deezer.com' || parsed.hostname.endsWith('.dzcdn.net'))
+  );
+}
 
 export function createApp(): Express {
   const app = express();
@@ -57,25 +72,30 @@ export function createApp(): Express {
 
   // Image proxy for card downloads — Deezer CDN doesn't send CORS headers,
   // so the Canvas API can't fetch artist images directly from the browser.
-  app.get('/api/image-proxy', async (req, res, next) => {
+  app.get('/api/image-proxy', searchRateLimiter, async (req, res, next) => {
     try {
       const url = req.query.url;
-      if (typeof url !== 'string' || !url.startsWith('https://')) {
-        res.status(400).json({ error: 'Invalid URL' });
-        return;
-      }
-      const allowed = ['e-cdns-images.dzcdn.net', 'cdns-images.dzcdn.net', 'api.deezer.com'];
-      const parsed = new URL(url);
-      if (!allowed.some((h) => parsed.hostname.endsWith(h))) {
+      if (typeof url !== 'string' || !isProxyableImageUrl(url)) {
         res.status(403).json({ error: 'Domain not allowed' });
         return;
       }
-      const upstream = await fetch(url);
-      if (!upstream.ok) {
-        res.status(upstream.status).end();
+      // Redirects are followed by hand, one hop, re-checking the host: api.deezer.com image
+      // links redirect to the CDN, and an automatic follow would go wherever a redirect said.
+      let upstream = await fetch(url, { redirect: 'manual' });
+      const location = upstream.headers.get('location');
+      if (upstream.status >= 300 && upstream.status < 400 && location) {
+        const next = new URL(location, url).toString();
+        if (!isProxyableImageUrl(next)) {
+          res.status(403).json({ error: 'Domain not allowed' });
+          return;
+        }
+        upstream = await fetch(next, { redirect: 'error' });
+      }
+      const ct = upstream.headers.get('content-type') ?? '';
+      if (!upstream.ok || !ct.startsWith('image/')) {
+        res.status(502).end();
         return;
       }
-      const ct = upstream.headers.get('content-type') ?? 'image/jpeg';
       res.setHeader('Content-Type', ct);
       res.setHeader('Cache-Control', 'public, max-age=86400');
       const buffer = Buffer.from(await upstream.arrayBuffer());

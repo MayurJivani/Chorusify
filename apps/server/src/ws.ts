@@ -7,6 +7,9 @@ import * as multiplayer from './services/multiplayerService';
 import { SESSION_COOKIE_NAME, getSessionFromToken, type RequestSession } from './auth/session';
 import type { Identity } from './auth/identity';
 
+const MESSAGE_WINDOW_MS = 10_000;
+const MESSAGE_LIMIT = 60;
+
 interface AuthedSocket extends WebSocket {
   session: RequestSession;
 }
@@ -19,7 +22,13 @@ function parseCookies(header?: string): Record<string, string> {
     if (idx === -1) continue;
     const key = part.slice(0, idx).trim();
     const value = part.slice(idx + 1).trim();
-    if (key && value) out[key] = decodeURIComponent(value);
+    if (!key || !value) continue;
+    try {
+      out[key] = decodeURIComponent(value);
+    } catch {
+      // A malformed escape (`%zz`) used to throw out of the upgrade handler as an unhandled
+      // rejection, which takes the whole process down.
+    }
   }
   return out;
 }
@@ -51,7 +60,8 @@ function isOriginAllowed(req: IncomingMessage): boolean {
 
 /** Attaches the real-time multiplayer socket server to the app's HTTP server. */
 export function attachWebSocketServer(server: Server): void {
-  const wss = new WebSocketServer({ noServer: true });
+  // The default maxPayload is 100 MiB; the largest real message is a join with a nickname.
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
 
   server.on('upgrade', (req, socket, head) => {
     if (!isOriginAllowed(req)) {
@@ -59,16 +69,21 @@ export function attachWebSocketServer(server: Server): void {
       socket.destroy();
       return;
     }
-    void resolveSession(req).then((session) => {
-      if (!session) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    void resolveSession(req)
+      .then((session) => {
+        if (!session) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req, session);
+        });
+      })
+      .catch((err) => {
+        logger.warn({ err }, 'WebSocket upgrade failed');
         socket.destroy();
-        return;
-      }
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit('connection', ws, req, session);
       });
-    });
   });
 
   wss.on('connection', (ws: AuthedSocket, _req: IncomingMessage, session: RequestSession) => {
@@ -88,14 +103,30 @@ export function attachWebSocketServer(server: Server): void {
       },
     });
 
+    // Fixed window per socket. A real client sends a handful of messages a second at most;
+    // this caps room-code guessing and guess spam without touching normal play.
+    let windowStart = Date.now();
+    let windowCount = 0;
+
     ws.on('message', (data) => {
+      const now = Date.now();
+      if (now - windowStart > MESSAGE_WINDOW_MS) {
+        windowStart = now;
+        windowCount = 0;
+      }
+      if (++windowCount > MESSAGE_LIMIT) {
+        ws.close(1008, 'Too many messages');
+        return;
+      }
       let parsed: unknown;
       try {
         parsed = JSON.parse(data.toString());
       } catch {
         return;
       }
-      void multiplayer.handleClientMessage(playerId, parsed);
+      multiplayer.handleClientMessage(playerId, parsed).catch((err) => {
+        logger.error({ err }, 'Multiplayer message failed');
+      });
     });
 
     ws.on('close', () => {

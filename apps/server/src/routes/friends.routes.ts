@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validate } from '../middleware/validate';
+import { friendRequestRateLimiter } from '../middleware/rateLimiters';
 import {
   FriendsError,
   getConversation,
@@ -69,6 +70,7 @@ const requestSchema = z
 
 friendsRouter.post(
   '/request',
+  friendRequestRateLimiter,
   validate(requestSchema),
   asyncHandler(async (req, res) => {
     const userId = requireUser(req);

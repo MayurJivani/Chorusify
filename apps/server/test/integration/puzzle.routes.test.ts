@@ -334,9 +334,12 @@ describe('same-artist hint', () => {
     const guessId = answerId === first.id ? second.id : first.id;
     expect(guessId).not.toBe(answerId);
 
+    const csrf = await getCsrfToken(agent);
+
     const res = await agent
       .post('/api/puzzle/today/guess')
-      .set('X-CSRF-Token', await getCsrfToken(agent))
+
+      .set('X-CSRF-Token', csrf)
       .send({ songId: guessId, guessNumber: 1 });
 
     expect(res.body.correct).toBe(false);
@@ -354,9 +357,12 @@ describe('same-artist hint', () => {
     const others = await db.select().from(songs);
     const wrong = others.find((s) => s.id !== answerId)!;
 
+    const csrf = await getCsrfToken(agent);
+
     const res = await agent
       .post('/api/puzzle/today/guess')
-      .set('X-CSRF-Token', await getCsrfToken(agent))
+
+      .set('X-CSRF-Token', csrf)
       .send({ songId: wrong.id, guessNumber: 1 });
 
     expect(res.body.correct).toBe(false);
@@ -370,9 +376,12 @@ describe('same-artist hint', () => {
     const agent = request.agent(app);
     await agent.get('/api/puzzle/today');
 
+    const csrf = await getCsrfToken(agent);
+
     const res = await agent
       .post('/api/puzzle/today/guess')
-      .set('X-CSRF-Token', await getCsrfToken(agent))
+
+      .set('X-CSRF-Token', csrf)
       .send({ songId: sibling.id, guessNumber: 6 });
 
     expect(res.body.isFinal).toBe(true);
