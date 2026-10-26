@@ -10,7 +10,10 @@ body,
 
 body {
   @apply bg-chorusify-bg text-slate-100 font-sans;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  /* `cv02`/`cv03`/`cv04`/`cv11` were Inter's character-variant axes and mean nothing to Geist.
+     Geist already ships the single-storey shapes those were selecting for, so the only setting
+     worth keeping is lining tabular figures, which steadies the scores and timers that tick. */
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

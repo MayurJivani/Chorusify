@@ -48,3 +48,7 @@ apps/server/pool.json
 # Claude Code and local tooling
 .claude/
 .codegraph/
+
+# Brag/demo video renders
+brag-output*/
+chorusify-demo-*/

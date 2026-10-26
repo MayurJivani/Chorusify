@@ -111,7 +111,7 @@ function drawDisc(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius:
   ctx.fill();
 }
 
-const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif';
+const FONT = '"Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif';
 
 export async function renderResultCard(options: ResultCardOptions): Promise<Blob | null> {
   const canvas = document.createElement('canvas');

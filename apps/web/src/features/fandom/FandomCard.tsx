@@ -311,6 +311,17 @@ async function renderCardToCanvas(
   const W = 576;
   const H = 768;
   const S = 2;
+  // Canvas text does not wait for a webfont the way the DOM does: whatever is loaded when
+  // fillText runs is what gets baked into the image. Without this the card can render in a
+  // system font and look nothing like the site.
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Not worth failing the card over; the fallback stack still renders.
+    }
+  }
+
   const canvas = document.createElement('canvas');
   canvas.width = W * S;
   canvas.height = H * S;
@@ -333,7 +344,7 @@ async function renderCardToCanvas(
   ctx.stroke();
 
   // Rarity badge
-  ctx.font = 'bold 16px Inter, system-ui, sans-serif';
+  ctx.font = 'bold 16px "Geist Variable", system-ui, sans-serif';
   const badgeText = membership.rarity;
   const badgeW = ctx.measureText(badgeText).width + 24;
   roundRect(ctx, 24, 24, badgeW, 30, 15);
@@ -344,7 +355,7 @@ async function renderCardToCanvas(
   ctx.fillText(badgeText, 36, 39);
 
   // Tier label
-  ctx.font = '500 14px Inter, system-ui, sans-serif';
+  ctx.font = '500 14px "Geist Variable", system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
   ctx.fillText(membership.tier, 24 + badgeW + 8, 39);
 
@@ -378,7 +389,7 @@ async function renderCardToCanvas(
   } else {
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fill();
-    ctx.font = 'bold 48px Inter, system-ui, sans-serif';
+    ctx.font = 'bold 48px "Geist Variable", system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -396,12 +407,12 @@ async function renderCardToCanvas(
   // Fandom name
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.font = 'bold 28px Inter, system-ui, sans-serif';
+  ctx.font = 'bold 28px "Geist Variable", system-ui, sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(membership.fandomName, W / 2, imgY + imgSize + 20);
 
   // Artist name
-  ctx.font = '400 16px Inter, system-ui, sans-serif';
+  ctx.font = '400 16px "Geist Variable", system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.fillText(membership.artistName, W / 2, imgY + imgSize + 56);
 
@@ -412,11 +423,11 @@ async function renderCardToCanvas(
   const statsW = W - 80;
 
   const drawRow = (label: string, value: string, y: number) => {
-    ctx.font = '400 16px Inter, system-ui, sans-serif';
+    ctx.font = '400 16px "Geist Variable", system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'left';
     ctx.fillText(label, statsX, y);
-    ctx.font = '600 16px Inter, system-ui, sans-serif';
+    ctx.font = '600 16px "Geist Variable", system-ui, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'right';
     ctx.fillText(value, statsX + statsW, y);
@@ -436,7 +447,7 @@ async function renderCardToCanvas(
 
   // Footer
   ctx.textAlign = 'left';
-  ctx.font = '500 12px Inter, system-ui, sans-serif';
+  ctx.font = '500 12px "Geist Variable", system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.letterSpacing = '2px';
   ctx.fillText('CHORUSIFY', statsX, statsY + 128);

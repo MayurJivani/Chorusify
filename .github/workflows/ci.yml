@@ -83,9 +83,9 @@ jobs:
 
           # Pinned rather than accepted on sight: StrictHostKeyChecking=no would
           # hand the deploy key to whatever answers on that hostname.
-          echo 'ssh.futile.studio ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK2kX9HMU4eqmZ5nZH8kouxstbAJWfZtj52kAvCRqFmP' > ~/.ssh/known_hosts
+          echo 'ssh.futile.studio ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB9r2Wzf+BIWhKlOZy4I9vq/8Qe5h8Aok8rVABitpDds' > ~/.ssh/known_hosts
 
-          # ServerAlive* because a cold `docker compose --build` can run for
+          # ServerAlive* because a cold `npm ci` and build on the box can run for
           # several minutes without writing anything to the channel.
           cat > ~/.ssh/config <<'EOF'
           Host ssh.futile.studio

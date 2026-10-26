@@ -5,7 +5,11 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Geist Variable', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Room codes, duel timers and leaderboard figures all run through `font-mono`, which was
+        // falling through to whatever the OS supplied. Naming it here keeps those aligned and
+        // matched to the sans.
+        mono: ['Geist Mono Variable', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
         chorusify: {
@@ -14,7 +18,6 @@ export default {
           'surface-2': '#26262b',
           'surface-hover': '#303036',
           accent: '#8b5cf6',
-          'accent-glow': 'rgba(139, 92, 246, 0.15)',
           accent2: '#06b6d4',
           success: '#22c55e',
           danger: '#ef4444',
@@ -52,10 +55,6 @@ export default {
           '0%, 100%': { height: '0.5rem' },
           '50%': { height: '1.75rem' },
         },
-        glow: {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(255, 255, 255, 0.1)' },
-          '50%': { boxShadow: '0 0 30px rgba(255, 255, 255, 0.2)' },
-        },
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-6px)' },
@@ -76,7 +75,6 @@ export default {
         'waveform-3': 'waveform-3 1.3s ease-in-out infinite',
         'waveform-4': 'waveform-4 0.8s ease-in-out infinite',
         'waveform-5': 'waveform-5 1.0s ease-in-out infinite',
-        glow: 'glow 2s ease-in-out infinite',
         float: 'float 3s ease-in-out infinite',
         'fade-up': 'fade-up 0.4s ease-out forwards',
         'spin-slow': 'spin-slow 3s linear infinite',
