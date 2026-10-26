@@ -47,6 +47,7 @@ export function MultiplayerRoomPage() {
     gameOver,
     scores,
     lastGuess,
+    standing,
     error,
     startGame,
     reveal,
@@ -161,6 +162,7 @@ export function MultiplayerRoomPage() {
         roundEnd={roundEnd}
         scores={scores}
         lastGuess={lastGuess}
+        standing={standing}
         searchFn={searchRoomTracks}
         onSubmitGuess={submitGuess}
         onReveal={reveal}

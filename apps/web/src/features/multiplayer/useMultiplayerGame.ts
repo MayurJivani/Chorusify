@@ -42,6 +42,13 @@ export interface MultiplayerGuessResult {
   guessedTrackId?: string;
 }
 
+/** Your place across the whole room as of the last reveal; the scores frame stops at ten. */
+export interface MultiplayerStanding {
+  rank: number;
+  score: number;
+  totalPlayers: number;
+}
+
 export interface MultiplayerRoundEnd {
   /** When the reveal ends, from the server. Absent only if an old client meets a new server. */
   revealEndsAt?: number;
@@ -86,6 +93,7 @@ interface UseMultiplayerGameResult {
   gameOver: MultiplayerGameOver | null;
   scores: MultiplayerScoreEntry[];
   lastGuess: MultiplayerGuessResult | null;
+  standing: MultiplayerStanding | null;
   error: string | null;
   startGame: () => void;
   reveal: () => void;
@@ -126,6 +134,7 @@ export function useMultiplayerGame(
   const [gameOver, setGameOver] = useState<MultiplayerGameOver | null>(null);
   const [scores, setScores] = useState<MultiplayerScoreEntry[]>([]);
   const [lastGuess, setLastGuess] = useState<MultiplayerGuessResult | null>(null);
+  const [standing, setStanding] = useState<MultiplayerStanding | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -152,6 +161,7 @@ export function useMultiplayerGame(
           setRound(null);
           setStageIndex(0);
           setLastGuess(null);
+          setStanding(null);
         }
         break;
       }
@@ -195,6 +205,13 @@ export function useMultiplayerGame(
           guessedTrackId: raw.guessedTrackId as string | undefined,
           yourRank: raw.yourRank as number | undefined,
           totalPlayers: raw.totalPlayers as number | undefined,
+        });
+        break;
+      case 'standing':
+        setStanding({
+          rank: raw.rank as number,
+          score: raw.score as number,
+          totalPlayers: raw.totalPlayers as number,
         });
         break;
       case 'scores':
@@ -313,6 +330,7 @@ export function useMultiplayerGame(
     gameOver,
     scores,
     lastGuess,
+    standing,
     error,
     startGame,
     reveal,

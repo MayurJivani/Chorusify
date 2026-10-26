@@ -947,6 +947,15 @@ function endRound(room: MpRoom): void {
       : null,
     scores: buildScores(room, true),
   });
+  // Each player's own place, since the scores frame stops at ten. One sort, one tiny frame each.
+  rankedPlayers(room).forEach((p, i) =>
+    sendTo(p.playerId, {
+      type: 'standing',
+      rank: i + 1,
+      score: p.score,
+      totalPlayers: room.players.size,
+    }),
+  );
 
   const isLastRound = room.currentRound >= room.rounds - 1;
   room.timers.push(
@@ -1123,12 +1132,20 @@ function computeWinner(
  */
 const MAX_BROADCAST_SCORES = 10;
 
+/**
+ * Everyone, best first, on the score the room is allowed to see: the total at round start while
+ * a round runs (the same masking as buildScores), the real total once it is revealed.
+ */
+function rankedPlayers(room: MpRoom): MpPlayer[] {
+  const shown = (p: MpPlayer) => (room.phase === 'playing' ? p.scoreAtRoundStart : p.score);
+  return [...room.players.values()].sort(
+    (a, b) => shown(b) - shown(a) || a.totalAnswerMs - b.totalAnswerMs,
+  );
+}
+
 /** Where a player actually stands, counted across everyone rather than the ten rows sent out. */
 function rankFor(room: MpRoom, playerId: string): number {
-  const ordered = [...room.players.values()].sort(
-    (a, b) => b.score - a.score || a.totalAnswerMs - b.totalAnswerMs,
-  );
-  return ordered.findIndex((p) => p.playerId === playerId) + 1;
+  return rankedPlayers(room).findIndex((p) => p.playerId === playerId) + 1;
 }
 
 function buildScores(room: MpRoom, reveal = false): MpScoreEntry[] {

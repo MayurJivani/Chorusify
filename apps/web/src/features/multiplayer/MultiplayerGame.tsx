@@ -15,6 +15,7 @@ import type {
   MultiplayerGuessResult,
   MultiplayerRound,
   MultiplayerRoundEnd,
+  MultiplayerStanding,
 } from './useMultiplayerGame';
 import { useCountdownTo } from './useCountdownTo';
 
@@ -26,6 +27,7 @@ interface MultiplayerGameProps {
   roundEnd: MultiplayerRoundEnd | null;
   scores: MultiplayerScoreEntry[];
   lastGuess: MultiplayerGuessResult | null;
+  standing: MultiplayerStanding | null;
   searchFn: (query: string) => Promise<SongSearchResult[]>;
   onSubmitGuess: (trackId: string) => void;
   onReveal: () => void;
@@ -43,6 +45,7 @@ export function MultiplayerGame({
   roundEnd,
   scores,
   lastGuess,
+  standing,
   searchFn,
   onSubmitGuess,
   onReveal,
@@ -256,6 +259,8 @@ export function MultiplayerGame({
         selfId={selfId}
         hostId={room.hostId}
         showRoundState
+        standing={standing}
+        limit={10}
         title="Live standings"
       />
 
