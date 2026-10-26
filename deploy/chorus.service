@@ -1,0 +1,24 @@
+[Unit]
+Description=chorus (music guessing game)
+After=network-online.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=icarusfalls
+WorkingDirectory=/opt/apps/Chorus/apps/server
+EnvironmentFile=/etc/apps/chorus.env
+Environment=NODE_ENV=production PORT=3001
+# Migrations are idempotent and run before every start, as in the old image.
+ExecStartPre=/usr/bin/node dist/db/migrate.js
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+MemoryMax=768M
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

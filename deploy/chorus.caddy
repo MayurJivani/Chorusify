@@ -1,0 +1,7 @@
+http://chorusify.com, http://chorus.futile.studio {
+	import common
+	# Multiplayer rooms ride a WebSocket; buffered, rounds reveal at different moments on each phone.
+	reverse_proxy 127.0.0.1:3001 {
+		flush_interval -1
+	}
+}
