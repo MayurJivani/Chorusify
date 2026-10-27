@@ -31,6 +31,7 @@ export function PlayPage() {
     submitting,
     guess,
     skip,
+    skipSong,
     continueAfterReveal,
   } = useGameState();
   const { snippetSchedule } = useGameConfig();
@@ -126,7 +127,7 @@ export function PlayPage() {
         {!isPaused && (
           <GuessInput
             onGuess={guess}
-            onSkip={skip}
+            onSkip={skipSong}
             onRevealMore={skip}
             canRevealMore={canRevealMore}
             currentSeconds={stageSeconds}

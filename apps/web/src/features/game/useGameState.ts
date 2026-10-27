@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getTodaysPuzzle, submitGuess } from '../../api/puzzle';
 import { getMyStats } from '../../api/stats';
+import { useGameConfig } from '../../hooks/useGameConfig';
 import type { DailySlotRecap, PuzzleResponse, SongSearchResult } from '../../types/api';
 
 export type GameStatus = 'loading' | 'playing' | 'revealing' | 'day-complete' | 'error';
@@ -42,11 +43,14 @@ interface GameState {
   submitting: boolean;
   guess: (song: SongSearchResult) => Promise<void>;
   skip: () => Promise<void>;
+  /** Gives up on the current song in one request, instead of spending its attempts one by one. */
+  skipSong: () => Promise<void>;
   /** Dismisses the reveal: advances to the next song, or finishes the day if that was the last. */
   continueAfterReveal: () => Promise<void>;
 }
 
 export function useGameState(): GameState {
+  const { maxGuesses } = useGameConfig();
   const [status, setStatus] = useState<GameStatus>('loading');
   const [puzzle, setPuzzle] = useState<PuzzleResponse | null>(null);
   const [position, setPosition] = useState(1);
@@ -97,7 +101,7 @@ export function useGameState(): GameState {
   }, [applyPuzzle]);
 
   const submit = useCallback(
-    async (song: SongSearchResult | null) => {
+    async (song: SongSearchResult | null, guessNumber = attemptNumber) => {
       if (status !== 'playing' || submitting) return;
       setSubmitting(true);
       setErrorMessage(null);
@@ -108,7 +112,7 @@ export function useGameState(): GameState {
         // support both call sites, so narrow it back down here.
         const result = await submitGuess({
           songId: song?.id as number | undefined,
-          guessNumber: attemptNumber,
+          guessNumber,
         });
         setHistory((prev) => [
           ...prev,
@@ -125,7 +129,7 @@ export function useGameState(): GameState {
         const finishedSlot: DailySlotRecap = {
           position: result.position,
           won: result.correct,
-          guessesUsed: attemptNumber,
+          guessesUsed: guessNumber,
           song: result.song!,
         };
         // `puzzle` here is still the pre-advance state for the slot just answered, so its
@@ -176,6 +180,8 @@ export function useGameState(): GameState {
 
   const guess = useCallback((song: SongSearchResult) => submit(song), [submit]);
   const skip = useCallback(() => submit(null), [submit]);
+  // The server treats the last attempt as final, so this ends the song in one request.
+  const skipSong = useCallback(() => submit(null, maxGuesses), [submit, maxGuesses]);
 
   return {
     status,
@@ -193,6 +199,7 @@ export function useGameState(): GameState {
     submitting,
     guess,
     skip,
+    skipSong,
     continueAfterReveal,
   };
 }

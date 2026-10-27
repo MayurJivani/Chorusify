@@ -22,9 +22,9 @@ interface GuessInputProps {
   /** Draws attention to the reveal the first time it is offered in a run. */
   emphasiseReveal?: boolean;
   /**
-   * Set on the daily, where skipping *is* how the snippet grows. There the two actions are one,
-   * so a single honest button replaces the pair — showing both meant two buttons that ran the
-   * same handler and only differed in wording.
+   * Set on the daily, where hearing more spends an attempt. Skip still gets its own button there:
+   * without it, the only way past a song was pressing Hear more once per attempt, which a player
+   * in a hurry spammed straight into the rate limit.
    */
   revealCostsGuess?: boolean;
 }
@@ -144,38 +144,14 @@ export function GuessInput({
         </ul>
       )}
 
-      {onRevealMore && revealCostsGuess ? (
-        // Daily: one action, so one button. Falls back to a plain Skip at the last attempt,
-        // where there is no more audio left to unlock.
-        <div className="mt-3 flex w-full">
-          {canRevealMore ? (
-            <RevealMoreButton
-              onRevealMore={onRevealMore}
-              currentSeconds={currentSeconds}
-              nextSeconds={nextSeconds}
-              disabled={disabled}
-              emphasise={emphasiseReveal}
-              costsGuess
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={onSkip}
-              disabled={disabled}
-              className="btn-ghost w-full !rounded-xl !py-2.5 !text-sm !text-slate-400"
-            >
-              Skip
-            </button>
-          )}
-        </div>
-      ) : onRevealMore ? (
+      {onRevealMore ? (
         <div className="mt-3 flex gap-2 w-full">
           <button
             type="button"
             onClick={onSkip}
             disabled={disabled}
             // Narrower and quieter than Reveal: this is the one that costs you the round.
-            className="btn-ghost shrink-0 !rounded-xl !px-4 !py-2.5 !text-sm !text-slate-400"
+            className={`btn-ghost ${canRevealMore ? 'shrink-0' : 'w-full'} !rounded-xl !px-4 !py-2.5 !text-sm !text-slate-400`}
           >
             Skip
           </button>
@@ -186,6 +162,7 @@ export function GuessInput({
               nextSeconds={nextSeconds}
               disabled={disabled}
               emphasise={emphasiseReveal}
+              costsGuess={revealCostsGuess}
             />
           )}
         </div>
