@@ -4,21 +4,46 @@ After=network-online.target postgresql.service
 Wants=postgresql.service
 
 [Service]
-User=icarusfalls
 WorkingDirectory=/opt/apps/Chorus/apps/server
 EnvironmentFile=/etc/apps/chorus.env
 Environment=NODE_ENV=production PORT=3001
-# Migrations are idempotent and run before every start, as in the old image.
 ExecStartPre=/usr/bin/node dist/db/migrate.js
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
-MemoryMax=768M
-NoNewPrivileges=yes
-ProtectSystem=full
+MemoryMax=512M
+# Migrations are idempotent and run before every start, as in the old image.
+# --- least privilege: a throwaway user per start, no capabilities, read-only code ---
+DynamicUser=yes
+ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+PrivateDevices=yes
+PrivateIPC=yes
+NoNewPrivileges=yes
+ProtectProc=invisible
+ProcSubset=pid
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+# A blocked call fails with EPERM instead of killing the process.
+SystemCallErrorNumber=EPERM
+UMask=0077
+# No MemoryDenyWriteExecute: V8's JIT needs writable+executable pages.
 
 [Install]
 WantedBy=multi-user.target
