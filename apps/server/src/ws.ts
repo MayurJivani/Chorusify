@@ -63,6 +63,22 @@ export function attachWebSocketServer(server: Server): void {
   // The default maxPayload is 100 MiB; the largest real message is a join with a nickname.
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
 
+  // Reap half-open sockets: a phone that sleeps or drops off wifi never sends a close frame, so
+  // its seat would stay in the room, and its socket in memory, for good.
+  const alive = new WeakSet<WebSocket>();
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!alive.has(ws)) {
+        ws.terminate();
+        continue;
+      }
+      alive.delete(ws);
+      ws.ping();
+    }
+  }, 30_000);
+  heartbeat.unref();
+  wss.on('close', () => clearInterval(heartbeat));
+
   server.on('upgrade', (req, socket, head) => {
     if (!isOriginAllowed(req)) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
@@ -88,6 +104,8 @@ export function attachWebSocketServer(server: Server): void {
 
   wss.on('connection', (ws: AuthedSocket, _req: IncomingMessage, session: RequestSession) => {
     ws.session = session;
+    alive.add(ws);
+    ws.on('pong', () => alive.add(ws));
     const playerId = randomUUID();
     const identity: Identity = {
       userId: session.userId,

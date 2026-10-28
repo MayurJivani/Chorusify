@@ -143,6 +143,7 @@ export async function getCategoryCatalog(categoryId: string): Promise<ArtistTrac
     if (Date.now() - stored.fetchedAt.getTime() > (await refreshAfterMs())) {
       void refreshInBackground(category.id, category.label, category.playlistIds);
     }
+    await warmPreviews(category.id, category.playlistIds);
     return stored.tracks;
   }
 
@@ -161,6 +162,32 @@ export async function getCategoryCatalog(categoryId: string): Promise<ArtistTrac
 }
 
 const refreshing = new Set<string>();
+
+/**
+ * A stored pool carries no usable preview URLs (Deezer signs them for about fifteen minutes), so a
+ * game over it looked each song up: a call per candidate, two candidates per round, all through one
+ * budget of nine calls a second. With a thousand players starting at once the last rooms waited over
+ * a minute (scripts/loadtest-rooms.ts). The category's playlists return every preview in a call or
+ * two and seed the cache those lookups read, so each category costs a few calls per few minutes
+ * however many rooms play it. Songs that have since left the playlists still get looked up singly.
+ */
+const WARM_MS = 8 * 60 * 1000; // inside the preview cache's ten minutes
+const warmed = new Map<string, { until: number; done: Promise<void> }>();
+
+function warmPreviews(categoryId: string, playlistIds: string[]): Promise<void> {
+  const hit = warmed.get(categoryId);
+  if (hit && hit.until > Date.now()) return hit.done;
+  const done = fetchMultiplePlaylists(playlistIds).then(
+    () => undefined,
+    (err) => {
+      // Not fatal: the game falls back to looking each song up, as before.
+      logger.warn({ err, categoryId }, 'Preview warm-up failed');
+      warmed.delete(categoryId);
+    },
+  );
+  warmed.set(categoryId, { until: Date.now() + WARM_MS, done });
+  return done;
+}
 
 function refreshInBackground(categoryId: string, label: string, playlistIds: string[]): void {
   if (refreshing.has(categoryId)) return;

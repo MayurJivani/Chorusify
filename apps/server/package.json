@@ -15,7 +15,8 @@
     "curate:songs": "tsx ../../scripts/curate-songs.ts",
     "reverify:songs": "tsx ../../scripts/reverify-songs.ts",
     "change-daily-puzzle": "tsx ../../scripts/change-daily-puzzle.ts",
-    "export:pool": "tsx src/db/exportPool.ts"
+    "export:pool": "tsx src/db/exportPool.ts",
+    "loadtest": "tsx src/scripts/loadtest-rooms.ts"
   },
   "dependencies": {
     "argon2": "^0.45.1",
