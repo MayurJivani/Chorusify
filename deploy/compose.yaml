@@ -1,0 +1,21 @@
+# Coolify on Jinx (FRC/DEPLOY.md). Host network: the app listens on 3001 like
+# its old systemd unit did, so its Caddy block, Postgres URL and env file are unchanged.
+services:
+  chorus:
+    image: ghcr.io/mayurjivani/chorus:latest
+    network_mode: host
+    restart: unless-stopped
+    user: "1000:1000"
+    command: ["sh", "-c", "node dist/db/migrate.js && exec node dist/index.js"]
+    env_file:
+      - path: /etc/apps/chorus.env
+        required: false
+    environment:
+      NODE_ENV: "production"
+      PORT: "3001"
+    mem_limit: 512m
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
