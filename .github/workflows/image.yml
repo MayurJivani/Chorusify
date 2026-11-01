@@ -1,4 +1,4 @@
-# Push to main: build the image, push it to GHCR, tell Coolify to redeploy.
+# Push to main: build the image and push it to GHCR. Jinx notices and redeploys (jinx/autodeploy.sh).
 name: image
 on:
   push:
@@ -28,15 +28,3 @@ jobs:
           tags: ghcr.io/mayurjivani/chorus:latest,ghcr.io/mayurjivani/chorus:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      # COOLIFY_UUID (a repo variable) is the Coolify resource. forge.futile.studio sits
-      # behind Cloudflare Access, so the call carries the CI service token too.
-      - name: Redeploy
-        if: vars.COOLIFY_UUID != ''
-        env:
-          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: >-
-          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "CF-Access-Client-Id: $CF_ID"
-          -H "CF-Access-Client-Secret: $CF_SECRET"
-          "https://forge.futile.studio/api/v1/deploy?uuid=${{ vars.COOLIFY_UUID }}"
