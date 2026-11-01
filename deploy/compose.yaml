@@ -3,6 +3,7 @@
 services:
   chorus:
     image: ghcr.io/mayurjivani/chorus:latest
+    pull_policy: always
     network_mode: host
     restart: unless-stopped
     user: "1000:1000"
