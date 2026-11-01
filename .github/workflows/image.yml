@@ -1,4 +1,4 @@
-# Push to main: build the image and push it to GHCR. Jinx notices and redeploys (jinx/autodeploy.sh).
+# Push to main: build the image, push it to GHCR, deploy it through Coolify straight away.
 name: image
 on:
   push:
@@ -28,3 +28,14 @@ jobs:
           tags: ghcr.io/mayurjivani/chorus:latest,ghcr.io/mayurjivani/chorus:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # forge.futile.studio sits behind Cloudflare Access, so the call carries a service
+      # token too. Access answers a refused token with a redirect, so only 200 counts.
+      - name: Deploy
+        env:
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          code=$(curl -sS -m 30 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $TOKEN" -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" "https://forge.futile.studio/api/v1/deploy?uuid=${{ vars.COOLIFY_UUID }}")
+          echo "Coolify answered $code"
+          [ "$code" = 200 ]
