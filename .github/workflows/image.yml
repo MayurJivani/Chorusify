@@ -37,6 +37,6 @@ jobs:
           CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: >-
-          curl -fsS -H "Authorization: Bearer $TOKEN" -H "CF-Access-Client-Id: $CF_ID"
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "CF-Access-Client-Id: $CF_ID"
           -H "CF-Access-Client-Secret: $CF_SECRET"
           "https://forge.futile.studio/api/v1/deploy?uuid=${{ vars.COOLIFY_UUID }}"
