@@ -100,7 +100,7 @@ export async function getAdminUsers(
 
 export async function updateAdminUser(
   userId: string,
-  patch: { isAdmin?: boolean; displayName?: string },
+  patch: { role?: 'user' | 'event_host'; displayName?: string },
 ): Promise<{ user: AdminUser }> {
   return apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: patch });
 }

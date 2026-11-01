@@ -1,16 +1,15 @@
+import { memo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import type {
-  MultiplayerRoomSnapshot,
-  MultiplayerScoreEntry,
-  SongSearchResult,
-} from '../../types/api';
+import type { MultiplayerRoomSnapshot, SongSearchResult } from '../../types/api';
+import { SyncedAudio } from '../events/SyncedAudio';
 import { SnippetPlayer } from '../game/SnippetPlayer';
 import { SnippetProgressBar } from '../game/SnippetProgressBar';
 import { GuessInput } from '../game/GuessInput';
 import { MultipleChoiceGuess } from '../artist/MultipleChoiceGuess';
 import { RevealMoreButton } from '../game/RevealMoreButton';
 import { SongPreviewButton } from '../game/SongPreviewButton';
-import { MultiplayerScoreboard } from './MultiplayerScoreboard';
+import { LiveScoreboard } from './MultiplayerScoreboard';
+import { useScores, type ScoresStore } from './scoresStore';
 import type {
   MultiplayerGuessResult,
   MultiplayerRound,
@@ -25,7 +24,10 @@ interface MultiplayerGameProps {
   round: MultiplayerRound;
   stageIndex: number;
   roundEnd: MultiplayerRoundEnd | null;
-  scores: MultiplayerScoreEntry[];
+  scoresStore: ScoresStore;
+  paused?: boolean;
+  audioStopped?: boolean;
+  reconnecting?: boolean;
   lastGuess: MultiplayerGuessResult | null;
   standing: MultiplayerStanding | null;
   searchFn: (query: string) => Promise<SongSearchResult[]>;
@@ -37,13 +39,64 @@ interface MultiplayerGameProps {
   onLeave: () => void;
 }
 
+/** Ticks on its own, so the rest of the game does not re-render every half second. */
+const Countdown = memo(function Countdown({ to }: { to: number }) {
+  const secondsLeft = useCountdownTo(to);
+  return <span className="font-semibold tabular-nums text-slate-200">{secondsLeft}s</span>;
+});
+
+/** True once `at` has passed on this device's clock. */
+function useReached(at: number): boolean {
+  const [reached, setReached] = useState(() => Date.now() >= at);
+  useEffect(() => {
+    const wait = at - Date.now();
+    setReached(wait <= 0);
+    if (wait <= 0) return;
+    const timer = setTimeout(() => setReached(true), wait);
+    return () => clearTimeout(timer);
+  }, [at]);
+  return reached;
+}
+
+/** A row of bars that moves only while music is meant to be playing, and sits still otherwise. */
+function ListenBars({ active }: { active: boolean }) {
+  return (
+    <span aria-hidden="true" className="flex h-8 items-end gap-1">
+      {[0.55, 1, 0.7, 0.9, 0.5].map((height, i) => (
+        <span
+          key={i}
+          className={`w-1.5 origin-bottom rounded-full bg-chorusify-accent2 ${active ? 'motion-safe:animate-listen' : 'opacity-40'}`}
+          style={{ height: `${height * 100}%`, animationDelay: `${i * 90}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function EventQuestion({ listening, active }: { listening: string; active: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="flex flex-col items-center gap-2 py-3 text-center"
+    >
+      <ListenBars active={active} />
+      <p className="text-sm font-medium text-slate-200">{listening}</p>
+    </motion.div>
+  );
+}
+
 export function MultiplayerGame({
   room,
   selfId,
   round,
   stageIndex,
   roundEnd,
-  scores,
+  scoresStore,
+  paused = false,
+  audioStopped = false,
+  reconnecting = false,
   lastGuess,
   standing,
   searchFn,
@@ -61,12 +114,22 @@ export function MultiplayerGame({
    * of the round. Reading it left a player who had already answered looking like they hadn't:
    * the guess UI stayed live and nothing marked what they'd picked.
    */
-  const you = scores.find((s) => s.playerId === selfId);
+  const scoreRowAnswered = useScores(
+    scoresStore,
+    (s) => s.rows.find((row) => row.playerId === selfId)?.answered,
+  );
+  /* Outside the top ten there is no row for you, and your own guess result is what says so. */
   const answered =
-    you?.answered ?? room.players.find((p) => p.playerId === selfId)?.roundAnswered ?? false;
+    scoreRowAnswered ??
+    (lastGuess != null || room.players.find((p) => p.playerId === selfId)?.roundAnswered) ??
+    false;
+  const isEvent = !!room.event;
+  const started = useReached(isEvent ? round.startedAt : 0);
   const isSpeed = round.gameMode === 'speed';
   const showPlayer = !room.hostOnlyAudio || isHost;
   const canGuess = !isHost || room.hostPlayable;
+  const stageMs = (round.snippetSchedule[0] ?? 0) * 1000;
+  const musicPlaying = started && !paused && !audioStopped && Date.now() < round.startedAt + stageMs;
 
   const clampedStage = Math.min(stageIndex, round.snippetSchedule.length - 1);
   const stageSeconds = round.snippetSchedule[clampedStage] ?? 1;
@@ -76,14 +139,17 @@ export function MultiplayerGame({
   /* The server says when the reveal ends, because a round that everybody answers finishes early
      and the scheduled round end is then a time that never happened. */
   const nextRoundAt = roundEnd?.revealEndsAt ?? roundEndsAt + round.revealDurationMs;
-  const secondsLeft = useCountdownTo(roundEnd ? nextRoundAt : roundEndsAt);
 
   const handleGuess = (song: SongSearchResult) => onSubmitGuess(String(song.id));
 
   const isChoice = !!round.options && round.options.length > 0;
   /* Replaces the correct/wrong message with something that is still worth reading while you
      wait, and is the same for everyone regardless of how they did. */
-  const waitingOn = scores.filter((s) => !s.answered).length;
+  const waitingOn = useScores(scoresStore, (s) =>
+    s.totalPlayers != null && s.answeredCount != null
+      ? s.totalPlayers - s.answeredCount
+      : s.rows.filter((row) => !row.answered).length,
+  );
 
   /*
    * The answer is offered rather than played.
@@ -105,21 +171,39 @@ export function MultiplayerGame({
         {/* Header */}
         <div className="flex w-full flex-col items-center gap-1 text-center">
           <h1 className="text-xl font-bold text-white">{room.label}</h1>
-          <p className="font-mono text-xs text-slate-500">
+          <p className="text-xs text-slate-400">
             Song {round.roundIndex + 1} of {round.totalRounds} ·{' '}
-            {roundEnd ? 'next round in' : 'round ends in'}{' '}
-            <span className="font-semibold text-slate-300">{secondsLeft}s</span>
+            {paused ? (
+              <span className="font-semibold text-amber-200">paused by the host</span>
+            ) : (
+              <>
+                {roundEnd ? 'next round in' : !started ? 'starting in' : 'round ends in'}{' '}
+                <Countdown to={roundEnd ? nextRoundAt : started ? roundEndsAt : round.startedAt} />
+              </>
+            )}
           </p>
+          {reconnecting && (
+            <p role="status" className="text-xs font-medium text-amber-200">
+              Connection lost. Getting you back in…
+            </p>
+          )}
         </div>
 
         {roundEnd ? (
           <motion.div
+            key={`reveal-${round.roundIndex}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="flex w-full flex-col items-center gap-5 text-center"
           >
             <h2 className="text-lg font-bold text-white">🎵 It was…</h2>
-            <div className="flex w-full max-w-md items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <motion.div
+              initial={{ scale: 0.92 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 22, delay: 0.08 }}
+              className="flex w-full max-w-md items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+            >
               {roundEnd.correct?.albumArtUrl ? (
                 <img
                   src={roundEnd.correct.albumArtUrl}
@@ -137,19 +221,42 @@ export function MultiplayerGame({
                 </p>
                 <p className="truncate text-xs text-slate-400">{roundEnd.correct?.artist ?? ''}</p>
               </div>
-            </div>
+            </motion.div>
 
             {revealPreview && <SongPreviewButton previewUrl={revealPreview} />}
 
             <p className="text-sm text-slate-400">
-              Next round in <span className="font-semibold text-slate-200">{secondsLeft}s</span>
+              Next round in <Countdown to={nextRoundAt} />
             </p>
-            {isHost && (
+            {isHost && !isEvent && (
               <button type="button" onClick={onNextRound} className="btn-ghost w-full !rounded-xl">
                 Skip reveal →
               </button>
             )}
           </motion.div>
+        ) : isEvent && room.hostOnlyAudio && !isHost ? (
+          <EventQuestion
+            key={round.roundIndex}
+            listening="Listen to the speakers"
+            active={musicPlaying}
+          />
+        ) : isEvent ? (
+          <>
+            <EventQuestion
+              key={round.roundIndex}
+              listening={started ? 'Listen' : 'Get ready'}
+              active={musicPlaying}
+            />
+            {round.previewUrl && (
+              <SyncedAudio
+                previewUrl={round.previewUrl}
+                playAt={round.startedAt}
+                playbackSeconds={round.snippetSchedule[0] ?? 15}
+                paused={paused}
+                stopped={audioStopped}
+              />
+            )}
+          </>
         ) : (
           <>
             {showPlayer && !isSpeed && <SnippetProgressBar stageIndex={stageIndex} />}
@@ -189,6 +296,11 @@ export function MultiplayerGame({
                 </div>
               ))}
 
+            </>
+        )}
+
+        {!roundEnd && (
+          <>
             {!canGuess ? (
               <div className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 w-full max-w-md">
                 <p className="text-sm font-medium text-slate-300">Streaming mode</p>
@@ -224,7 +336,7 @@ export function MultiplayerGame({
                   onGuess={handleGuess}
                   onSkip={() => onSubmitGuess('__pass__')}
                   lockedGuessId={lockedGuessId}
-                  disabled={answered}
+                  disabled={answered || paused || !started}
                   dense
                   twoColumn
                 />
@@ -254,8 +366,8 @@ export function MultiplayerGame({
         )}
       </div>
 
-      <MultiplayerScoreboard
-        scores={scores}
+      <LiveScoreboard
+        store={scoresStore}
         selfId={selfId}
         hostId={room.hostId}
         showRoundState

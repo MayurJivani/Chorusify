@@ -28,6 +28,10 @@ export default {
         'hero-glow': 'radial-gradient(ellipse 60% 40% at 50% -10%, rgba(255, 255, 255, 0.05) 0%, transparent 70%)',
       },
       keyframes: {
+        listen: {
+          '0%, 100%': { transform: 'scaleY(0.35)' },
+          '50%': { transform: 'scaleY(1)' },
+        },
         shake: {
           '0%, 100%': { transform: 'translateX(0)' },
           '20%': { transform: 'translateX(-8px)' },
@@ -69,6 +73,7 @@ export default {
         },
       },
       animation: {
+        listen: 'listen 0.9s ease-in-out infinite',
         shake: 'shake 0.4s ease-in-out',
         'waveform-1': 'waveform-1 1.1s ease-in-out infinite',
         'waveform-2': 'waveform-2 0.9s ease-in-out infinite',

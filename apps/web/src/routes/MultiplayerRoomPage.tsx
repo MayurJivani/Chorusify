@@ -10,6 +10,8 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { useSession } from '../hooks/useSession';
 import { ensureMediaUnlocked } from '../features/game/SnippetPlayer';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
+import { getEventJoinInfo } from '../api/events';
+import type { EventJoinInfo } from '../types/api';
 
 export function MultiplayerRoomPage() {
   usePageTitle('Game Room');
@@ -23,6 +25,18 @@ export function MultiplayerRoomPage() {
   const hostName = typeof location.state?.hostName === 'string' ? location.state.hostName : '';
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState<string | null>(autoJoin ? hostName : null);
+  const [password, setPassword] = useState('');
+  const [submittedPassword, setSubmittedPassword] = useState('');
+  const [eventInfo, setEventInfo] = useState<EventJoinInfo | null>(null);
+
+  // Scanning a QR lands here. An event shows its name and asks for its password up front;
+  // an ordinary room has no stored record, and this comes back empty.
+  useEffect(() => {
+    getEventJoinInfo(code).then(
+      (r) => setEventInfo(r.event),
+      () => setEventInfo(null),
+    );
+  }, [code]);
 
   /**
    * A signed-in player joins straight through: the server resolves their display name from
@@ -30,7 +44,8 @@ export function MultiplayerRoomPage() {
    * with the name already on their profile. Waits for the session to load first — deciding
    * while `user` is still null would show the form to someone who is in fact logged in.
    */
-  const skipNamePrompt = !sessionLoading && user !== null && nickname === null;
+  const skipNamePrompt =
+    !sessionLoading && user !== null && nickname === null && !eventInfo?.needsPassword;
   useEffect(() => {
     if (!skipNamePrompt) return;
     ensureMediaUnlocked();
@@ -45,7 +60,11 @@ export function MultiplayerRoomPage() {
     stageIndex,
     roundEnd,
     gameOver,
-    scores,
+    scoresStore,
+    paused,
+    audioStopped,
+    closedReason,
+    errorCode,
     lastGuess,
     standing,
     error,
@@ -55,7 +74,8 @@ export function MultiplayerRoomPage() {
     nextRound,
     changeSource,
     leave,
-  } = useMultiplayerGame(code, nickname);
+    hostCommand,
+  } = useMultiplayerGame(code, nickname, { password: submittedPassword });
 
   // The typeahead has to search whatever the room races over, not always an artist.
   const sourceType = room?.sourceType;
@@ -91,36 +111,119 @@ export function MultiplayerRoomPage() {
           onSubmit={(event) => {
             event.preventDefault();
             ensureMediaUnlocked();
-            setNickname(name.trim());
+            setSubmittedPassword(password);
+            setNickname(user ? '' : name.trim());
           }}
           className="glass flex w-full max-w-md flex-col items-center gap-4 rounded-2xl p-6 text-center"
         >
           <div className="flex flex-col items-center gap-1">
-            <p className="text-sm text-slate-400">You&apos;re joining room</p>
-            <p className="font-mono text-3xl font-black tracking-[0.25em] text-chorusify-accent2">
-              {code}
-            </p>
+            {eventInfo ? (
+              <>
+                <h1 className="text-2xl font-extrabold text-white">{eventInfo.name}</h1>
+                {eventInfo.description && (
+                  <p className="text-sm text-slate-400">{eventInfo.description}</p>
+                )}
+                <p className="mt-1 font-mono text-sm tracking-widest text-chorusify-accent2">
+                  {code}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-slate-400">You&apos;re joining room</p>
+                <p className="font-mono text-3xl font-black tracking-[0.25em] text-chorusify-accent2">
+                  {code}
+                </p>
+              </>
+            )}
           </div>
+          {eventInfo?.status === 'ended' ? (
+            <p className="text-sm text-slate-300">This event has finished.</p>
+          ) : (
+            <>
+              {!user && (
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  maxLength={24}
+                  placeholder="Your name (optional)"
+                  aria-label="Your name"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none placeholder:text-slate-500 focus:border-chorusify-accent2"
+                />
+              )}
+              {eventInfo?.needsPassword && (
+                <input
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  maxLength={100}
+                  placeholder="Event password"
+                  aria-label="Event password"
+                  autoComplete="off"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none placeholder:text-slate-500 focus:border-chorusify-accent2"
+                />
+              )}
+              <button type="submit" className="btn-primary w-full !rounded-xl">
+                {eventInfo ? 'Join event →' : 'Join room →'}
+              </button>
+            </>
+          )}
+        </form>
+      </Centered>
+    );
+  }
+
+  // A wrong password returns here with the socket held open for another try.
+  if (errorCode === 'password_required' || errorCode === 'wrong_password') {
+    return (
+      <Centered>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            hostCommand('join_room', { code, password, nickname: nickname ?? undefined });
+          }}
+          className="glass flex w-full max-w-md flex-col items-center gap-4 rounded-2xl p-6 text-center"
+        >
+          <h1 className="text-lg font-bold text-white">{eventInfo?.name ?? 'This event'} needs a password</h1>
+          {errorCode === 'wrong_password' && (
+            <p role="alert" className="text-sm text-red-300">That password is not right. Ask the host.</p>
+          )}
           <input
             autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={24}
-            placeholder="Your name (optional)"
-            aria-label="Your name"
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none placeholder:text-slate-600 focus:border-chorusify-accent2"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            maxLength={100}
+            aria-label="Event password"
+            autoComplete="off"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none focus:border-chorusify-accent2"
           />
           <button type="submit" className="btn-primary w-full !rounded-xl">
-            Join room →
+            Join event →
           </button>
         </form>
       </Centered>
     );
   }
 
-  // The server only lets you into a room while it's in the lobby — a dropped socket during
-  // the game means you're out, so show that honestly instead of a broken spinner.
-  if (connectionStatus === 'closed' && room && room.phase !== 'lobby') {
+  if (closedReason) {
+    return (
+      <Centered>
+        <div className="glass flex max-w-md flex-col items-center gap-4 rounded-2xl p-6 text-center">
+          <h1 className="text-lg font-bold text-white">You&apos;re out of this game</h1>
+          <p className="text-sm text-slate-400">{closedReason}</p>
+          <Link to="/multiplayer" className="btn-primary w-full !rounded-xl">
+            Back to multiplayer
+          </Link>
+        </div>
+      </Centered>
+    );
+  }
+
+  // The server only lets you into an ordinary room while it's in the lobby — a dropped socket during
+  // the game means you're out, so show that honestly instead of a broken spinner. Events keep your
+  // seat and carry on reconnecting.
+  if (connectionStatus === 'closed' && room && room.phase !== 'lobby' && !room.event) {
     return (
       <Centered>
         <div className="glass flex max-w-md flex-col items-center gap-4 rounded-2xl p-6 text-center">
@@ -144,7 +247,7 @@ export function MultiplayerRoomPage() {
         gameOver={gameOver}
         selfId={selfId}
         label={room.label}
-        canPlayAgain={selfId === room.hostId}
+        canPlayAgain={selfId === room.hostId && !room.event}
         onPlayAgain={startGame}
         onChangeSource={changeSource}
         onLeave={handleLeave}
@@ -152,7 +255,7 @@ export function MultiplayerRoomPage() {
     );
   }
 
-  if (round && room && connectionStatus !== 'closed') {
+  if (round && room && (connectionStatus !== 'closed' || room.event)) {
     return (
       <MultiplayerGame
         room={room}
@@ -160,7 +263,10 @@ export function MultiplayerRoomPage() {
         round={round}
         stageIndex={stageIndex}
         roundEnd={roundEnd}
-        scores={scores}
+        scoresStore={scoresStore}
+        paused={paused}
+        audioStopped={audioStopped}
+        reconnecting={connectionStatus !== 'open'}
         lastGuess={lastGuess}
         standing={standing}
         searchFn={searchRoomTracks}

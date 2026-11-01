@@ -14,16 +14,13 @@ import {
   stripVersionSuffix,
 } from '../utils/trackFilters';
 import { logger } from '../logger';
+import { TtlCache } from '../utils/ttlCache';
+import { count, registerMetricSources } from './metrics';
 
 interface FreshPreview {
   previewUrl: string;
   durationSeconds: number;
   artist?: string;
-}
-
-interface CacheEntry<T> {
-  value: T;
-  expiresAt: number;
 }
 
 /**
@@ -42,23 +39,43 @@ const DEEZER_WINDOW_MS = 5000;
 const QUOTA_RETRIES = 3;
 
 /**
- * Two budgets, because the traffic is two very different things. Interactive lookups (the
- * preview a player is staring at a spinner for) may use the whole window; bulk crawling a
- * discography stops short of it. That reserve is the point: a crawl issues hundreds of
- * requests back to back and would otherwise hold the entire quota for its duration, so the
- * one request that actually blocks a player would queue behind it or come back as a quota
- * error indistinguishable from "no preview exists".
+ * Three budgets, because the traffic is three very different things. Interactive lookups (the
+ * preview a player is staring at a spinner for) may use the whole window; a host's song search and
+ * bulk crawling a discography stop short of it. That reserve is the point: a crawl issues hundreds
+ * of requests back to back and would otherwise hold the entire quota for its duration, so the one
+ * request that actually blocks a player would queue behind it or come back as a quota error
+ * indistinguishable from "no preview exists".
  */
 const DEEZER_MAX_PER_WINDOW = 45; // headroom under Deezer's ~50
 const DEEZER_BULK_PER_WINDOW = 30; // leaves 15 slots for interactive lookups
+const DEEZER_SEARCH_PER_WINDOW = 20; // hosts typing cannot starve a live game of previews
+type DeezerPriority = 'interactive' | 'search' | 'bulk';
+
+/** A hung connection must not hold a slot, or a room's start, indefinitely. */
+const DEEZER_TIMEOUT_MS = 8000;
+const DEEZER_MAX_CONCURRENT = 12;
+const NETWORK_RETRIES = 2;
+const BREAKER_THRESHOLD = 5;
+const BREAKER_OPEN_MS = 30_000;
 
 let windowStartedAt = 0;
 let windowCount = 0;
+let inFlightCount = 0;
+let consecutiveFailures = 0;
+let breakerOpenUntil = 0;
+const concurrencyQueue: (() => void)[] = [];
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** Full jitter, so callers that failed together do not retry together. */
+const backoff = (attempt: number): number => Math.random() * 500 * 2 ** attempt;
 
-async function acquireDeezerSlot(bulk: boolean): Promise<void> {
-  const limit = bulk ? DEEZER_BULK_PER_WINDOW : DEEZER_MAX_PER_WINDOW;
+async function acquireDeezerSlot(priority: DeezerPriority): Promise<void> {
+  const limit =
+    priority === 'bulk'
+      ? DEEZER_BULK_PER_WINDOW
+      : priority === 'search'
+        ? DEEZER_SEARCH_PER_WINDOW
+        : DEEZER_MAX_PER_WINDOW;
   for (;;) {
     const now = Date.now();
     if (now - windowStartedAt >= DEEZER_WINDOW_MS) {
@@ -73,6 +90,32 @@ async function acquireDeezerSlot(bulk: boolean): Promise<void> {
   }
 }
 
+async function withConcurrencyLimit<T>(work: () => Promise<T>): Promise<T> {
+  if (inFlightCount >= DEEZER_MAX_CONCURRENT) {
+    await new Promise<void>((resolve) => concurrencyQueue.push(resolve));
+  } else {
+    inFlightCount += 1;
+  }
+  try {
+    return await work();
+  } finally {
+    // The slot passes straight to the next waiter, so the count stays right.
+    const next = concurrencyQueue.shift();
+    if (next) next();
+    else inFlightCount -= 1;
+  }
+}
+
+function recordFailure(): void {
+  count('deezerErrors');
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= BREAKER_THRESHOLD && Date.now() >= breakerOpenUntil) {
+    breakerOpenUntil = Date.now() + BREAKER_OPEN_MS;
+    count('deezerBreakerOpens');
+    logger.error('Deezer is failing: pausing calls for 30s and serving what is cached');
+  }
+}
+
 function isQuotaError(body: unknown): boolean {
   if (typeof body !== 'object' || body === null) return false;
   const error = (body as { error?: unknown }).error;
@@ -81,18 +124,71 @@ function isQuotaError(body: unknown): boolean {
   return typeof message === 'string' && /quota/i.test(message);
 }
 
-/** Rate-limited Deezer GET returning parsed JSON, or null if the request failed outright.
- *  Retries transparently when Deezer answers with a quota error. */
-async function deezerFetchJson<T>(url: string, bulk = false): Promise<T | null> {
-  for (let attempt = 0; attempt <= QUOTA_RETRIES; attempt += 1) {
-    await acquireDeezerSlot(bulk);
+/** Identical GETs running right now, so any number of callers cost one request. */
+const pendingGets = new Map<string, Promise<unknown>>();
 
-    const res = await fetch(url, { headers: { Referer: 'https://chorusify.com/' } });
+/**
+ * Every Deezer call in the app goes through here: the budget window, a concurrency cap, a timeout,
+ * retries with jitter, a circuit breaker, and sharing of identical in-flight requests. Returns null
+ * if the request failed outright, which callers already treat as "nothing available", so an outage
+ * degrades to cached data rather than an exception on the game loop.
+ */
+export function deezerFetchJson<T>(url: string, priority: DeezerPriority | boolean = 'interactive'): Promise<T | null> {
+  const pending = pendingGets.get(url);
+  if (pending) {
+    count('deezerCoalesced');
+    return pending as Promise<T | null>;
+  }
+  const level: DeezerPriority =
+    priority === true ? 'bulk' : priority === false ? 'interactive' : priority;
+  const request = withConcurrencyLimit(() => attemptDeezerFetch<T>(url, level)).finally(() =>
+    pendingGets.delete(url),
+  );
+  pendingGets.set(url, request);
+  return request;
+}
+
+async function attemptDeezerFetch<T>(url: string, priority: DeezerPriority): Promise<T | null> {
+  let networkFailures = 0;
+  for (let attempt = 0; attempt <= QUOTA_RETRIES; attempt += 1) {
+    if (Date.now() < breakerOpenUntil) return null;
+    await acquireDeezerSlot(priority);
+
+    let res: Response;
+    try {
+      count('deezerRequests');
+      res = await fetch(url, {
+        headers: { Referer: 'https://chorusify.com/' },
+        signal: AbortSignal.timeout(DEEZER_TIMEOUT_MS),
+      });
+    } catch (err) {
+      recordFailure();
+      if (networkFailures++ >= NETWORK_RETRIES) {
+        logger.warn({ err, url }, 'Deezer request failed');
+        return null;
+      }
+      await sleep(backoff(networkFailures));
+      continue;
+    }
+    if (res.status >= 500) {
+      recordFailure();
+      if (networkFailures++ >= NETWORK_RETRIES) return null;
+      await sleep(backoff(networkFailures));
+      continue;
+    }
     if (!res.ok) return null;
 
-    const body = (await res.json()) as T;
+    let body: T;
+    try {
+      body = (await res.json()) as T;
+    } catch {
+      recordFailure();
+      return null;
+    }
+    consecutiveFailures = 0;
     if (!isQuotaError(body)) return body;
 
+    count('deezerErrors');
     if (attempt < QUOTA_RETRIES) {
       logger.warn({ url, attempt }, 'Deezer quota exceeded; backing off');
       await sleep(DEEZER_WINDOW_MS);
@@ -103,14 +199,27 @@ async function deezerFetchJson<T>(url: string, bulk = false): Promise<T | null> 
   return null;
 }
 
-/** Test helper — resets the rate-limit window so suites don't inherit each other's budget. */
+/** Test helper: resets the budget and breaker so suites don't inherit each other's state. */
 export function __resetDeezerRateLimit(): void {
   windowStartedAt = 0;
   windowCount = 0;
+  consecutiveFailures = 0;
+  breakerOpenUntil = 0;
+  pendingGets.clear();
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const cache = new Map<string, CacheEntry<FreshPreview>>();
+/** Tracks seen so far; well above any category plus every running playlist. */
+const PREVIEW_CACHE_MAX = 20_000;
+const cache = new TtlCache<FreshPreview>(PREVIEW_CACHE_MAX);
+/** "No preview" is remembered briefly, so a dead track is not looked up by every room. */
+const NEGATIVE_TTL_MS = 60 * 1000;
+const noPreview = new TtlCache<true>(PREVIEW_CACHE_MAX);
+/**
+ * Stale previews are only served while Deezer is unreachable, and only while the signature could
+ * still be valid. Observed lifetime is about fifteen minutes, so past this they are never reused.
+ */
+const STALE_LIMIT_MS = 14 * 60 * 1000;
 
 interface DeezerTrackResponse {
   preview?: string;
@@ -129,28 +238,34 @@ function buildArtistString(body: DeezerTrackResponse): string | undefined {
 
 export async function getFreshPreviewUrl(deezerTrackId: string): Promise<FreshPreview | null> {
   const cached = cache.get(deezerTrackId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
-  }
+  if (cached) return cached;
+  if (noPreview.has(deezerTrackId)) return null;
 
   const body = await deezerFetchJson<DeezerTrackResponse>(
     `https://api.deezer.com/track/${encodeURIComponent(deezerTrackId)}`,
   );
-  if (!body?.preview || body.error) return null;
+  if (!body) {
+    // Deezer unreachable: a url signed recently enough may still play, and a round is better
+    // with it than without. Never reused past the signature's life, unlike the cached copy.
+    return cache.peek(deezerTrackId, STALE_LIMIT_MS) ?? null;
+  }
+  if (!body.preview || body.error) {
+    noPreview.set(deezerTrackId, true, NEGATIVE_TTL_MS);
+    return null;
+  }
 
   const value: FreshPreview = {
     previewUrl: body.preview,
     durationSeconds: body.duration ?? 0,
     artist: buildArtistString(body),
   };
-  cache.set(deezerTrackId, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  cache.set(deezerTrackId, value, CACHE_TTL_MS);
   return value;
 }
 
 /** Pre-seeds the preview cache from bulk track data that already includes preview URLs.
  *  Avoids a per-track /track/{id} call when the data was just fetched. */
 function seedPreviewCache(tracks: DeezerAlbumTrack[]): void {
-  const expiresAt = Date.now() + CACHE_TTL_MS;
   for (const t of tracks) {
     if (!t.preview) continue;
     const trackId = String(t.id);
@@ -159,10 +274,11 @@ function seedPreviewCache(tracks: DeezerAlbumTrack[]): void {
       t.contributors && t.contributors.length > 0
         ? t.contributors.map((c) => c.name).join(', ')
         : t.artist?.name;
-    cache.set(trackId, {
-      value: { previewUrl: t.preview, durationSeconds: t.duration, artist },
-      expiresAt,
-    });
+    cache.set(
+      trackId,
+      { previewUrl: t.preview, durationSeconds: t.duration, artist },
+      CACHE_TTL_MS,
+    );
   }
 }
 
@@ -170,19 +286,117 @@ function seedPreviewCache(tracks: DeezerAlbumTrack[]): void {
 export function seedPreviewCacheFromPlaylist(
   tracks: { deezerTrackId: string; previewUrl: string; durationSeconds: number; artist: string }[],
 ): void {
-  const expiresAt = Date.now() + CACHE_TTL_MS;
   for (const t of tracks) {
     if (cache.has(t.deezerTrackId)) continue;
-    cache.set(t.deezerTrackId, {
-      value: { previewUrl: t.previewUrl, durationSeconds: t.durationSeconds, artist: t.artist },
-      expiresAt,
-    });
+    cache.set(
+      t.deezerTrackId,
+      {
+        previewUrl: t.previewUrl,
+        durationSeconds: t.durationSeconds,
+        artist: t.artist,
+      },
+      CACHE_TTL_MS,
+    );
   }
 }
 
 export function clearPreviewCache(): void {
   cache.clear();
+  noPreview.clear();
 }
+
+// --- Song search (event playlists) -------------------------------------------------------
+
+export interface SongSearchHit {
+  deezerTrackId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  albumArtUrl: string | null;
+  durationSeconds: number;
+  previewUrl: string | null;
+}
+
+interface DeezerSearchTrack {
+  id?: number;
+  title?: string;
+  duration?: number;
+  preview?: string;
+  artist?: { name?: string };
+  album?: { title?: string; cover_medium?: string };
+}
+
+export const SONG_SEARCH_LIMIT = 25;
+const SEARCH_TTL_MS = 30 * 60 * 1000;
+const EMPTY_SEARCH_TTL_MS = 60 * 1000;
+const searchCache = new TtlCache<SongSearchHit[]>(2000);
+
+/**
+ * Searches Deezer's catalogue. Results are shared across hosts, an identical search already
+ * running is joined rather than repeated, and when Deezer is down the last answer for that search
+ * is served even if it has aged out.
+ */
+export async function searchSongs(
+  query: string,
+  field: 'any' | 'artist' | 'album' = 'any',
+): Promise<SongSearchHit[]> {
+  const normalized = query.trim().toLowerCase().replace(/\s+/g, ' ');
+  const key = `${field}:${normalized}`;
+  const cached = searchCache.get(key);
+  if (cached) {
+    count('searchCacheHits');
+    return cached;
+  }
+  count('searchCacheMisses');
+
+  const escaped = normalized.replace(/"/g, ' ');
+  const q = field === 'any' ? escaped : `${field}:"${escaped}"`;
+  const body = await deezerFetchJson<{ data?: DeezerSearchTrack[] }>(
+    `https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=${SONG_SEARCH_LIMIT}`,
+    'search',
+  );
+  if (!body) return searchCache.peek(key) ?? [];
+
+  const hits: SongSearchHit[] = (body.data ?? []).flatMap((t) =>
+    t.id && t.title
+      ? [
+          {
+            deezerTrackId: String(t.id),
+            title: t.title,
+            artist: t.artist?.name ?? 'Unknown',
+            album: t.album?.title ?? null,
+            albumArtUrl: t.album?.cover_medium ?? null,
+            durationSeconds: t.duration ?? 0,
+            previewUrl: t.preview || null,
+          },
+        ]
+      : [],
+  );
+  searchCache.set(key, hits, hits.length ? SEARCH_TTL_MS : EMPTY_SEARCH_TTL_MS);
+  seedPreviewCacheFromPlaylist(
+    hits.flatMap((h) =>
+      h.previewUrl
+        ? [
+            {
+              deezerTrackId: h.deezerTrackId,
+              previewUrl: h.previewUrl,
+              durationSeconds: h.durationSeconds,
+              artist: h.artist,
+            },
+          ]
+        : [],
+    ),
+  );
+  return hits;
+}
+
+registerMetricSources({
+  deezer: () => ({
+    breakerOpen: Date.now() < breakerOpenUntil,
+    previewCache: { size: cache.size, hits: cache.hits, misses: cache.misses },
+    searchCache: { size: searchCache.size, hits: searchCache.hits, misses: searchCache.misses },
+  }),
+});
 
 // --- Artist lookups (Artist Mode) -------------------------------------------------------
 
@@ -222,18 +436,15 @@ export async function searchArtists(query: string): Promise<ArtistSearchResult[]
     .map((a) => ({ id: a.id, name: a.name, pictureUrl: a.picture_medium ?? null }));
 }
 
-const artistCache = new Map<
-  number,
-  CacheEntry<{ id: number; name: string; pictureUrl: string | null } | null>
->();
+const artistCache = new TtlCache<{ id: number; name: string; pictureUrl: string | null } | null>(
+  5000,
+);
 
 export async function getArtistById(
   artistId: number,
 ): Promise<{ id: number; name: string; pictureUrl: string | null } | null> {
-  const cached = artistCache.get(artistId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
-  }
+  const cached = artistCache.get(String(artistId));
+  if (cached !== undefined) return cached;
 
   const body = await deezerFetchJson<DeezerArtistResponse>(
     `https://api.deezer.com/artist/${artistId}`,
@@ -244,7 +455,7 @@ export async function getArtistById(
       ? { id: body.id, name: body.name, pictureUrl: body.picture_medium ?? null }
       : null;
 
-  artistCache.set(artistId, { value, expiresAt: Date.now() + ARTIST_CACHE_TTL_MS });
+  artistCache.set(String(artistId), value, ARTIST_CACHE_TTL_MS);
   return value;
 }
 
@@ -343,7 +554,8 @@ async function fetchArtistTopChart(artistId: number): Promise<DeezerAlbumTrack[]
   return tracks;
 }
 
-const topTracksCache = new Map<string, CacheEntry<ArtistTrack[]>>();
+// Each entry can hold a whole discography, so this bound is what keeps memory flat.
+const topTracksCache = new TtlCache<ArtistTrack[]>(200);
 
 /**
  * Discography fetches that are currently running, keyed the same way as the cache.
@@ -372,9 +584,7 @@ export async function getArtistTopTracks(
 ): Promise<ArtistTrack[]> {
   const cacheKey = `${artistId}:${includeFeatures}`;
   const cached = topTracksCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.value;
-  }
+  if (cached) return cached;
 
   const inFlight = topTracksInFlight.get(cacheKey);
   if (inFlight) {
@@ -383,7 +593,7 @@ export async function getArtistTopTracks(
 
   const pending = fetchArtistTopTracks(artistId, includeFeatures)
     .then((tracks) => {
-      topTracksCache.set(cacheKey, { value: tracks, expiresAt: Date.now() + ARTIST_CACHE_TTL_MS });
+      topTracksCache.set(cacheKey, tracks, ARTIST_CACHE_TTL_MS);
       return tracks;
     })
     // Always release the slot, success or failure, so one failed crawl can't wedge the artist
@@ -541,6 +751,7 @@ export function clearArtistCaches(): void {
   topTracksInFlight.clear();
   artistCache.clear();
   topTracksCache.clear();
+  searchCache.clear();
 }
 
 /** Whether `candidateTitle` is a better representative for `base` than `existingTitle` —

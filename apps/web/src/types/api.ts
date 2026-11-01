@@ -4,6 +4,8 @@ export interface PublicUser {
   displayName: string;
   /** Only decides whether the admin link is rendered — every admin route re-checks server-side. */
   isAdmin?: boolean;
+  /** Same: only decides which links appear. */
+  role?: 'user' | 'event_host' | 'admin';
 }
 
 export interface MeResponse {
@@ -240,6 +242,8 @@ export interface MultiplayerScoreEntry {
   correctThisRound: boolean | null;
   /** This player's reveal stage for the current round (0 = heard only the first slice). */
   stageIndex: number;
+  /** Shared by players level on points and time. Absent only from a lobby snapshot. */
+  rank?: number;
 }
 
 export type MultiplayerGuessMode = 'search' | 'choice';
@@ -258,9 +262,69 @@ export interface MultiplayerRoomSnapshot {
   hostId: string;
   currentRound: number;
   totalRounds: number;
+  /** The newest few once a room is large; `playerCount` is always exact. */
   players: MultiplayerPlayer[];
   hostOnlyAudio: boolean;
   hostPlayable: boolean;
+  playerCount?: number;
+  event?: { id: string; name: string; description: string; audioMode: EventAudioMode } | null;
+  paused?: boolean;
+}
+
+export type EventAudioMode = 'everyone_plays' | 'host_only';
+
+export interface PlaylistTrack {
+  deezerTrackId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  albumArtUrl: string | null;
+  durationSeconds: number;
+}
+
+export interface SongHit extends PlaylistTrack {
+  previewUrl: string | null;
+}
+
+export interface Playlist {
+  id: string;
+  name: string;
+  tracks: PlaylistTrack[];
+  updatedAt: string;
+}
+
+export interface EventInput {
+  name: string;
+  description: string;
+  visibility: 'public' | 'unlisted';
+  password?: string | null;
+  audioMode: EventAudioMode;
+  hostPlays: boolean;
+  rounds: number;
+  playbackSeconds: number;
+  guessSeconds: number;
+  maxPoints: number;
+  minPoints: number;
+  firstBonus: number;
+  playlistId: string;
+}
+
+export interface HostedEvent extends Omit<EventInput, 'password'> {
+  id: string;
+  code: string;
+  status: 'open' | 'live' | 'ended';
+  hasPassword: boolean;
+  trackCount: number;
+  playerCount: number;
+  results: { rank: number; displayName: string; score: number }[] | null;
+  createdAt: string;
+}
+
+export interface EventJoinInfo {
+  name: string;
+  description: string;
+  status: 'open' | 'live' | 'ended';
+  needsPassword: boolean;
 }
 
 export interface MultiplayerCreateRoomResponse {
@@ -653,7 +717,7 @@ export interface UpcomingSchedule {
 export interface AdminDashboard {
   today: string;
   content: { total: number; active: number; curated: number };
-  players: { total: number; admins: number; newThisWeek: number; activeThisWeek: number };
+  players: { total: number; eventHosts: number; newThisWeek: number; activeThisWeek: number };
   activity: {
     dailyPlays24h: number;
     dailyPlays7d: number;
@@ -678,6 +742,7 @@ export interface AdminUser {
   email: string;
   displayName: string;
   isAdmin: boolean;
+  role: 'user' | 'event_host' | 'admin';
   rating: number;
   ratedDuels: number;
   createdAt: string;
@@ -696,6 +761,7 @@ export interface AdminRoom {
   hostId: string;
   currentRound: number;
   totalRounds: number;
+  playerCount?: number;
   players: {
     playerId: string;
     displayName: string;

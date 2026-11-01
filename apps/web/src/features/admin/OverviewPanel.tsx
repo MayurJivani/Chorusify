@@ -37,7 +37,7 @@ export function OverviewPanel() {
 
       <Section title="Players">
         <Stat label="Accounts" value={players.total} />
-        <Stat label="Admins" value={players.admins} />
+        <Stat label="Event hosts" value={players.eventHosts} />
         <Stat label="New this week" value={players.newThisWeek} />
         <Stat label="Signed in this week" value={players.activeThisWeek} />
       </Section>

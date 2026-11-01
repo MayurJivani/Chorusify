@@ -37,6 +37,21 @@ const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter(Boolean),
     ),
+  // The one account with admin rights. Compared server side on every privileged request and never
+  // sent to the client. Unset means nobody is admin: this fails closed.
+  ADMIN_EMAIL: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  // Registration refuses ADMIN_EMAIL because addresses are not verified: otherwise whoever signs up
+  // with it first becomes admin. Set to true only to create the owner's account, then remove it.
+  ADMIN_REGISTRATION_OPEN: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;

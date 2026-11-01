@@ -3,12 +3,18 @@ import type { IncomingMessage, Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { env } from './env';
 import { logger } from './logger';
+import { count } from './services/metrics';
 import * as multiplayer from './services/multiplayerService';
 import { SESSION_COOKIE_NAME, getSessionFromToken, type RequestSession } from './auth/session';
 import type { Identity } from './auth/identity';
 
 const MESSAGE_WINDOW_MS = 10_000;
 const MESSAGE_LIMIT = 60;
+/**
+ * A socket this far behind is on a dead network. Dropping it costs that player a reconnect (events
+ * keep the seat); keeping it means every later frame queues in memory for someone not reading.
+ */
+const MAX_SOCKET_BUFFER_BYTES = 1024 * 1024;
 
 interface AuthedSocket extends WebSocket {
   session: RequestSession;
@@ -60,8 +66,8 @@ function isOriginAllowed(req: IncomingMessage): boolean {
 
 /** Attaches the real-time multiplayer socket server to the app's HTTP server. */
 export function attachWebSocketServer(server: Server): void {
-  // The default maxPayload is 100 MiB; the largest real message is a join with a nickname.
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
+  // The default maxPayload is 100 MiB; the largest real message is a join with a name and password.
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 });
 
   // Reap half-open sockets: a phone that sleeps or drops off wifi never sends a close frame, so
   // its seat would stay in the room, and its socket in memory, for good.
@@ -105,6 +111,7 @@ export function attachWebSocketServer(server: Server): void {
   wss.on('connection', (ws: AuthedSocket, _req: IncomingMessage, session: RequestSession) => {
     ws.session = session;
     alive.add(ws);
+    count('wsConnections');
     ws.on('pong', () => alive.add(ws));
     const playerId = randomUUID();
     const identity: Identity = {
@@ -116,7 +123,16 @@ export function attachWebSocketServer(server: Server): void {
       playerId,
       identity,
       socket: {
-        send: (data) => ws.send(data),
+        send: (data) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          if (ws.bufferedAmount > MAX_SOCKET_BUFFER_BYTES) {
+            count('wsSlowClientsDropped');
+            ws.terminate();
+            return;
+          }
+          count('wsFramesOut');
+          ws.send(data);
+        },
         close: (code, reason) => ws.close(code, reason),
       },
     });
@@ -127,6 +143,7 @@ export function attachWebSocketServer(server: Server): void {
     let windowCount = 0;
 
     ws.on('message', (data) => {
+      count('wsMessagesIn');
       const now = Date.now();
       if (now - windowStart > MESSAGE_WINDOW_MS) {
         windowStart = now;

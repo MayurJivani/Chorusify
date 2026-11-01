@@ -28,6 +28,7 @@ import { adminRouter } from './routes/admin.routes';
 import { friendsRouter } from './routes/friends.routes';
 import { profileRouter } from './routes/profile.routes';
 import { fandomRouter } from './routes/fandom.routes';
+import { eventsRouter } from './routes/events.routes';
 
 /** Deezer's own image hosts only, matched exactly so `dzcdn.net.evil.com` and the like fail. */
 export function isProxyableImageUrl(raw: string): boolean {
@@ -49,6 +50,8 @@ export function createApp(): Express {
   app.set('trust proxy', 1);
   applySecurityMiddleware(app);
   app.use(pinoHttp({ logger }));
+  // A 200-song playlist is the one legitimate large body. Parsed first; the next line then skips it.
+  app.use('/api/events/playlists', express.json({ limit: '256kb' }));
   app.use(express.json({ limit: '10kb' }));
   app.use(cookieParser());
   app.use(sessionMiddleware);
@@ -120,6 +123,7 @@ export function createApp(): Express {
   app.use('/api/era', eraRouter);
   app.use('/api/challenges', challengesRouter);
   app.use('/api/duels', duelsRouter);
+  app.use('/api/events', eventsRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/friends', friendsRouter);
   app.use('/api/profile', profileRouter);

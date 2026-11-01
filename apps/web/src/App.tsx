@@ -1,38 +1,46 @@
+import { lazy } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
 import { SessionProvider } from './hooks/useSession';
 import { GameConfigProvider } from './hooks/useGameConfig';
 import { RootLayout } from './routes/RootLayout';
 import { HomePage } from './routes/HomePage';
-import { PlayPage } from './routes/PlayPage';
-import { StatsPage } from './routes/StatsPage';
-import { LeaderboardPage } from './routes/LeaderboardPage';
-import { LoginPage } from './routes/LoginPage';
-import { RegisterPage } from './routes/RegisterPage';
-import { AboutPage } from './routes/AboutPage';
-import { PrivacyPage } from './routes/PrivacyPage';
-import { TermsPage } from './routes/TermsPage';
-import { CookiePolicyPage } from './routes/CookiePolicyPage';
-import { ArtistSearchPage } from './routes/ArtistSearchPage';
-import { ArtistPlayPage } from './routes/ArtistPlayPage';
-import { CategoryPickerPage } from './routes/CategoryPickerPage';
-import { SoundtrackPickerPage } from './routes/SoundtrackPickerPage';
-import { CategoryPlayPage } from './routes/CategoryPlayPage';
-import { SurvivalPage } from './routes/SurvivalPage';
-import { EraPlayPage } from './routes/EraPlayPage';
-import { DuelsPage } from './routes/DuelsPage';
-import { AdminPage } from './routes/AdminPage';
-import { NotFoundPage } from './routes/NotFoundPage';
-import { MultiplayerHomePage } from './routes/MultiplayerHomePage';
-import { MultiplayerRoomPage } from './routes/MultiplayerRoomPage';
-import { FriendsPage } from './routes/FriendsPage';
-import { ForgotPasswordPage } from './routes/ForgotPasswordPage';
-import { ProfilePage } from './routes/ProfilePage';
-import { FandomsPage } from './routes/FandomsPage';
-import { FandomDetailPage } from './routes/FandomDetailPage';
 import { ToastProvider } from './hooks/useToast';
 import { KonamiVinylPlayer } from './features/easter-eggs/KonamiVinylPlayer';
 import { SecretDJMode } from './features/easter-eggs/SecretDJMode';
+
+// Every route but the home page loads on demand: someone scanning a QR code at an event should
+// not download the admin console to answer a music question.
+const PlayPage = lazy(() => import('./routes/PlayPage').then((m) => ({ default: m.PlayPage })));
+const StatsPage = lazy(() => import('./routes/StatsPage').then((m) => ({ default: m.StatsPage })));
+const LeaderboardPage = lazy(() => import('./routes/LeaderboardPage').then((m) => ({ default: m.LeaderboardPage })));
+const LoginPage = lazy(() => import('./routes/LoginPage').then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('./routes/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+const AboutPage = lazy(() => import('./routes/AboutPage').then((m) => ({ default: m.AboutPage })));
+const PrivacyPage = lazy(() => import('./routes/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('./routes/TermsPage').then((m) => ({ default: m.TermsPage })));
+const CookiePolicyPage = lazy(() => import('./routes/CookiePolicyPage').then((m) => ({ default: m.CookiePolicyPage })));
+const ArtistSearchPage = lazy(() => import('./routes/ArtistSearchPage').then((m) => ({ default: m.ArtistSearchPage })));
+const ArtistPlayPage = lazy(() => import('./routes/ArtistPlayPage').then((m) => ({ default: m.ArtistPlayPage })));
+const CategoryPickerPage = lazy(() => import('./routes/CategoryPickerPage').then((m) => ({ default: m.CategoryPickerPage })));
+const SoundtrackPickerPage = lazy(() => import('./routes/SoundtrackPickerPage').then((m) => ({ default: m.SoundtrackPickerPage })));
+const CategoryPlayPage = lazy(() => import('./routes/CategoryPlayPage').then((m) => ({ default: m.CategoryPlayPage })));
+const SurvivalPage = lazy(() => import('./routes/SurvivalPage').then((m) => ({ default: m.SurvivalPage })));
+const EraPlayPage = lazy(() => import('./routes/EraPlayPage').then((m) => ({ default: m.EraPlayPage })));
+const DuelsPage = lazy(() => import('./routes/DuelsPage').then((m) => ({ default: m.DuelsPage })));
+const AdminPage = lazy(() => import('./routes/AdminPage').then((m) => ({ default: m.AdminPage })));
+const NotFoundPage = lazy(() => import('./routes/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
+const MultiplayerHomePage = lazy(() => import('./routes/MultiplayerHomePage').then((m) => ({ default: m.MultiplayerHomePage })));
+const MultiplayerRoomPage = lazy(() => import('./routes/MultiplayerRoomPage').then((m) => ({ default: m.MultiplayerRoomPage })));
+const FriendsPage = lazy(() => import('./routes/FriendsPage').then((m) => ({ default: m.FriendsPage })));
+const ForgotPasswordPage = lazy(() => import('./routes/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
+const ProfilePage = lazy(() => import('./routes/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const FandomsPage = lazy(() => import('./routes/FandomsPage').then((m) => ({ default: m.FandomsPage })));
+const FandomDetailPage = lazy(() => import('./routes/FandomDetailPage').then((m) => ({ default: m.FandomDetailPage })));
+const EventsPage = lazy(() => import('./routes/EventsPage').then((m) => ({ default: m.EventsPage })));
+const EventConsolePage = lazy(() =>
+  import('./routes/EventConsolePage').then((m) => ({ default: m.EventConsolePage })),
+);
 
 const router = createBrowserRouter([
   {
@@ -57,6 +65,8 @@ const router = createBrowserRouter([
       { path: '/era', element: <EraPlayPage /> },
       { path: '/duels', element: <DuelsPage /> },
       { path: '/admin', element: <AdminPage /> },
+      { path: '/events', element: <EventsPage /> },
+      { path: '/events/:id/live', element: <EventConsolePage /> },
       { path: '/multiplayer', element: <MultiplayerHomePage /> },
       { path: '/room/:code', element: <MultiplayerRoomPage /> },
       { path: '/fandoms', element: <FandomsPage /> },

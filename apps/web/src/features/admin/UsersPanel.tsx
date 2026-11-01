@@ -36,14 +36,16 @@ export function UsersPanel() {
     setSearch(query);
   };
 
-  const toggleAdmin = async (user: AdminUser) => {
+  const toggleHost = async (user: AdminUser) => {
     setError(null);
     setNotice(null);
     try {
-      const { user: updated } = await updateAdminUser(user.id, { isAdmin: !user.isAdmin });
+      const { user: updated } = await updateAdminUser(user.id, {
+        role: user.role === 'event_host' ? 'user' : 'event_host',
+      });
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setNotice(
-        `${updated.displayName} is ${updated.isAdmin ? 'now an admin' : 'no longer an admin'}.`,
+        `${updated.displayName} ${updated.role === 'event_host' ? 'can now host events' : 'can no longer host events'}.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update user.');
@@ -108,6 +110,11 @@ export function UsersPanel() {
                       admin
                     </span>
                   )}
+                  {user.role === 'event_host' && (
+                    <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-200">
+                      event host
+                    </span>
+                  )}
                 </p>
                 <p className="truncate text-xs text-slate-500">{user.email}</p>
                 <p className="text-[11px] text-slate-600">
@@ -121,14 +128,15 @@ export function UsersPanel() {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void toggleAdmin(user)}
+                  onClick={() => void toggleHost(user)}
+                  disabled={user.isAdmin}
                   className={`btn-ghost !py-1 text-xs ${
-                    user.isAdmin
+                    user.role === 'event_host'
                       ? 'text-red-300 hover:text-red-200'
                       : 'text-emerald-300 hover:text-emerald-200'
                   }`}
                 >
-                  {user.isAdmin ? 'Remove admin' : 'Make admin'}
+                  {user.role === 'event_host' ? 'Revoke hosting' : 'Make event host'}
                 </button>
               </div>
             </li>

@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { listPublicEvents } from '../api/events';
 import { createMultiplayerRoom, MULTIPLAYER_MAX_ROUNDS } from '../api/multiplayer';
 import { SourcePicker, type PickedSource } from '../features/multiplayer/SourcePicker';
 import { QrScanner } from '../features/multiplayer/QrScanner';
@@ -19,6 +20,38 @@ const CLASSIC_ENABLED = false;
 
 /** Offered game lengths. Capped at the server's MP_MAX_ROUNDS. */
 const ROUND_CHOICES = [5, 10, 15, 20, MULTIPLAYER_MAX_ROUNDS] as const;
+
+/** Events their hosts chose to list. Absent, not empty, when there are none. */
+function PublicEvents() {
+  const [events, setEvents] = useState<Awaited<ReturnType<typeof listPublicEvents>>['events']>([]);
+  useEffect(() => {
+    listPublicEvents().then(
+      (r) => setEvents(r.events),
+      () => undefined,
+    );
+  }, []);
+  if (events.length === 0) return null;
+  return (
+    <section className="glass w-full rounded-2xl p-4">
+      <h2 className="mb-2 text-sm font-semibold text-white">Happening now</h2>
+      <ul className="flex flex-col gap-1">
+        {events.map((event) => (
+          <li key={event.code}>
+            <Link
+              to={`/room/${event.code}`}
+              className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 text-sm text-slate-200 transition-colors hover:bg-white/5"
+            >
+              <span className="min-w-0 truncate font-medium">{event.name}</span>
+              <span className="shrink-0 text-xs text-slate-400">
+                {event.needsPassword ? 'Password' : event.status === 'live' ? 'Live' : 'Open'}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export function MultiplayerHomePage() {
   usePageTitle('Multiplayer');
@@ -90,6 +123,7 @@ export function MultiplayerHomePage() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-xl flex-col items-center gap-5 px-4 py-6 sm:py-10">
+      <PublicEvents />
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}

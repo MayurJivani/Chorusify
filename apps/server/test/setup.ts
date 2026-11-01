@@ -31,6 +31,8 @@ function assertTestDatabase(): void {
  * this can never wipe another file's data mid-run.
  */
 const TABLES = [
+  'events',
+  'playlists',
   'messages',
   'friendships',
   'password_reset_tokens',

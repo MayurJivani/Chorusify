@@ -17,6 +17,7 @@ import { seededShuffle } from '../utils/deterministic';
 import { timeDecayScore } from '../utils/scoring';
 import { getSettings } from './settingsService';
 import { logger } from '../logger';
+import { answerProcessingMs, count, registerMetricSources } from './metrics';
 
 /** Seconds of audio revealed at each reveal stage, Heardle-style. Players advance their own
  *  snippet one stage at a time with a "reveal more" action instead of a shared auto-timer. */
@@ -34,6 +35,23 @@ export const MP_REVEAL_DURATION_MS = 10_000;
 /** Fallback only; the live limit is the `multiplayerMaxPlayers` setting, which goes far higher. */
 export const MP_MAX_PLAYERS = 8;
 export const MP_EMPTY_ROOM_TTL_MS = 10 * 60 * 1000;
+/** The size load-tested end to end. See docs/LOAD-TEST.md before raising it. */
+export const EVENT_MAX_PLAYERS = 1000;
+/**
+ * Above this a room stops broadcasting per action. A join or guess then marks the room dirty and
+ * one frame goes out per interval, because a frame per action in a full room is N frames to N
+ * sockets. Smaller rooms keep the instant update, where it is cheap and people notice.
+ */
+const COALESCE_ABOVE_PLAYERS = 32;
+const COALESCE_INTERVAL_MS = 250;
+/** Names carried by a large room's snapshot: the newest joiners, for the lobby to show. */
+const LARGE_ROOM_SNAPSHOT_PLAYERS = 24;
+/** Time for every phone to buffer and for clients to line up on one start instant. */
+const EVENT_ROUND_LEAD_MS = 2500;
+/** A phone asleep in the lobby keeps its seat this long, then stops counting as present. */
+const LOBBY_SEAT_GRACE_MS = 2 * 60 * 1000;
+const EVENT_IDLE_ROOM_TTL_MS = 30 * 60 * 1000;
+const MAX_PASSWORD_ATTEMPTS = 5;
 
 /**
  * Multiplayer choice rounds offer four answers, not the three a single-player run uses.
@@ -72,7 +90,7 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** An opaque outbound channel — the real WebSocket wrapper lives in ws.ts, a fake in tests. */
 export interface MpSocket {
-  send(data: string): void;
+  send(data: string | Buffer): void;
   close(code?: number, reason?: string): void;
 }
 
@@ -95,9 +113,15 @@ export interface MpPlayerState {
   /** This player's own reveal stage for the current round (0 = only the first slice heard). */
   stageIndex: number;
   joinedAt: number;
+  connected?: boolean;
 }
 
 interface MpPlayer extends MpPlayerState {
+  /** Stable across reconnects, unlike playerId: it is what holds an event seat. */
+  seatKey: string;
+  disconnectedAt: number | null;
+  /** Answer time in the current round, so a skipped round can be taken back out. */
+  roundAnswerMs: number;
   socket: MpSocket;
   identity: Identity;
   /**
@@ -144,8 +168,55 @@ interface MpDuel {
   settled: boolean;
 }
 
+/** What makes a room a hosted event. See eventService for the stored half. */
+export interface MpEvent {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  description: string;
+  passwordHash: string | null;
+  audioMode: 'everyone_plays' | 'host_only';
+  hostPlays: boolean;
+  playbackSeconds: number;
+}
+
+export interface EventHooks {
+  /** Finds a stored event whose room is not in memory (first join, or after a restart). */
+  load(code: string): Promise<{ event: MpEvent; tracks: ArtistTrack[]; config: EventRoomConfig } | 'ended' | null>;
+  canHost(userId: string): Promise<boolean>;
+  checkPassword(event: MpEvent, password: string): boolean;
+  onStarted(eventId: string): void;
+  onFinished(eventId: string, playerCount: number, top: { rank: number; displayName: string; score: number }[]): void;
+}
+
+export interface EventRoomConfig {
+  rounds: number;
+  guessSeconds: number;
+  maxPoints: number;
+  minPoints: number;
+  firstBonus: number;
+}
+
+let eventHooks: EventHooks | null = null;
+export function setEventHooks(hooks: EventHooks): void {
+  eventHooks = hooks;
+}
+
 interface MpRoom {
   code: string;
+  /** Present on hosted events. The owner then controls the room without holding a player seat. */
+  event?: MpEvent;
+  /** Event seats by identity, so a reconnect finds its score and a second tab replaces the first. */
+  seats: Map<string, MpPlayer>;
+  kicked: Set<string>;
+  /** When the current phase's timer fires, and what is left of it while paused. */
+  phaseEndsAt: number;
+  paused: { at: number; remainingMs: number } | null;
+  /** Answer ranks frozen at round start; a thousand guesses would otherwise each sort the room. */
+  roundRanks: Map<string, number>;
+  scoresTimer: ReturnType<typeof setTimeout> | null;
+  stateTimer: ReturnType<typeof setTimeout> | null;
+  lastActiveAt: number;
   /**
    * What the room's songs come from.
    *
@@ -197,6 +268,8 @@ export interface MpScoreEntry {
   correctThisRound: boolean | null;
   /** This player's reveal stage for the current round (0 = heard only the first slice). */
   stageIndex: number;
+  /** Shared by players level on points and answer time. */
+  rank: number;
 }
 
 export interface MpRoomSnapshot {
@@ -217,14 +290,34 @@ export interface MpRoomSnapshot {
   hostPlayable: boolean;
   /** True on a rated duel, so the client can drop the host controls and show the stakes. */
   isDuel: boolean;
+  /** Everyone in the room. `players` only holds the newest few once a room is large. */
+  playerCount: number;
+  event: {
+    id: string;
+    name: string;
+    description: string;
+    audioMode: MpEvent['audioMode'];
+  } | null;
+  paused: boolean;
 }
+
+const emptyRoomExtras = () => ({
+  seats: new Map<string, MpPlayer>(),
+  kicked: new Set<string>(),
+  phaseEndsAt: 0,
+  paused: null,
+  roundRanks: new Map<string, number>(),
+  scoresTimer: null,
+  stateTimer: null,
+  lastActiveAt: Date.now(),
+});
 
 const rooms = new Map<string, MpRoom>();
 const sockets = new Map<string, MpSocket>();
 const identities = new Map<string, Identity>();
 const playerRooms = new Map<string, string>();
 
-function generateRoomCode(): string {
+export function generateRoomCode(): string {
   const bytes = randomBytes(6);
   let code = '';
   for (const b of bytes) {
@@ -286,6 +379,7 @@ export async function createRoom(
     speedCorrectCount: 0,
     hostOnlyAudio,
     hostPlayable,
+    ...emptyRoomExtras(),
   });
 
   logger.info(
@@ -337,6 +431,77 @@ export async function createDuelRoom(
   return { code };
 }
 
+/** Puts a stored event's room in memory. Its rules come from the event, not the admin settings. */
+async function createEventRoom(
+  code: string,
+  event: MpEvent,
+  tracks: ArtistTrack[],
+  config: EventRoomConfig,
+): Promise<MpRoom> {
+  const settings = await getSettings();
+  const existing = rooms.get(code);
+  if (existing) return existing;
+  const room: MpRoom = {
+    code,
+    event,
+    source: {
+      sourceType: 'category',
+      sourceId: event.id,
+      label: event.name,
+      pictureUrl: null,
+      answerIsTitle: false,
+      loadCatalog: async () => tracks,
+    } as unknown as ChallengeSource,
+    guessMode: 'choice',
+    gameMode: 'speed',
+    phase: 'lobby',
+    hostId: '',
+    players: new Map(),
+    tracks: [],
+    previewUrls: [],
+    roundOptions: [],
+    currentRound: 0,
+    roundStartedAt: 0,
+    timers: [],
+    createdAt: Date.now(),
+    rounds: config.rounds,
+    roundDurationMs: config.guessSeconds * 1000,
+    revealDurationMs: settings.multiplayerRevealSeconds * 1000,
+    maxPlayers: EVENT_MAX_PLAYERS,
+    revealSchedule: settings.snippetScheduleSeconds,
+    speedRoundDurationMs: config.guessSeconds * 1000,
+    speedSnippetSeconds: event.playbackSeconds,
+    speedPoints: [config.firstBonus],
+    speedMaxPoints: config.maxPoints,
+    speedMinPoints: config.minPoints,
+    speedCorrectCount: 0,
+    hostOnlyAudio: event.audioMode === 'host_only',
+    hostPlayable: true,
+    ...emptyRoomExtras(),
+  };
+  rooms.set(code, room);
+  logger.info({ code, eventId: event.id }, 'Event room opened');
+  return room;
+}
+
+/** One lookup however many phones scan the code in the same moment. */
+const roomLoads = new Map<string, Promise<MpRoom | 'ended' | null>>();
+function loadEventRoom(code: string): Promise<MpRoom | 'ended' | null> {
+  if (!eventHooks) return Promise.resolve(null);
+  const pending = roomLoads.get(code);
+  if (pending) return pending;
+  const load: Promise<MpRoom | 'ended' | null> = eventHooks
+    .load(code)
+    .then<MpRoom | 'ended' | null>((found) =>
+      found && found !== 'ended'
+        ? createEventRoom(code, found.event, found.tracks, found.config)
+        : (found as 'ended' | null),
+    )
+    .finally(() => roomLoads.delete(code));
+  roomLoads.set(code, load);
+  return load;
+}
+
 /** Registers a new WebSocket connection (no room membership yet — join_room binds it). */
 export function registerConnection(input: {
   playerId: string;
@@ -348,7 +513,8 @@ export function registerConnection(input: {
 }
 
 export function unregisterConnection(playerId: string): void {
-  leaveRoom(playerId);
+  dropFromRoom(playerId);
+  passwordAttempts.delete(playerId);
   // A queued player whose socket died must come out of the line, or the next person to pick
   // that artist gets matched into a room nobody is going to join.
   duelQueue.dropPlayer(playerId);
@@ -383,7 +549,8 @@ export async function handleClientMessage(playerId: string, message: unknown): P
         typeof payload.code === 'string' ? payload.code.trim().toUpperCase().slice(0, 12) : '';
       const nickname =
         typeof payload.nickname === 'string' ? payload.nickname.trim().slice(0, 24) : undefined;
-      await joinRoom(playerId, code, nickname);
+      const password = typeof payload.password === 'string' ? payload.password.slice(0, 100) : '';
+      await joinRoom(playerId, code, nickname, password);
       break;
     }
     case 'leave_room':
@@ -402,7 +569,8 @@ export async function handleClientMessage(playerId: string, message: unknown): P
       revealMore(playerId);
       break;
     case 'guess': {
-      const trackId = typeof payload.trackId === 'string' ? payload.trackId : undefined;
+      const trackId =
+        typeof payload.trackId === 'string' ? payload.trackId.slice(0, 32) : undefined;
       if (trackId) submitGuess(playerId, trackId);
       break;
     }
@@ -410,7 +578,35 @@ export async function handleClientMessage(playerId: string, message: unknown): P
       skipReveal(playerId);
       break;
     case 'ping':
-      sendTo(playerId, { type: 'pong' });
+      // Echoes the client's own timestamp, which is what lets it work out its clock offset.
+      sendTo(playerId, { type: 'pong', t: payload.t, serverNow: Date.now() });
+      break;
+
+    case 'host_event':
+      if (typeof payload.eventId === 'string' && typeof payload.code === 'string') {
+        await attachHost(playerId, payload.eventId.slice(0, 64), payload.code.slice(0, 12));
+      }
+      break;
+    case 'host_pause':
+      withControl(playerId, pauseRoom);
+      break;
+    case 'host_resume':
+      withControl(playerId, resumeRoom);
+      break;
+    case 'host_skip':
+      withControl(playerId, skipCurrent);
+      break;
+    case 'host_stop_audio':
+      withControl(playerId, (room) => broadcast(room, { type: 'stop_audio' }));
+      break;
+    case 'host_end':
+      withControl(playerId, endEvent);
+      break;
+    case 'host_kick':
+      if (typeof payload.playerId === 'string') {
+        const target = payload.playerId;
+        withControl(playerId, (room) => kickPlayer(room, target));
+      }
       break;
 
     // Duel matchmaking rides the same socket rather than opening a second one: the connection
@@ -449,17 +645,32 @@ function parseDuelRequest(payload: Record<string, unknown>): duelQueue.DuelQueue
   return null;
 }
 
-async function joinRoom(playerId: string, code: string, nickname?: string): Promise<void> {
-  const current = playerRooms.get(playerId);
-  if (current === code) return;
-  if (current) leaveRoom(playerId);
+const passwordAttempts = new Map<string, number>();
 
-  const room = rooms.get(code);
+async function joinRoom(
+  playerId: string,
+  code: string,
+  nickname?: string,
+  password = '',
+): Promise<void> {
+  const current = playerRooms.get(playerId);
+  if (current === code && rooms.get(code)?.players.has(playerId)) return;
+  if (current && current !== code) leaveRoom(playerId);
+
+  let room = rooms.get(code);
+  if (!room) {
+    const loaded = await loadEventRoom(code);
+    if (loaded === 'ended') return sendError(playerId, 'That event has ended.');
+    if (loaded) room = loaded;
+  }
   if (!room) return sendError(playerId, 'Room not found, check the code and try again.');
-  if (room.phase !== 'lobby') return sendError(playerId, 'That game is already in progress.');
-  if (room.players.size >= room.maxPlayers) return sendError(playerId, 'Room is full.');
 
   const identity = identities.get(playerId) ?? { userId: null, guestId: null };
+
+  if (room.event) return joinEvent(room, playerId, identity, nickname, password);
+
+  if (room.phase !== 'lobby') return sendError(playerId, 'That game is already in progress.');
+  if (room.players.size >= room.maxPlayers) return sendError(playerId, 'Room is full.');
 
   // A duel's two seats are reserved for the accounts the matchmaker paired. Without this the
   // room code is a plain string that anyone could join, and a rated result would depend on who
@@ -476,10 +687,19 @@ async function joinRoom(playerId: string, code: string, nickname?: string): Prom
     }
   }
 
+  const displayName = await resolveDisplayName(identity, nickname);
+  // The lookup above yields, so re-check: the room may have filled, or the socket gone, meanwhile.
+  if (!sockets.has(playerId)) return;
+  if (room.phase !== 'lobby') return sendError(playerId, 'That game is already in progress.');
+  if (room.players.size >= room.maxPlayers) return sendError(playerId, 'Room is full.');
+
   const isHost = room.players.size === 0;
   const player: MpPlayer = {
     playerId,
-    displayName: await resolveDisplayName(identity, nickname),
+    seatKey: playerId,
+    disconnectedAt: null,
+    roundAnswerMs: 0,
+    displayName,
     identity,
     socket: sockets.get(playerId)!,
     isHost,
@@ -507,6 +727,304 @@ async function joinRoom(playerId: string, code: string, nickname?: string): Prom
   }
 }
 
+const seatKeyFor = (identity: Identity, playerId: string): string =>
+  identity.userId ?? identity.guestId ?? playerId;
+
+/**
+ * Takes or retakes an event seat.
+ *
+ * Unlike a friends' room this works at any point in the game: the same identity gets its score
+ * back, and someone new starts from zero at whichever round is running. A phone in a lecture hall
+ * loses signal or sleeps all the time, and an event cannot treat that as walking out.
+ */
+async function joinEvent(
+  room: MpRoom,
+  playerId: string,
+  identity: Identity,
+  nickname: string | undefined,
+  password: string,
+): Promise<void> {
+  const event = room.event!;
+  const seatKey = seatKeyFor(identity, playerId);
+  if (room.kicked.has(seatKey)) return sendError(playerId, 'The host removed you from this event.');
+  if (room.phase === 'finished') return sendError(playerId, 'That event has ended.');
+
+  const seat = room.seats.get(seatKey);
+  const isOwner = identity.userId === event.ownerUserId;
+  if (!seat) {
+    if (event.passwordHash && !isOwner && !eventHooks?.checkPassword(event, password)) {
+      const attempts = (passwordAttempts.get(playerId) ?? 0) + 1;
+      passwordAttempts.set(playerId, attempts);
+      sendTo(playerId, {
+        type: 'error',
+        code: password ? 'wrong_password' : 'password_required',
+        message: password ? 'That password is not right.' : 'This event needs a password.',
+      });
+      if (attempts >= MAX_PASSWORD_ATTEMPTS) sockets.get(playerId)?.close(1008, 'Too many attempts');
+      return;
+    }
+    const displayName = await resolveDisplayName(identity, nickname);
+    if (!sockets.has(playerId)) return;
+    if (room.seats.has(seatKey)) return joinEvent(room, playerId, identity, nickname, password);
+    if (room.seats.size >= room.maxPlayers) return sendError(playerId, 'This event is full.');
+
+    const player: MpPlayer = {
+      playerId,
+      seatKey,
+      disconnectedAt: null,
+      roundAnswerMs: 0,
+      displayName,
+      identity,
+      socket: sockets.get(playerId)!,
+      isHost: isOwner,
+      score: 0,
+      // Someone arriving mid-round has that round to play.
+      roundAnswered: false,
+      roundCorrect: null,
+      roundPoints: 0,
+      stageIndex: 0,
+      scoreAtRoundStart: 0,
+      totalAnswerMs: 0,
+      joinedAt: Date.now(),
+    };
+    room.seats.set(seatKey, player);
+    room.players.set(playerId, player);
+  } else if (seat.playerId !== playerId) {
+    // The same person on a new socket. The old one is told why, and must not reconnect over this.
+    count('reconnects');
+    const old = sockets.get(seat.playerId);
+    room.players.delete(seat.playerId);
+    playerRooms.delete(seat.playerId);
+    old?.close(4001, 'Opened somewhere else');
+    seat.playerId = playerId;
+    seat.socket = sockets.get(playerId)!;
+    seat.disconnectedAt = null;
+    room.players.set(playerId, seat);
+  } else {
+    seat.disconnectedAt = null;
+  }
+  playerRooms.set(playerId, room.code);
+  room.lastActiveAt = Date.now();
+
+  sendCatchUp(room, playerId);
+  broadcastRoomState(room);
+}
+
+/** Everything a player arriving now needs: the room, and the round in progress if there is one. */
+function sendCatchUp(room: MpRoom, playerId: string): void {
+  sendTo(playerId, { type: 'room_state', room: buildRoomSnapshot(room) });
+  const player = room.players.get(playerId);
+  if ((room.phase === 'playing' || room.phase === 'round-reveal') && player) {
+    sendRoundStart(room, player);
+    if (player.roundAnswered) {
+      sendTo(playerId, {
+        type: 'guess_result',
+        stageIndex: player.stageIndex,
+        yourRank: room.roundRanks.get(player.seatKey) ?? room.players.size,
+        totalPlayers: room.players.size,
+      });
+    }
+    sendTo(playerId, scoresFrame(room));
+  }
+  if (room.phase === 'round-reveal') sendTo(playerId, roundEndFrame(room));
+  if (room.paused) sendTo(playerId, { type: 'paused', remainingMs: room.paused.remainingMs });
+}
+
+/** A dead socket, as opposed to a player choosing to leave. Only events keep the seat. */
+function dropFromRoom(playerId: string): void {
+  const code = playerRooms.get(playerId);
+  const room = code ? rooms.get(code) : undefined;
+  if (!room?.event || room.phase === 'finished') return leaveRoom(playerId);
+
+  playerRooms.delete(playerId);
+  if (room.hostId === playerId) room.hostId = '';
+  const player = room.players.get(playerId);
+  if (player) player.disconnectedAt = Date.now();
+  room.lastActiveAt = Date.now();
+  resolveRoundIfComplete(room);
+  broadcastRoomState(room);
+}
+
+/** Players the round is still waiting for. Someone with no connection cannot answer. */
+function resolveRoundIfComplete(room: MpRoom): void {
+  if (room.phase !== 'playing' || room.paused) return;
+  for (const p of room.players.values()) {
+    if (!p.roundAnswered && p.disconnectedAt === null && !(p.playerId === room.hostId && !room.hostPlayable)) {
+      return;
+    }
+  }
+  // Nobody connected at all is an empty hall, not a finished round: let the clock decide.
+  if (room.event && ![...room.players.values()].some((p) => p.disconnectedAt === null)) return;
+  endRound(room);
+}
+
+// --- Event host controls ------------------------------------------------------------------
+
+/**
+ * Makes this socket the event's controller.
+ *
+ * Controlling and playing are separate things: the controller is not in `players`, so holds no
+ * seat, no score and no place on the leaderboard unless the event says the host plays too. The
+ * role is re-read from the database here rather than trusted from when the socket opened.
+ */
+async function attachHost(playerId: string, eventId: string, code: string): Promise<void> {
+  const identity = identities.get(playerId);
+  const userId = identity?.userId;
+  const loaded = rooms.get(code) ?? (await loadEventRoom(code));
+  const room = loaded && loaded !== 'ended' && loaded.event?.id === eventId ? loaded : null;
+  const refuse = () => sendTo(playerId, { type: 'error', code: 'not_host', message: 'Only the event host can do that.' });
+  if (!userId || !eventHooks || !(await eventHooks.canHost(userId))) return refuse();
+  if (!room || room.event?.ownerUserId !== userId) return refuse();
+  if (!sockets.has(playerId)) return;
+
+  const previous = room.hostId;
+  if (previous && previous !== playerId) {
+    playerRooms.delete(previous);
+    sockets.get(previous)?.close(4001, 'Opened somewhere else');
+  }
+  room.hostId = playerId;
+  playerRooms.set(playerId, room.code);
+  room.lastActiveAt = Date.now();
+
+  if (room.event!.hostPlays) await joinEvent(room, playerId, identity!, undefined, '');
+  else sendCatchUp(room, playerId);
+  sendHostRound(room);
+  broadcastRoomState(room);
+}
+
+function withControl(playerId: string, action: (room: MpRoom) => void): void {
+  const room = roomFor(playerId);
+  if (!room?.event || room.hostId !== playerId) {
+    return sendTo(playerId, { type: 'error', code: 'not_host', message: 'Only the event host can do that.' });
+  }
+  action(room);
+}
+
+/** The song, for the host's device only. Sent in both audio modes; only host_only plays it. */
+function sendHostRound(room: MpRoom): void {
+  if (!room.hostId || (room.phase !== 'playing' && room.phase !== 'round-reveal')) return;
+  const track = room.tracks[room.currentRound];
+  sendTo(room.hostId, {
+    type: 'host_round',
+    roundIndex: room.currentRound,
+    totalRounds: room.rounds,
+    playAt: room.roundStartedAt,
+    playbackSeconds: room.speedSnippetSeconds,
+    roundEndsAt: room.phaseEndsAt,
+    previewUrl: room.previewUrls[room.currentRound] ?? null,
+    title: track?.title ?? null,
+    artist: track?.artist ?? null,
+    albumArtUrl: track?.albumArtUrl ?? null,
+  });
+}
+
+function pauseRoom(room: MpRoom): void {
+  if (room.paused || (room.phase !== 'playing' && room.phase !== 'round-reveal')) return;
+  clearRoomTimers(room);
+  room.paused = { at: Date.now(), remainingMs: Math.max(0, room.phaseEndsAt - Date.now()) };
+  broadcast(room, { type: 'paused', remainingMs: room.paused.remainingMs });
+}
+
+function resumeRoom(room: MpRoom): void {
+  if (!room.paused) return;
+  const { at, remainingMs } = room.paused;
+  room.paused = null;
+  // The clock simply did not run: answer times and audio position both stay continuous.
+  room.roundStartedAt += Date.now() - at;
+  schedulePhaseEnd(room, remainingMs);
+  broadcast(room, {
+    type: 'resumed',
+    startedAt: room.roundStartedAt,
+    phaseEndsAt: room.phaseEndsAt,
+    serverNow: Date.now(),
+  });
+  sendHostRound(room);
+}
+
+function schedulePhaseEnd(room: MpRoom, delayMs: number): void {
+  room.phaseEndsAt = Date.now() + delayMs;
+  room.timers.push(
+    setTimeout(() => {
+      if (room.phase === 'playing') endRound(room);
+      else if (room.phase === 'round-reveal') advanceRound(room);
+    }, delayMs),
+  );
+}
+
+function advanceRound(room: MpRoom): void {
+  clearRoomTimers(room);
+  room.paused = null;
+  if (room.currentRound >= room.rounds - 1) finishGame(room);
+  else if (room.event) void startEventRound(room, room.currentRound + 1);
+  else startRound(room, room.currentRound + 1);
+}
+
+/** A round that did not count: nobody keeps points from a song the host threw out. */
+function rollBackRound(room: MpRoom): void {
+  for (const p of room.players.values()) {
+    p.score = p.scoreAtRoundStart;
+    p.totalAnswerMs -= p.roundAnswerMs;
+    p.roundAnswerMs = 0;
+    p.roundCorrect = null;
+    p.roundPoints = 0;
+  }
+}
+
+function skipCurrent(room: MpRoom): void {
+  if (room.phase === 'playing') rollBackRound(room);
+  else if (room.phase !== 'round-reveal') return;
+  broadcast(room, { type: 'stop_audio' });
+  advanceRound(room);
+}
+
+function endEvent(room: MpRoom): void {
+  if (room.phase === 'finished') return;
+  if (room.phase === 'playing') rollBackRound(room);
+  clearRoomTimers(room);
+  room.paused = null;
+  broadcast(room, { type: 'stop_audio' });
+  finishGame(room);
+}
+
+function kickPlayer(room: MpRoom, targetId: string): void {
+  const target = room.players.get(targetId);
+  if (!target) return;
+  room.kicked.add(target.seatKey);
+  room.seats.delete(target.seatKey);
+  room.players.delete(targetId);
+  playerRooms.delete(targetId);
+  sendTo(targetId, { type: 'kicked', message: 'The host removed you from this event.' });
+  sockets.get(targetId)?.close(4002, 'Removed by host');
+  resolveRoundIfComplete(room);
+  broadcastRoomState(room);
+}
+
+/**
+ * Finds the next song that will actually play, and starts it.
+ *
+ * Previews are signed for about fifteen minutes, so a long event cannot resolve them all up
+ * front: they are fetched as each round comes up, and a song Deezer no longer serves is dropped
+ * rather than stopping the event.
+ */
+async function startEventRound(room: MpRoom, roundIndex: number): Promise<void> {
+  for (let index = roundIndex; index < room.rounds; index += 1) {
+    const track = room.tracks[index];
+    if (!track) break;
+    const preview = await getFreshPreviewUrl(track.deezerTrackId).catch(() => null);
+    if (!rooms.has(room.code) || room.phase === 'finished') return;
+    if (preview) {
+      room.previewUrls[index] = preview.previewUrl;
+      startRound(room, index);
+      return;
+    }
+    logger.warn({ code: room.code, deezerTrackId: track.deezerTrackId }, 'Event song has no audio; skipping');
+    if (room.hostId) {
+      sendTo(room.hostId, { type: 'song_skipped', title: track.title, reason: 'No audio available from Deezer' });
+    }
+  }
+  finishGame(room);
+}
+
 export function leaveRoom(playerId: string): void {
   const code = playerRooms.get(playerId);
   if (!code) return;
@@ -517,6 +1035,15 @@ export function leaveRoom(playerId: string): void {
 
   const leaver = room.players.get(playerId);
   room.players.delete(playerId);
+  if (leaver) room.seats.delete(leaver.seatKey);
+  room.lastActiveAt = Date.now();
+
+  if (room.event) {
+    if (room.hostId === playerId) room.hostId = '';
+    resolveRoundIfComplete(room);
+    broadcastRoomState(room);
+    return;
+  }
 
   /*
    * Walking out of a rated duel in progress is a loss, not an escape.
@@ -592,6 +1119,7 @@ export async function changeSource(
   const room = roomFor(playerId);
   if (!room) return;
   if (room.hostId !== playerId) return sendError(playerId, 'Only the host can change the music.');
+  if (room.event) return sendError(playerId, 'An event plays its own playlist.');
   if (room.phase === 'playing' || room.phase === 'round-reveal') {
     return sendError(playerId, 'Finish the current game first.');
   }
@@ -639,7 +1167,7 @@ export async function startGame(playerId: string): Promise<void> {
   const room = roomFor(playerId);
   if (!room) return;
   if (room.hostId !== playerId) return sendError(playerId, 'Only the host can start the game.');
-  if (room.phase !== 'lobby' && room.phase !== 'finished') {
+  if (room.phase !== 'lobby' && (room.phase !== 'finished' || room.event)) {
     return sendError(playerId, 'Game already in progress.');
   }
 
@@ -655,6 +1183,16 @@ export async function startGame(playerId: string): Promise<void> {
     broadcastRoomState(room);
     sendError(playerId, message);
   };
+
+  if (room.event) {
+    try {
+      await prepareEvent(room);
+    } catch (err) {
+      logger.error({ err, code: room.code }, 'Failed to start event');
+      abort('Could not start the event, please try again.');
+    }
+    return;
+  }
 
   try {
     const pool = await room.source.loadCatalog();
@@ -740,6 +1278,24 @@ export async function startGame(playerId: string): Promise<void> {
   }
 }
 
+/** An event plays its playlist in the order the host set, for as many rounds as it asked for. */
+async function prepareEvent(room: MpRoom): Promise<void> {
+  const pool = await room.source.loadCatalog();
+  room.tracks = pool.slice(0, room.rounds);
+  room.rounds = room.tracks.length;
+  room.previewUrls = room.tracks.map(() => '');
+  room.roundOptions = room.tracks.map((track) =>
+    buildRoundOptions(track, pool, MP_CHOICE_OPTIONS, false),
+  );
+  for (const p of room.players.values()) {
+    p.score = 0;
+    p.scoreAtRoundStart = 0;
+    p.totalAnswerMs = 0;
+  }
+  eventHooks?.onStarted(room.event!.id);
+  await startEventRound(room, 0);
+}
+
 function startRound(room: MpRoom, roundIndex: number): void {
   clearRoomTimers(room);
 
@@ -747,6 +1303,7 @@ function startRound(room: MpRoom, roundIndex: number): void {
     p.roundAnswered = p.playerId === room.hostId && !room.hostPlayable;
     p.roundCorrect = null;
     p.roundPoints = 0;
+    p.roundAnswerMs = 0;
     p.stageIndex = 0;
     // Freeze the total the scoreboard shows for the duration of the round.
     p.scoreAtRoundStart = p.score;
@@ -754,12 +1311,14 @@ function startRound(room: MpRoom, roundIndex: number): void {
 
   room.currentRound = roundIndex;
   room.phase = 'playing';
-  room.roundStartedAt = Date.now();
+  // An event's clock starts when the music does, a moment from now, on every device at once.
+  const lead = room.event ? EVENT_ROUND_LEAD_MS : 0;
+  room.roundStartedAt = Date.now() + lead;
   room.speedCorrectCount = 0;
+  room.roundRanks = new Map(rankedPlayers(room).map((p, i) => [p.seatKey, i + 1]));
 
-  const track = room.tracks[roundIndex];
-  const isSpeed = room.gameMode === 'speed';
-  const roundDuration = isSpeed ? room.speedRoundDurationMs : room.roundDurationMs;
+  const roundDuration =
+    room.gameMode === 'speed' ? room.speedRoundDurationMs : room.roundDurationMs;
 
   /*
    * Sent per player rather than broadcast, so everyone gets the same four options in a
@@ -773,26 +1332,7 @@ function startRound(room: MpRoom, roundIndex: number): void {
    * Seeded on player and round rather than randomised per send: a reconnect mid-round would
    * otherwise deal a new arrangement and move the answer out from under someone's finger.
    */
-  const options = room.roundOptions[roundIndex] ?? [];
-  for (const player of room.players.values()) {
-    sendTo(player.playerId, {
-      type: 'round_start',
-      roundIndex,
-      totalRounds: room.rounds,
-      startedAt: room.roundStartedAt,
-      roundDurationMs: roundDuration,
-      snippetSchedule: isSpeed ? [room.speedSnippetSeconds] : room.revealSchedule,
-      previewUrl: room.previewUrls[roundIndex] ?? null,
-      albumArtUrl: track?.albumArtUrl ?? null,
-      pictureUrl: room.source.pictureUrl,
-      revealDurationMs: room.revealDurationMs,
-      guessMode: room.guessMode,
-      gameMode: room.gameMode,
-      ...(room.guessMode === 'choice'
-        ? { options: seededShuffle(options, `${player.playerId}:${roundIndex}`) }
-        : {}),
-    });
-  }
+  for (const player of room.players.values()) sendRoundStart(room, player);
 
   /*
    * Publish the cleared per-round state.
@@ -802,13 +1342,37 @@ function startRound(room: MpRoom, roundIndex: number): void {
    * everyone reads as answered. That left the guess UI disabled from round two onwards — you
    * could play the first song and then nothing else.
    */
-  broadcast(room, { type: 'scores', scores: buildScores(room) });
+  broadcast(room, scoresFrame(room));
 
-  room.timers.push(
-    setTimeout(() => {
-      endRound(room);
-    }, roundDuration),
-  );
+  schedulePhaseEnd(room, lead + roundDuration);
+  sendHostRound(room);
+}
+
+function sendRoundStart(room: MpRoom, player: MpPlayer): void {
+  const roundIndex = room.currentRound;
+  const track = room.tracks[roundIndex];
+  const isSpeed = room.gameMode === 'speed';
+  const options = room.roundOptions[roundIndex] ?? [];
+  // Seeded on the seat, which a reconnect keeps, so the answers do not move under someone's finger.
+  const seed = `${room.event ? player.seatKey : player.playerId}:${roundIndex}`;
+  // Host-only audio: a player's device is never told what to play, not merely told not to.
+  const hearsAudio = !room.hostOnlyAudio || player.playerId === room.hostId;
+  sendTo(player.playerId, {
+    type: 'round_start',
+    roundIndex,
+    totalRounds: room.rounds,
+    startedAt: room.roundStartedAt,
+    serverNow: Date.now(),
+    roundDurationMs: isSpeed ? room.speedRoundDurationMs : room.roundDurationMs,
+    snippetSchedule: isSpeed ? [room.speedSnippetSeconds] : room.revealSchedule,
+    previewUrl: hearsAudio ? (room.previewUrls[roundIndex] ?? null) : null,
+    albumArtUrl: track?.albumArtUrl ?? null,
+    pictureUrl: room.source.pictureUrl,
+    revealDurationMs: room.revealDurationMs,
+    guessMode: room.guessMode,
+    gameMode: room.gameMode,
+    ...(room.guessMode === 'choice' ? { options: seededShuffle(options, seed) } : {}),
+  });
 }
 
 /** Extends this player's own snippet one stage further along the reveal schedule. */
@@ -826,16 +1390,21 @@ function revealMore(playerId: string): void {
 
   player.stageIndex += 1;
   sendTo(playerId, { type: 'stage', stageIndex: player.stageIndex });
-  broadcast(room, { type: 'scores', scores: buildScores(room) });
+  publishScores(room);
 }
 
 function submitGuess(playerId: string, trackId: string): void {
+  const handledFrom = performance.now();
   const room = roomFor(playerId);
   if (!room) return;
-  if (room.phase !== 'playing') return sendError(playerId, 'No round is in progress.');
+  if (room.phase !== 'playing' || room.paused) {
+    return sendError(playerId, 'No round is in progress.');
+  }
   const player = room.players.get(playerId);
   if (!player) return;
   if (player.roundAnswered) return sendError(playerId, 'Already answered this round.');
+  // Options reach phones before the music starts. Answering before it starts is not a thing.
+  if (Date.now() < room.roundStartedAt) return sendError(playerId, 'The song has not started yet.');
 
   const track = room.tracks[room.currentRound];
   const correct = track?.deezerTrackId === trackId;
@@ -848,6 +1417,7 @@ function submitGuess(playerId: string, trackId: string): void {
   const roundDuration = isSpeed ? room.speedRoundDurationMs : room.roundDurationMs;
   const elapsedMs = Math.max(0, Math.min(roundDuration, Date.now() - room.roundStartedAt));
   player.totalAnswerMs += elapsedMs;
+  player.roundAnswerMs = elapsedMs;
 
   let points = 0;
   if (correct) {
@@ -880,15 +1450,12 @@ function submitGuess(playerId: string, trackId: string): void {
     guessedTrackId: trackId,
     // Your standing, which the shared scoreboard frame cannot carry: it only holds the top ten,
     // and in a big room you are almost certainly not in it.
-    yourRank: rankFor(room, playerId),
+    yourRank: room.roundRanks.get(player.seatKey) ?? room.players.size,
     totalPlayers: room.players.size,
   });
-  broadcast(room, { type: 'scores', scores: buildScores(room) });
-
-  const remaining = [...room.players.values()].filter(
-    (p) => !p.roundAnswered && !(p.playerId === room.hostId && !room.hostPlayable),
-  );
-  if (remaining.length === 0) endRound(room);
+  publishScores(room);
+  resolveRoundIfComplete(room);
+  answerProcessingMs.add(performance.now() - handledFrom);
 }
 
 /**
@@ -917,13 +1484,9 @@ function speedPointsFor(room: MpRoom, elapsedMs: number, roundDurationMs: number
   return Math.max(0, timeScore + orderBonus);
 }
 
-function endRound(room: MpRoom): void {
-  if (room.phase !== 'playing') return;
-  clearRoomTimers(room);
-  room.phase = 'round-reveal';
-
+function roundEndFrame(room: MpRoom): Record<string, unknown> {
   const track = room.tracks[room.currentRound];
-  broadcast(room, {
+  return {
     type: 'round_end',
     /*
      * When the reveal actually ends, rather than leaving the client to infer it.
@@ -934,19 +1497,38 @@ function endRound(room: MpRoom): void {
      * seconds away, so the reveal counted down from a number that had nothing to do with when
      * the next round would start.
      */
-    revealEndsAt: Date.now() + room.revealDurationMs,
+    revealEndsAt: room.phaseEndsAt,
     correct: track
       ? {
           title: track.title,
           artist: track.artist,
           albumArtUrl: track.albumArtUrl,
           // Sent so the reveal can play the song rather than only name it — hearing the bit
-          // you missed is most of why the answer is worth showing at all.
-          previewUrl: room.previewUrls[room.currentRound] ?? null,
+          // you missed is most of why the answer is worth showing at all. Host-only rooms play
+          // through one speaker, so the reveal stays there too.
+          previewUrl: room.hostOnlyAudio ? null : (room.previewUrls[room.currentRound] ?? null),
         }
       : null,
     scores: buildScores(room, true),
-  });
+  };
+}
+
+function endRound(room: MpRoom): void {
+  if (room.phase !== 'playing') return;
+  clearRoomTimers(room);
+  if (room.scoresTimer) clearTimeout(room.scoresTimer);
+  room.scoresTimer = null;
+  room.paused = null;
+  room.phase = 'round-reveal';
+  schedulePhaseEnd(room, room.revealDurationMs);
+
+  broadcast(room, roundEndFrame(room));
+  if (room.hostOnlyAudio && room.hostId) {
+    sendTo(room.hostId, {
+      type: 'reveal_audio',
+      previewUrl: room.previewUrls[room.currentRound] ?? null,
+    });
+  }
   // Each player's own place, since the scores frame stops at ten. One sort, one tiny frame each.
   rankedPlayers(room).forEach((p, i) =>
     sendTo(p.playerId, {
@@ -957,17 +1539,9 @@ function endRound(room: MpRoom): void {
     }),
   );
 
-  const isLastRound = room.currentRound >= room.rounds - 1;
-  room.timers.push(
-    setTimeout(() => {
-      if (room.phase !== 'round-reveal') return;
-      if (isLastRound) {
-        finishGame(room);
-      } else {
-        startRound(room, room.currentRound + 1);
-      }
-    }, room.revealDurationMs),
-  );
+  // Looked up now so the next round starts on time rather than waiting on Deezer.
+  const next = room.event ? room.tracks[room.currentRound + 1] : undefined;
+  if (next) void getFreshPreviewUrl(next.deezerTrackId).catch(() => null);
 }
 
 function skipReveal(playerId: string): void {
@@ -976,17 +1550,19 @@ function skipReveal(playerId: string): void {
   if (room.phase !== 'round-reveal') return;
   if (room.hostId !== playerId) return sendError(playerId, 'Only the host can skip the reveal.');
 
-  clearRoomTimers(room);
-  if (room.currentRound >= room.rounds - 1) {
-    finishGame(room);
-  } else {
-    startRound(room, room.currentRound + 1);
-  }
+  advanceRound(room);
 }
 
 function finishGame(room: MpRoom): void {
   room.phase = 'finished';
   const scores = buildScores(room, true);
+  if (room.event) {
+    eventHooks?.onFinished(
+      room.event.id,
+      room.players.size,
+      scores.map((s) => ({ rank: s.rank, displayName: s.displayName, score: s.score })),
+    );
+  }
   broadcast(room, {
     type: 'game_over',
     scores,
@@ -1138,38 +1714,74 @@ const MAX_BROADCAST_SCORES = 10;
  */
 function rankedPlayers(room: MpRoom): MpPlayer[] {
   const shown = (p: MpPlayer) => (room.phase === 'playing' ? p.scoreAtRoundStart : p.score);
+  // Join time last (the sort is stable), so level players never swap places between two frames.
   return [...room.players.values()].sort(
-    (a, b) => shown(b) - shown(a) || a.totalAnswerMs - b.totalAnswerMs,
+    (a, b) =>
+      shown(b) - shown(a) ||
+      a.totalAnswerMs - b.totalAnswerMs ||
+      a.joinedAt - b.joinedAt,
   );
-}
-
-/** Where a player actually stands, counted across everyone rather than the ten rows sent out. */
-function rankFor(room: MpRoom, playerId: string): number {
-  return rankedPlayers(room).findIndex((p) => p.playerId === playerId) + 1;
 }
 
 function buildScores(room: MpRoom, reveal = false): MpScoreEntry[] {
-  return (
-    [...room.players.values()]
-      .map((p) => ({
-        playerId: p.playerId,
-        displayName: p.displayName,
-        score: reveal ? p.score : p.scoreAtRoundStart,
-        totalAnswerMs: p.totalAnswerMs,
-        answered: p.roundAnswered,
-        correctThisRound: reveal ? p.roundCorrect : null,
-        stageIndex: p.stageIndex,
-      }))
-      // Sorted on whatever score is being reported, so the order cannot jump a round early.
-      // Ties fall to whoever answered faster overall rather than to insertion order.
-      .sort((a, b) => b.score - a.score || a.totalAnswerMs - b.totalAnswerMs)
-      // Cut after sorting, so what goes is the bottom of the ranking rather than whoever
-      // happened to be late in the map.
-      .slice(0, MAX_BROADCAST_SCORES)
+  const shown = (p: MpPlayer) => (reveal ? p.score : p.scoreAtRoundStart);
+  const sorted = [...room.players.values()].sort(
+    (a, b) =>
+      shown(b) - shown(a) ||
+      a.totalAnswerMs - b.totalAnswerMs ||
+      a.joinedAt - b.joinedAt,
   );
+  const rows: MpScoreEntry[] = [];
+  // Sorted on whatever score is being reported, so the order cannot jump a round early, then cut
+  // so what goes is the bottom of the ranking rather than whoever was late in the map.
+  for (let i = 0; i < Math.min(sorted.length, MAX_BROADCAST_SCORES); i += 1) {
+    const p = sorted[i]!;
+    const prev = sorted[i - 1];
+    const tied =
+      prev && shown(prev) === shown(p) && prev.totalAnswerMs === p.totalAnswerMs && rows[i - 1];
+    rows.push({
+      playerId: p.playerId,
+      displayName: p.displayName,
+      score: shown(p),
+      totalAnswerMs: p.totalAnswerMs,
+      answered: p.roundAnswered,
+      correctThisRound: reveal ? p.roundCorrect : null,
+      stageIndex: p.stageIndex,
+      rank: tied ? rows[i - 1]!.rank : i + 1,
+    });
+  }
+  return rows;
+}
+
+function scoresFrame(room: MpRoom): Record<string, unknown> {
+  let answeredCount = 0;
+  for (const p of room.players.values()) if (p.roundAnswered) answeredCount += 1;
+  return {
+    type: 'scores',
+    scores: buildScores(room),
+    answeredCount,
+    totalPlayers: room.players.size,
+  };
+}
+
+/** Sends the scoreboard now in a small room; in a large one, at most once per interval. */
+function publishScores(room: MpRoom): void {
+  if (room.players.size <= COALESCE_ABOVE_PLAYERS) {
+    broadcast(room, scoresFrame(room));
+    return;
+  }
+  if (room.scoresTimer) return;
+  room.scoresTimer = setTimeout(() => {
+    room.scoresTimer = null;
+    if (room.phase === 'playing') broadcast(room, scoresFrame(room));
+  }, COALESCE_INTERVAL_MS);
 }
 
 function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
+  const all = [...room.players.values()];
+  // A thousand names in every frame is what a lobby of a thousand cannot afford, and only the
+  // newest few can fit on a phone anyway. The count is exact.
+  const shown = all.length > COALESCE_ABOVE_PLAYERS ? all.slice(-LARGE_ROOM_SNAPSHOT_PLAYERS) : all;
   return {
     code: room.code,
     sourceType: room.source.sourceType,
@@ -1184,7 +1796,7 @@ function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
     totalRounds: room.rounds,
     // Same masking as buildScores — the snapshot carries the scoreboard too, so leaving it
     // truthful mid-round would hand back exactly what the scores frame is withholding.
-    players: [...room.players.values()].map((p) => ({
+    players: shown.map((p) => ({
       playerId: p.playerId,
       displayName: p.displayName,
       isHost: p.isHost,
@@ -1194,18 +1806,41 @@ function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
       roundPoints: p.roundPoints,
       stageIndex: p.stageIndex,
       joinedAt: p.joinedAt,
+      connected: p.disconnectedAt === null,
     })),
     hostOnlyAudio: room.hostOnlyAudio,
     hostPlayable: room.hostPlayable,
     isDuel: room.duel != null,
+    playerCount: all.length,
+    event: room.event
+      ? {
+          id: room.event.id,
+          name: room.event.name,
+          description: room.event.description,
+          audioMode: room.event.audioMode,
+        }
+      : null,
+    paused: room.paused != null,
   };
 }
 
 function broadcastRoomState(room: MpRoom): void {
-  const snapshot = buildRoomSnapshot(room);
-  for (const p of room.players.values()) {
-    sendTo(p.playerId, { type: 'room_state', room: snapshot });
+  if (room.players.size <= COALESCE_ABOVE_PLAYERS) {
+    const snapshot = buildRoomSnapshot(room);
+    for (const p of room.players.values()) {
+      sendTo(p.playerId, { type: 'room_state', room: snapshot });
+    }
+    if (room.hostId && !room.players.has(room.hostId)) {
+      sendTo(room.hostId, { type: 'room_state', room: snapshot });
+    }
+    return;
   }
+  if (room.stateTimer) return;
+  // Everyone in a large room already knows who they are from their own join frame.
+  room.stateTimer = setTimeout(() => {
+    room.stateTimer = null;
+    broadcast(room, { type: 'room_state', room: buildRoomSnapshot(room) });
+  }, COALESCE_INTERVAL_MS);
 }
 
 /**
@@ -1223,22 +1858,26 @@ function broadcastRoomState(room: MpRoom): void {
  * See scripts/bench-broadcast.ts.
  */
 function broadcast(room: MpRoom, payload: Record<string, unknown>): void {
-  let frame: string;
+  let frame: Buffer;
   try {
-    frame = JSON.stringify(payload);
+    // A Buffer, so each socket writes the same bytes rather than re-encoding the string.
+    frame = Buffer.from(JSON.stringify(payload));
   } catch (err) {
     logger.warn({ err }, 'Failed to serialise multiplayer broadcast');
     return;
   }
-  for (const p of room.players.values()) {
-    const socket = sockets.get(p.playerId);
-    if (!socket) continue;
+  const write = (id: string) => {
+    const socket = sockets.get(id);
+    if (!socket) return;
     try {
       socket.send(frame);
     } catch (err) {
       logger.warn({ err }, 'Failed to send multiplayer message');
     }
-  }
+  };
+  for (const p of room.players.values()) write(p.playerId);
+  // The host of an event usually holds no seat, and still needs to see everything.
+  if (room.hostId && !room.players.has(room.hostId)) write(room.hostId);
 }
 
 function sendTo(playerId: string, payload: Record<string, unknown>): void {
@@ -1280,6 +1919,9 @@ function clearRoomTimers(room: MpRoom): void {
 
 function destroyRoom(room: MpRoom): void {
   clearRoomTimers(room);
+  if (room.scoresTimer) clearTimeout(room.scoresTimer);
+  if (room.stateTimer) clearTimeout(room.stateTimer);
+  for (const p of room.players.values()) playerRooms.delete(p.playerId);
   rooms.delete(room.code);
   logger.info({ code: room.code }, 'Multiplayer room destroyed');
 }
@@ -1298,9 +1940,51 @@ function ensureGc(): void {
 export function sweepEmptyRooms(): void {
   const now = Date.now();
   for (const room of rooms.values()) {
+    if (room.event) {
+      sweepEventRoom(room, now);
+      continue;
+    }
     if (room.players.size === 0 && now - room.createdAt > MP_EMPTY_ROOM_TTL_MS) {
       destroyRoom(room);
     }
+  }
+}
+
+/** Gives up seats nobody came back to, and takes a deserted event's room out of memory. */
+function sweepEventRoom(room: MpRoom, now: number): void {
+  let dropped = false;
+  if (room.phase === 'lobby') {
+    for (const p of room.players.values()) {
+      if (p.disconnectedAt !== null && now - p.disconnectedAt > LOBBY_SEAT_GRACE_MS) {
+        room.players.delete(p.playerId);
+        room.seats.delete(p.seatKey);
+        dropped = true;
+      }
+    }
+  }
+  if (dropped) broadcastRoomState(room);
+  const anyoneHere = room.hostId || [...room.players.values()].some((p) => p.disconnectedAt === null);
+  if (anyoneHere) room.lastActiveAt = now;
+  // A live round's timers keep it going only until they run out of players to serve.
+  else if (now - room.lastActiveAt > EVENT_IDLE_ROOM_TTL_MS) destroyRoom(room);
+}
+
+/** Closes a stored event's room, if it has one, and tells everyone in it why. */
+export function closeEventRoom(eventId: string, reason: string): void {
+  for (const room of rooms.values()) {
+    if (room.event?.id !== eventId) continue;
+    broadcast(room, { type: 'room_closed', reason });
+    const ids = [...room.players.keys()];
+    if (room.hostId && !room.players.has(room.hostId)) ids.push(room.hostId);
+    for (const id of ids) {
+      playerRooms.delete(id);
+      try {
+        sockets.get(id)?.close(4003, 'Event closed');
+      } catch {
+        /* already gone */
+      }
+    }
+    destroyRoom(room);
   }
 }
 
@@ -1318,6 +2002,8 @@ export function __resetForTests(): void {
   sockets.clear();
   identities.clear();
   playerRooms.clear();
+  passwordAttempts.clear();
+  roomLoads.clear();
   if (gcInterval) {
     clearInterval(gcInterval);
     gcInterval = null;
@@ -1345,7 +2031,7 @@ export function activeRoomCount(): { total: number; playing: number } {
 export function playersBySource(): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const room of rooms.values()) {
-    if (room.players.size === 0) continue;
+    if (room.players.size === 0 || room.event) continue;
     const key = `${room.source.sourceType}:${room.source.sourceId}`;
     counts[key] = (counts[key] ?? 0) + room.players.size;
   }
@@ -1361,6 +2047,11 @@ export function listRooms(): MpRoomSnapshot[] {
 export function forceCloseRoom(code: string): boolean {
   const room = rooms.get(code);
   if (!room) return false;
+  if (room.event) {
+    eventHooks?.onFinished(room.event.id, room.players.size, []);
+    closeEventRoom(room.event.id, 'Closed by an admin.');
+    return true;
+  }
   broadcast(room, { type: 'room_closed', reason: 'Closed by an admin.' });
   for (const p of room.players.values()) {
     playerRooms.delete(p.playerId);
@@ -1395,3 +2086,15 @@ export function __getCurrentTrack(
 }
 
 void ensureGc();
+
+registerMetricSources({
+  rooms: () => {
+    const events = [...rooms.values()].filter((r) => r.event);
+    return {
+      rooms: rooms.size,
+      connections: sockets.size,
+      eventsRunning: events.filter((r) => r.phase === 'playing' || r.phase === 'round-reveal').length,
+      playersPerEvent: Object.fromEntries(events.map((r) => [r.code, r.players.size])),
+    };
+  },
+});

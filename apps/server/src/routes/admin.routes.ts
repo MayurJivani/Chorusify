@@ -14,7 +14,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, asc, desc, eq, gte, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { artistTrackPools, dailyPuzzles, gameResults, songs, users } from '../db/schema';
+import { artistTrackPools, dailyPuzzles, events, gameResults, songs, users } from '../db/schema';
+import { effectiveRole } from '../auth/roles';
+import { closeEventsOwnedBy } from '../services/eventService';
+import { metricsSnapshot } from '../services/metrics';
 import { CATEGORIES, findCategory, isSoundtrackCategory } from '../services/categories';
 import { getUtcDateString, previewUpcomingPuzzles, SLOTS_PER_DAY } from '../services/puzzleService';
 import {
@@ -35,6 +38,12 @@ import { HttpError } from '../middleware/errorHandler';
 import { logger } from '../logger';
 
 export const adminRouter = Router();
+
+const withEffectiveRole = <T extends { email: string; role: string }>(user: T) => ({
+  ...user,
+  role: effectiveRole(user),
+  isAdmin: effectiveRole(user) === 'admin',
+});
 
 adminRouter.use(requireAdmin);
 
@@ -409,7 +418,7 @@ adminRouter.get(
       db
         .select({
           total: sql<number>`COUNT(*)::int`,
-          admins: sql<number>`COUNT(*) FILTER (WHERE ${users.isAdmin})::int`,
+          eventHosts: sql<number>`COUNT(*) FILTER (WHERE ${users.role} = 'event_host')::int`,
           newThisWeek: sql<number>`COUNT(*) FILTER (WHERE ${users.createdAt} > now() - interval '7 days')::int`,
           activeThisWeek: sql<number>`COUNT(*) FILTER (WHERE ${users.lastLoginAt} > now() - interval '7 days')::int`,
         })
@@ -450,7 +459,7 @@ adminRouter.get(
     res.json({
       today: getUtcDateString(),
       content: content[0] ?? { total: 0, active: 0, curated: 0 },
-      players: players[0] ?? { total: 0, admins: 0, newThisWeek: 0, activeThisWeek: 0 },
+      players: players[0] ?? { total: 0, eventHosts: 0, newThisWeek: 0, activeThisWeek: 0 },
       activity: (activity as unknown as Record<string, number>[])[0] ?? {},
       caches: (caches as unknown as Record<string, number>[])[0] ?? {},
       topArtists,
@@ -479,7 +488,7 @@ adminRouter.get(
         id: users.id,
         email: users.email,
         displayName: users.displayName,
-        isAdmin: users.isAdmin,
+        role: users.role,
         rating: users.rating,
         ratedDuels: users.ratedDuels,
         createdAt: users.createdAt,
@@ -496,7 +505,7 @@ adminRouter.get(
       .from(users)
       .where(q ? or(ilike(users.displayName, `%${q}%`), ilike(users.email, `%${q}%`)) : undefined);
 
-    res.json({ users: rows, total: countRows[0]?.count ?? 0 });
+    res.json({ users: rows.map(withEffectiveRole), total: countRows[0]?.count ?? 0 });
   }),
 );
 
@@ -504,28 +513,27 @@ adminRouter.patch(
   '/users/:userId',
   validate(z.object({ userId: z.string().min(1) }), 'params'),
   validate(
-    z.object({
-      isAdmin: z.boolean().optional(),
-      displayName: z.string().trim().min(1).max(50).optional(),
-    }),
+    z
+      .object({
+        // Admin is not on offer: this enum is every role an account can be given.
+        role: z.enum(['user', 'event_host']).optional(),
+        displayName: z.string().trim().min(1).max(50).optional(),
+      })
+      .strict(),
   ),
   asyncHandler(async (req, res) => {
     const { userId } = req.params as { userId: string };
-    const patch = req.body as { isAdmin?: boolean; displayName?: string };
+    const patch = req.body as { role?: 'user' | 'event_host'; displayName?: string };
 
-    if (patch.isAdmin === undefined && patch.displayName === undefined) {
+    if (patch.role === undefined && patch.displayName === undefined) {
       throw new HttpError(400, 'Nothing to change');
-    }
-
-    if (patch.isAdmin === false && userId === req.session.userId) {
-      throw new HttpError(409, 'You cannot remove your own admin access');
     }
 
     const updated = await db.update(users).set(patch).where(eq(users.id, userId)).returning({
       id: users.id,
       email: users.email,
       displayName: users.displayName,
-      isAdmin: users.isAdmin,
+      role: users.role,
       rating: users.rating,
       ratedDuels: users.ratedDuels,
       createdAt: users.createdAt,
@@ -535,24 +543,62 @@ adminRouter.patch(
     const user = updated[0];
     if (!user) throw new HttpError(404, 'No such user');
 
-    // Granting or revoking admin is the one change here that widens who can reach these routes,
-    // so it leaves a trail naming who did it. Without this an unexplained admin account is
-    // untraceable after the fact.
-    if (patch.isAdmin !== undefined) {
+    if (patch.role !== undefined) {
       logger.warn(
-        {
-          actorId: req.session.userId,
-          targetId: user.id,
-          targetEmail: user.email,
-          isAdmin: user.isAdmin,
-        },
-        patch.isAdmin ? 'Admin access granted' : 'Admin access revoked',
+        { actorId: req.session.userId, targetId: user.id, role: user.role },
+        'Event host access changed',
       );
+      // A revoked host loses the events they are running now, not just the next one.
+      if (patch.role === 'user') await closeEventsOwnedBy(user.id, 'The host of this event was removed.');
     }
 
-    res.json({ user });
+    res.json({ user: withEffectiveRole(user) });
   }),
 );
+
+/** Every event host, with how many events they have made. */
+adminRouter.get(
+  '/event-hosts',
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
+        eventCount: sql<number>`(SELECT COUNT(*) FROM events e WHERE e.owner_user_id = ${users.id})::int`,
+      })
+      .from(users)
+      .where(eq(users.role, 'event_host'))
+      .orderBy(asc(users.displayName));
+    res.json({ hosts: rows });
+  }),
+);
+
+adminRouter.get(
+  '/events',
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: events.id,
+        code: events.code,
+        name: events.name,
+        status: events.status,
+        audioMode: events.audioMode,
+        playerCount: events.playerCount,
+        createdAt: events.createdAt,
+        hostName: users.displayName,
+      })
+      .from(events)
+      .innerJoin(users, eq(users.id, events.ownerUserId))
+      .orderBy(desc(events.createdAt))
+      .limit(200);
+    res.json({ events: rows });
+  }),
+);
+
+adminRouter.get('/metrics', (_req, res) => {
+  res.json(metricsSnapshot());
+});
 
 // --- Multiplayer rooms -------------------------------------------------------------------
 

@@ -1,4 +1,6 @@
+import { sql } from 'drizzle-orm';
 import {
+  check,
   pgTable,
   serial,
   text,
@@ -45,11 +47,11 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   displayName: text('display_name').notNull(),
-  // Grants access to the admin tools (editing the daily puzzle schedule). Off by default.
-  // PATCH /api/admin/users/:userId can set it, so an existing admin can promote any account:
-  // the flag is only as trustworthy as the current admin list, and a stolen admin session is
-  // enough to mint more admins. Audit this column when an unexpected admin appears.
+  // Retired: nothing reads or writes this. Admin is decided by ADMIN_EMAIL (auth/roles.ts), so no
+  // row can claim it. Left in place so a rollback still finds it; drop once this has shipped.
   isAdmin: boolean('is_admin').notNull().default(false),
+  // 'user' or 'event_host'. Admin is deliberately not a value here: see auth/roles.ts.
+  role: text('role').notNull().default('user'),
   /**
    * Elo rating for 1v1 duels. Everyone starts level; the number only means anything relative to
    * the people you have actually played, which is why `ratedDuels` travels with it — a 1400 from
@@ -60,6 +62,84 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 });
+
+export interface PlaylistTrack {
+  deezerTrackId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  albumArtUrl: string | null;
+  durationSeconds: number;
+}
+
+/**
+ * A host's saved playlist. Tracks are jsonb, ordered, read and written whole: the only operation
+ * is "save this list", the same shape as artist_track_pools.
+ */
+export const playlists = pgTable(
+  'playlists',
+  {
+    id: text('id').primaryKey(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tracks: jsonb('tracks').notNull().$type<PlaylistTrack[]>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('playlists_owner_idx').on(table.ownerUserId, table.updatedAt)],
+);
+
+export interface EventResultRow {
+  rank: number;
+  displayName: string;
+  score: number;
+}
+
+/**
+ * A hosted music event. Its songs are a copy (`tracks`), so editing the saved playlist cannot
+ * change an event already announced or running. Live state stays in memory in
+ * multiplayerService; this row holds the configuration and the final result.
+ */
+export const events = pgTable(
+  'events',
+  {
+    id: text('id').primaryKey(),
+    code: text('code').notNull().unique(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    visibility: text('visibility').notNull().default('unlisted'),
+    // HMAC, not a password hash: see eventService.hashEventPassword.
+    passwordHash: text('password_hash'),
+    audioMode: text('audio_mode').notNull(),
+    hostPlays: boolean('host_plays').notNull().default(false),
+    rounds: integer('rounds').notNull(),
+    playbackSeconds: integer('playback_seconds').notNull(),
+    guessSeconds: integer('guess_seconds').notNull(),
+    maxPoints: integer('max_points').notNull(),
+    minPoints: integer('min_points').notNull(),
+    firstBonus: integer('first_bonus').notNull(),
+    playlistId: text('playlist_id').references(() => playlists.id, { onDelete: 'set null' }),
+    tracks: jsonb('tracks').notNull().$type<PlaylistTrack[]>(),
+    status: text('status').notNull().default('open'),
+    playerCount: integer('player_count').notNull().default(0),
+    results: jsonb('results').$type<EventResultRow[]>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('events_owner_idx').on(table.ownerUserId, table.createdAt),
+    index('events_visibility_status_idx').on(table.visibility, table.status),
+    check('events_audio_mode_check', sql`${table.audioMode} in ('everyone_plays', 'host_only')`),
+    check('events_status_check', sql`${table.status} in ('open', 'live', 'ended')`),
+    check('events_visibility_check', sql`${table.visibility} in ('public', 'unlisted')`),
+  ],
+);
 
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(), // SHA-256 hash of the opaque token held in the cookie

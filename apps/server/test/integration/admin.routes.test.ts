@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { createApp } from '../../src/app';
+import { env } from '../../src/env';
 import { db } from '../../src/db/client';
 import {
   appSettings,
@@ -47,19 +48,15 @@ async function seedSong(id: number, title: string, curated = true, active = true
   });
 }
 
-/** Registers an account through the API (so the password hash is real) and optionally promotes
- *  it — the admin flag is only ever set directly in the database, never by a route. */
-async function signIn(email: string, admin: boolean) {
+/** Registers an account through the API, so the password hash is real. Admin comes only from the
+ *  address matching ADMIN_EMAIL (boss@example.test here); the argument just says what is expected. */
+async function signIn(email: string, _admin: boolean) {
   const agent = request.agent(app);
   const csrf = await getCsrfToken(agent);
   const res = await agent
     .post('/api/auth/register')
     .set('X-CSRF-Token', csrf)
     .send({ email, password: TEST_PASSWORD, displayName: email.split('@')[0] });
-
-  if (admin) {
-    await db.update(users).set({ isAdmin: true }).where(eq(users.email, email));
-  }
   return { agent, userId: res.body.user.id as string, csrf: await getCsrfToken(agent) };
 }
 
@@ -100,14 +97,72 @@ describe('admin route access', () => {
     expect(res.body.puzzles).toEqual([]);
   });
 
-  it('stops reporting isAdmin once the flag is revoked', async () => {
-    const { agent } = await signIn('boss@example.test', true);
-    expect(await agent.get('/api/admin/dashboard').then((r) => r.status)).toBe(200);
-
-    await db.update(users).set({ isAdmin: false }).where(eq(users.email, 'boss@example.test'));
-
-    // Same session, no re-login — the flag is read per request, not cached in the session.
+  it('gives nothing to a stored is_admin flag or role', async () => {
+    const { agent } = await signIn('plain@example.test', false);
+    await db
+      .update(users)
+      .set({ isAdmin: true, role: 'admin' })
+      .where(eq(users.email, 'plain@example.test'));
     expect(await agent.get('/api/admin/dashboard').then((r) => r.status)).toBe(404);
+  });
+
+  it('refuses to register the admin address unless explicitly opened', async () => {
+    env.ADMIN_REGISTRATION_OPEN = false;
+    try {
+      const agent = request.agent(app);
+      const csrf = await getCsrfToken(agent);
+      const res = await agent
+        .post('/api/auth/register')
+        .set('X-CSRF-Token', csrf)
+        .send({ email: 'BOSS@example.test', password: TEST_PASSWORD, displayName: 'Mallory' });
+      expect(res.status).toBe(409);
+    } finally {
+      env.ADMIN_REGISTRATION_OPEN = true;
+    }
+  });
+});
+
+describe('event host roles', () => {
+  it('lets only the admin grant and revoke, and never admin itself', async () => {
+    const admin = await signIn('boss@example.test', true);
+    const plain = await signIn('plain@example.test', false);
+    const other = await signIn('other@example.test', false);
+
+    // Not reachable by an ordinary account, or by an event host.
+    const asPlain = await plain.agent
+      .patch(`/api/admin/users/${other.userId}`)
+      .set('X-CSRF-Token', plain.csrf)
+      .send({ role: 'event_host' });
+    expect(asPlain.status).toBe(404);
+
+    const grant = await admin.agent
+      .patch(`/api/admin/users/${plain.userId}`)
+      .set('X-CSRF-Token', admin.csrf)
+      .send({ role: 'event_host' });
+    expect(grant.status).toBe(200);
+    expect(grant.body.user.role).toBe('event_host');
+
+    const asHost = await plain.agent
+      .patch(`/api/admin/users/${other.userId}`)
+      .set('X-CSRF-Token', plain.csrf)
+      .send({ role: 'event_host' });
+    expect(asHost.status).toBe(404);
+
+    for (const body of [{ role: 'admin' }, { isAdmin: true }]) {
+      const res = await admin.agent
+        .patch(`/api/admin/users/${plain.userId}`)
+        .set('X-CSRF-Token', admin.csrf)
+        .send(body);
+      expect(res.status).toBe(400);
+    }
+
+    // Takes effect on the same session, with no re-login.
+    expect(await plain.agent.get('/api/events/mine').then((r) => r.status)).toBe(200);
+    await admin.agent
+      .patch(`/api/admin/users/${plain.userId}`)
+      .set('X-CSRF-Token', admin.csrf)
+      .send({ role: 'user' });
+    expect(await plain.agent.get('/api/events/mine').then((r) => r.status)).toBe(403);
   });
 });
 
@@ -429,7 +484,7 @@ describe('GET /api/admin/dashboard', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.content).toMatchObject({ total: 1, active: 1, curated: 1 });
-    expect(res.body.players.admins).toBe(1);
+    expect(res.body.players.eventHosts).toBe(0);
     expect(typeof res.body.activity.dailyPlays24h).toBe('number');
     expect(typeof res.body.caches.pools).toBe('number');
     expect(res.body.liveRooms).toMatchObject({ total: expect.any(Number) });

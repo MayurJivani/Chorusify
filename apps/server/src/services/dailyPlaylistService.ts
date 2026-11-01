@@ -10,6 +10,7 @@ import { and, desc, eq, inArray, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { dailyPuzzles, songs } from '../db/schema';
 import { logger } from '../logger';
+import { deezerFetchJson } from './deezerService';
 
 interface DailyPlaylist {
   id: string;
@@ -57,11 +58,8 @@ export async function fetchPlaylistTracks(playlistId: string): Promise<PlaylistT
   let url: string | null = `https://api.deezer.com/playlist/${playlistId}/tracks?limit=100`;
 
   while (url) {
-    const res = await fetch(url, { headers: { Referer: 'https://chorusify.com/' } });
-    if (!res.ok) {
-      throw new Error(`Deezer playlist ${playlistId} fetch failed with status ${res.status}`);
-    }
-    const body = (await res.json()) as DeezerTrackListResponse;
+    const body: DeezerTrackListResponse | null = await deezerFetchJson(url, 'bulk');
+    if (!body) throw new Error(`Deezer playlist ${playlistId} fetch failed`);
     if (body.error) {
       throw new Error(`Deezer playlist ${playlistId} returned an error`);
     }

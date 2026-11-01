@@ -13,6 +13,7 @@ import { generateCsrfToken } from '../middleware/csrf';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { createResetToken, resetPassword, ResetError } from '../services/passwordResetService';
 import { env } from '../env';
+import { effectiveRole, isAdminEmail } from '../auth/roles';
 import {
   passwordProblems,
   PASSWORD_MAX_LENGTH,
@@ -32,14 +33,15 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-function toPublicUser(user: { id: string; email: string; displayName: string; isAdmin?: boolean }) {
-  // `isAdmin` only controls whether the client bothers to show the admin link — every admin
-  // route re-checks the flag against the database itself, so a tampered client gains nothing.
+function toPublicUser(user: { id: string; email: string; displayName: string; role?: string }) {
+  // These only decide which links the client shows: every privileged route re-checks server side.
+  const role = effectiveRole(user);
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
-    isAdmin: user.isAdmin ?? false,
+    role,
+    isAdmin: role === 'admin',
   };
 }
 
@@ -50,6 +52,13 @@ authRouter.post('/register', authRateLimiter, validate(registerSchema), async (r
   const problems = passwordProblems(password, { email, displayName });
   if (problems.length > 0) {
     res.status(400).json({ error: problems[0], problems });
+    return;
+  }
+
+  // Addresses are not verified, so whoever registered this one first would become admin. Same
+  // answer as a taken address, which is what it is meant to be.
+  if (isAdminEmail(email) && !env.ADMIN_REGISTRATION_OPEN) {
+    res.status(409).json({ error: 'An account with that email already exists' });
     return;
   }
 

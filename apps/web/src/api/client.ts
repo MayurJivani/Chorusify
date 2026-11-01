@@ -37,6 +37,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   skipCache?: boolean;
+  signal?: AbortSignal;
 }
 
 const CACHE_TTL_MS = 5_000;
@@ -57,8 +58,9 @@ async function doFetch<T>(
   method: string,
   headers: Record<string, string>,
   body?: string,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const res = await fetch(url, { method, headers, credentials: 'include', body });
+  const res = await fetch(url, { method, headers, credentials: 'include', body, signal });
 
   const contentType = res.headers.get('content-type') ?? '';
   const parsed = contentType.includes('application/json') ? await res.json() : undefined;
@@ -91,7 +93,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (method !== 'GET' || options.skipCache) {
     if (method !== 'GET') invalidateApiCache();
-    return doFetch<T>(url, method, headers, bodyStr);
+    return doFetch<T>(url, method, headers, bodyStr, options.signal);
   }
 
   const cached = getCache.get(path);

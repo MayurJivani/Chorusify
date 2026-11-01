@@ -3,17 +3,14 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { users } from '../db/schema';
 import { logger } from '../logger';
+import { canHostEvents, isAdminEmail } from '../auth/roles';
 
 /**
  * Gate for the admin tools.
  *
- * The flag is read from the database on every request rather than trusted from the session or a
- * token, so revoking someone's admin rights takes effect immediately instead of whenever their
- * session happens to expire.
- *
- * Note that `PATCH /users/:userId` below this gate *can* grant the flag, so admin is not a
- * database-only privilege: one compromised admin session can promote further accounts. Promotions
- * are logged by the route, and an unexpected admin should be treated as a session compromise.
+ * The account's email is read from the database on every request and compared to ADMIN_EMAIL, so
+ * admin cannot be granted by any row, request body or session. There is one admin, and changing it
+ * takes a config change.
  *
  * A non-admin gets 404, not 403: confirming that an endpoint exists but is forbidden tells an
  * attacker there is something worth attacking.
@@ -27,12 +24,12 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
 
   try {
     const rows = await db
-      .select({ isAdmin: users.isAdmin })
+      .select({ email: users.email })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!rows[0]?.isAdmin) {
+    if (!isAdminEmail(rows[0]?.email)) {
       logger.warn({ userId, path: req.path }, 'Rejected non-admin request to admin route');
       res.status(404).json({ error: 'Not found' });
       return;
@@ -42,5 +39,28 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     return;
   }
 
+  next();
+}
+
+/** Event hosts and the admin. Checked against the database so a revocation applies at once. */
+export async function requireEventHost(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const userId = req.session.userId;
+  if (!userId) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  try {
+    if (!(await canHostEvents(userId))) {
+      res.status(403).json({ error: 'Event host access required' });
+      return;
+    }
+  } catch (err) {
+    next(err);
+    return;
+  }
   next();
 }

@@ -41,6 +41,8 @@ export default defineConfig({
       SESSION_SECRET: 'test-session-secret-at-least-32-characters-long',
       CSRF_SECRET: 'test-csrf-secret-at-least-32-characters-long-x',
       CORS_ORIGIN: 'http://localhost:5173',
+      ADMIN_EMAIL: 'boss@example.test',
+      ADMIN_REGISTRATION_OPEN: 'true',
     },
     fileParallelism: false,
     // Local development talks to Postgres through a port-forward (~30ms round-trip), so

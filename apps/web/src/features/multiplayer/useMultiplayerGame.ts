@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { multiplayerSocketUrl } from '../../api/multiplayer';
+import { createClockSync } from './clockSync';
+import { createScoresStore, type ScoresStore } from './scoresStore';
 import type {
   ArtistRoundOption,
   MultiplayerGameMode,
@@ -17,6 +19,7 @@ export interface MultiplayerRound {
   /** Cap on the whole round; it can end earlier when everyone has answered. */
   roundDurationMs: number;
   snippetSchedule: readonly number[];
+  /** Null in a host-only event: the player's device is not told what is playing. */
   previewUrl: string;
   albumArtUrl: string | null;
   pictureUrl: string | null;
@@ -77,6 +80,20 @@ export interface MultiplayerGameOver {
   songs: MultiplayerPlayedSong[];
 }
 
+/** What the host's console needs about the running round. Only ever sent to the host. */
+export interface HostRound {
+  roundIndex: number;
+  totalRounds: number;
+  /** On this device's clock. */
+  playAt: number;
+  roundEndsAt: number;
+  playbackSeconds: number;
+  previewUrl: string | null;
+  title: string | null;
+  artist: string | null;
+  albumArtUrl: string | null;
+}
+
 interface ServerMessage {
   selfId: string;
   type: string;
@@ -91,7 +108,15 @@ interface UseMultiplayerGameResult {
   stageIndex: number;
   roundEnd: MultiplayerRoundEnd | null;
   gameOver: MultiplayerGameOver | null;
-  scores: MultiplayerScoreEntry[];
+  /** Changes many times a second in a big room, so it is subscribed to, not passed as state. */
+  scoresStore: ScoresStore;
+  hostRound: HostRound | null;
+  paused: boolean;
+  audioStopped: boolean;
+  skippedSong: string | null;
+  /** Why the server ended this connection for good. */
+  closedReason: string | null;
+  errorCode: string | null;
   lastGuess: MultiplayerGuessResult | null;
   standing: MultiplayerStanding | null;
   error: string | null;
@@ -102,7 +127,15 @@ interface UseMultiplayerGameResult {
   /** Host-only: repoints the room at a different artist or category and returns it to the lobby. */
   changeSource: (source: { artistId: number } | { categoryId: string }) => void;
   leave: () => void;
+  /** Sends a host control. The server checks it came from the host. */
+  hostCommand: (type: string, extra?: Record<string, unknown>) => void;
 }
+
+/** Close codes meaning "do not come back": replaced by another tab, removed, event over. */
+const FINAL_CLOSE_CODES = new Set([4001, 4002, 4003]);
+const RECONNECT_BASE_MS = 800;
+const RECONNECT_MAX_MS = 15_000;
+const CLOCK_SAMPLES = 5;
 
 function snapshotScores(room: MultiplayerRoomSnapshot): MultiplayerScoreEntry[] {
   return room.players.map((p) => ({
@@ -123,6 +156,7 @@ function snapshotScores(room: MultiplayerRoomSnapshot): MultiplayerScoreEntry[] 
 export function useMultiplayerGame(
   code: string,
   nickname?: string | null,
+  options: { password?: string; hostEventId?: string } = {},
 ): UseMultiplayerGameResult {
   const [connectionStatus, setConnectionStatus] =
     useState<MultiplayerConnectionStatus>('connecting');
@@ -132,7 +166,14 @@ export function useMultiplayerGame(
   const [stageIndex, setStageIndex] = useState(0);
   const [roundEnd, setRoundEnd] = useState<MultiplayerRoundEnd | null>(null);
   const [gameOver, setGameOver] = useState<MultiplayerGameOver | null>(null);
-  const [scores, setScores] = useState<MultiplayerScoreEntry[]>([]);
+  const [scoresStore] = useState(createScoresStore);
+  const [hostRound, setHostRound] = useState<HostRound | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [audioStopped, setAudioStopped] = useState(false);
+  const [skippedSong, setSkippedSong] = useState<string | null>(null);
+  const [closedReason, setClosedReason] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [clock] = useState(createClockSync);
   const [lastGuess, setLastGuess] = useState<MultiplayerGuessResult | null>(null);
   const [standing, setStanding] = useState<MultiplayerStanding | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +183,10 @@ export function useMultiplayerGame(
   codeRef.current = code;
   const nicknameRef = useRef(nickname);
   nicknameRef.current = nickname;
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  const attemptsRef = useRef(0);
+  const finalCloseRef = useRef(false);
 
   const handleServerMessage = useCallback((raw: ServerMessage) => {
     if (raw.selfId) setSelfId(raw.selfId);
@@ -150,9 +195,14 @@ export function useMultiplayerGame(
       case 'room_state': {
         const snapshot = raw.room as MultiplayerRoomSnapshot;
         setRoom(snapshot);
-        setScores(snapshotScores(snapshot));
-        setGameOver(null);
-        setRoundEnd(null);
+        setErrorCode(null);
+        setPaused(snapshot.paused ?? false);
+        // Membership changes arrive mid-round in an event, and must not wipe the running round.
+        if (!snapshot.event || snapshot.phase === 'lobby') {
+          scoresStore.set({ rows: snapshotScores(snapshot) });
+          setGameOver(null);
+          setRoundEnd(null);
+        }
         // A room back in the lobby has no round by definition. Without this the last round of
         // the previous game survives, and the host switching to a new artist drops everyone
         // back into the finished game's screen instead of the lobby — `round` is checked
@@ -166,10 +216,12 @@ export function useMultiplayerGame(
         break;
       }
       case 'round_start': {
+        setAudioStopped(false);
+        setPaused(false);
         setRound({
           roundIndex: raw.roundIndex as number,
           totalRounds: raw.totalRounds as number,
-          startedAt: raw.startedAt as number,
+          startedAt: clock.toLocal(raw.startedAt as number),
           roundDurationMs: raw.roundDurationMs as number,
           snippetSchedule: raw.snippetSchedule as readonly number[],
           previewUrl: raw.previewUrl as string,
@@ -191,9 +243,11 @@ export function useMultiplayerGame(
          * and if the scores frame is ever dropped or reordered, it never unlocks at all.
          * Totals are left alone; only the server changes those.
          */
-        setScores((prev) =>
-          prev.map((s) => ({ ...s, answered: false, correctThisRound: null, stageIndex: 0 })),
-        );
+        scoresStore.set({
+          rows: scoresStore
+            .get()
+            .rows.map((s) => ({ ...s, answered: false, correctThisRound: null, stageIndex: 0 })),
+        });
         break;
       }
       case 'stage':
@@ -215,15 +269,68 @@ export function useMultiplayerGame(
         });
         break;
       case 'scores':
-        setScores(raw.scores as MultiplayerScoreEntry[]);
+        scoresStore.set({
+          rows: raw.scores as MultiplayerScoreEntry[],
+          answeredCount: (raw.answeredCount as number | undefined) ?? null,
+          totalPlayers: (raw.totalPlayers as number | undefined) ?? null,
+        });
+        break;
+      case 'pong': {
+        if (typeof raw.t === 'number' && typeof raw.serverNow === 'number') {
+          clock.addSample(raw.t, Date.now(), raw.serverNow);
+        }
+        break;
+      }
+      case 'host_round':
+        setAudioStopped(false);
+        setPaused(false);
+        setHostRound({
+          roundIndex: raw.roundIndex as number,
+          totalRounds: raw.totalRounds as number,
+          playAt: clock.toLocal(raw.playAt as number),
+          roundEndsAt: clock.toLocal(raw.roundEndsAt as number),
+          playbackSeconds: raw.playbackSeconds as number,
+          previewUrl: raw.previewUrl as string | null,
+          title: raw.title as string | null,
+          artist: raw.artist as string | null,
+          albumArtUrl: raw.albumArtUrl as string | null,
+        });
+        break;
+      case 'paused':
+        setPaused(true);
+        break;
+      case 'resumed': {
+        setPaused(false);
+        const startedAt = clock.toLocal(raw.startedAt as number);
+        const phaseEndsAt = clock.toLocal(raw.phaseEndsAt as number);
+        setRound((r) => (r ? { ...r, startedAt } : r));
+        setRoundEnd((r) => (r ? { ...r, revealEndsAt: phaseEndsAt } : r));
+        break;
+      }
+      case 'stop_audio':
+        setAudioStopped(true);
+        break;
+      case 'song_skipped':
+        setSkippedSong(raw.title as string);
+        break;
+      case 'reveal_audio':
+        setRoundEnd((r) =>
+          r?.correct ? { ...r, correct: { ...r.correct, previewUrl: raw.previewUrl as string } } : r,
+        );
+        break;
+      case 'room_closed':
+      case 'kicked':
+        finalCloseRef.current = true;
+        setClosedReason((raw.reason ?? raw.message) as string);
         break;
       case 'round_end':
         setRoundEnd({
           correct: raw.correct as MultiplayerRoundEnd['correct'],
           scores: raw.scores as MultiplayerScoreEntry[],
-          revealEndsAt: raw.revealEndsAt as number | undefined,
+          revealEndsAt:
+            raw.revealEndsAt != null ? clock.toLocal(raw.revealEndsAt as number) : undefined,
         });
-        setScores(raw.scores as MultiplayerScoreEntry[]);
+        scoresStore.set({ rows: raw.scores as MultiplayerScoreEntry[] });
         break;
       case 'game_over':
         setGameOver({
@@ -231,7 +338,7 @@ export function useMultiplayerGame(
           winner: raw.winner as MultiplayerGameOver['winner'],
           songs: (raw.songs as MultiplayerPlayedSong[] | undefined) ?? [],
         });
-        setScores(raw.scores as MultiplayerScoreEntry[]);
+        scoresStore.set({ rows: raw.scores as MultiplayerScoreEntry[] });
         /*
          * The finished round has to go with it.
          *
@@ -247,11 +354,12 @@ export function useMultiplayerGame(
         break;
       case 'error':
         setError(raw.message as string);
+        setErrorCode((raw.code as string | undefined) ?? null);
         break;
       default:
         break;
     }
-  }, []);
+  }, [clock, scoresStore]);
 
   const connect = useCallback(() => {
     setConnectionStatus('connecting');
@@ -263,9 +371,25 @@ export function useMultiplayerGame(
     ws.onopen = () => {
       setConnectionStatus('open');
       setError(null);
-      const join: Record<string, unknown> = { type: 'join_room', code: codeRef.current };
-      if (nicknameRef.current) join.nickname = nicknameRef.current;
-      ws.send(JSON.stringify(join));
+      setErrorCode(null);
+      attemptsRef.current = 0;
+      const { hostEventId, password } = optionsRef.current;
+      if (hostEventId) {
+        ws.send(JSON.stringify({ type: 'host_event', eventId: hostEventId, code: codeRef.current }));
+      } else {
+        const join: Record<string, unknown> = { type: 'join_room', code: codeRef.current };
+        if (nicknameRef.current) join.nickname = nicknameRef.current;
+        if (password) join.password = password;
+        ws.send(JSON.stringify(join));
+      }
+      // A few samples spread out, so one slow moment does not decide this device's clock offset.
+      for (let i = 0; i < CLOCK_SAMPLES; i += 1) {
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping', t: Date.now() }));
+          }
+        }, i * 300);
+      }
     };
     ws.onmessage = (event) => {
       try {
@@ -274,7 +398,14 @@ export function useMultiplayerGame(
         /* ignore malformed frames */
       }
     };
-    ws.onclose = () => setConnectionStatus('closed');
+    ws.onclose = (event) => {
+      if (wsRef.current !== ws) return;
+      if (FINAL_CLOSE_CODES.has(event.code)) {
+        finalCloseRef.current = true;
+        if (event.code === 4001) setClosedReason('This event is now open somewhere else.');
+      }
+      setConnectionStatus('closed');
+    };
     ws.onerror = () => ws.close();
   }, [handleServerMessage]);
 
@@ -286,18 +417,28 @@ export function useMultiplayerGame(
     };
   }, [connect, nickname]);
 
-  // Reconnect once while still in (or before) the lobby — a dropped socket mid-game is a
-  // hard exit, matching the server's "can't join a game in progress" rule.
+  // In an ordinary room, reconnect while still in (or before) the lobby: a dropped socket mid-game
+  // is a hard exit, matching the server's "can't join a game in progress" rule. An event keeps your
+  // seat, so there it keeps trying. Backoff with full jitter, because when a venue's wifi blips
+  // every phone in the room comes back at the same moment.
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (nickname === null) return;
     if (connectionStatus !== 'closed') return;
-    if (room && room.phase !== 'lobby') return;
-    reconnectTimerRef.current = setTimeout(() => connect(), 800);
+    if (finalCloseRef.current) return;
+    const isEvent = !!room?.event || !!options.hostEventId;
+    if (room && room.phase !== 'lobby' && !isEvent) return;
+    if (isEvent && room?.phase === 'finished') return;
+    if (errorCode === 'password_required' || errorCode === 'wrong_password') return;
+    const attempt = attemptsRef.current;
+    attemptsRef.current = attempt + 1;
+    const ceiling = isEvent ? Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt) : 0;
+    const delay = isEvent ? RECONNECT_BASE_MS / 2 + Math.random() * ceiling : RECONNECT_BASE_MS;
+    reconnectTimerRef.current = setTimeout(() => connect(), delay);
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
-  }, [connectionStatus, room, connect, nickname]);
+  }, [connectionStatus, room, connect, nickname, errorCode, options.hostEventId]);
 
   const send = useCallback((payload: Record<string, unknown>) => {
     const ws = wsRef.current;
@@ -316,9 +457,14 @@ export function useMultiplayerGame(
     [send],
   );
   const leave = useCallback(() => {
+    finalCloseRef.current = true;
     send({ type: 'leave_room' });
     wsRef.current?.close();
   }, [send]);
+  const hostCommand = useCallback(
+    (type: string, extra: Record<string, unknown> = {}) => send({ type, ...extra }),
+    [send],
+  );
 
   return {
     connectionStatus,
@@ -328,7 +474,13 @@ export function useMultiplayerGame(
     stageIndex,
     roundEnd,
     gameOver,
-    scores,
+    scoresStore,
+    hostRound,
+    paused,
+    audioStopped,
+    skippedSong,
+    closedReason,
+    errorCode,
     lastGuess,
     standing,
     error,
@@ -338,5 +490,6 @@ export function useMultiplayerGame(
     nextRound,
     changeSource,
     leave,
+    hostCommand,
   };
 }

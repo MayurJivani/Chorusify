@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import type { MultiplayerRoomSnapshot, MultiplayerScoreEntry } from '../../types/api';
-import { MultiplayerScoreboard } from './MultiplayerScoreboard';
+import { SharePanel } from '../events/SharePanel';
+import { Avatar, MultiplayerScoreboard } from './MultiplayerScoreboard';
 import { KnockAnnounceButton } from './KnockAnnounceButton';
 import { ensureMediaUnlocked } from '../game/SnippetPlayer';
 
@@ -26,6 +27,50 @@ function toScoreEntries(room: MultiplayerRoomSnapshot): MultiplayerScoreEntry[] 
   }));
 }
 
+/** A hall of people arriving: the count is the news, and the newest few names keep it human. */
+function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onLeave'>) {
+  const count = room.playerCount ?? room.players.length;
+  return (
+    <div className="mx-auto flex min-h-full w-full max-w-xl flex-col items-center justify-center gap-5 px-4 py-6 text-center">
+      <h1 className="text-3xl font-extrabold text-white">{room.event?.name}</h1>
+      {room.event?.description && <p className="text-sm text-slate-400">{room.event.description}</p>}
+      <p className="text-sm text-slate-300">
+        <span className="text-4xl font-bold tabular-nums text-white">{count}</span>{' '}
+        {count === 1 ? 'player' : 'players'} in. The host starts when everyone is ready.
+      </p>
+      <ul className="flex min-h-9 flex-wrap justify-center gap-1.5" aria-label="Newest players">
+        <AnimatePresence initial={false} mode="popLayout">
+          {room.players.slice(-12).map((p) => (
+            <motion.li
+              key={p.playerId}
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ type: 'spring', stiffness: 460, damping: 28 }}
+              className="flex items-center gap-1.5 rounded-full bg-white/[0.06] py-1 pl-1 pr-2.5 text-xs text-slate-200"
+            >
+              <Avatar name={p.displayName} size={22} />
+              <span className="max-w-24 truncate">{p.displayName}</span>
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </ul>
+      <p className="text-sm text-slate-400">
+        {room.event?.audioMode === 'host_only'
+          ? 'The music comes through the speakers, so your phone stays quiet.'
+          : 'The music plays on your phone. Turn your sound up.'}
+      </p>
+      <div className="glass w-full max-w-xs rounded-2xl p-4">
+        <p className="mb-3 text-sm text-slate-300">Bring someone in</p>
+        <SharePanel code={room.code} eventName={room.event?.name} />
+      </div>
+      <button type="button" onClick={onLeave} className="text-xs text-slate-400 underline decoration-dotted transition-colors hover:text-slate-200">
+        Leave event
+      </button>
+    </div>
+  );
+}
+
 export function MultiplayerLobby({ room, selfId, onStart, onLeave }: MultiplayerLobbyProps) {
   const isHost = selfId === room.hostId;
   const [copied, setCopied] = useState(false);
@@ -40,6 +85,8 @@ export function MultiplayerLobby({ room, selfId, onStart, onLeave }: Multiplayer
       /* clipboard unavailable */
     }
   }, [inviteUrl]);
+
+  if (room.event) return <EventLobby room={room} onLeave={onLeave} />;
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-xl flex-col items-center justify-center gap-4 sm:gap-6 px-4 py-4 sm:py-8">

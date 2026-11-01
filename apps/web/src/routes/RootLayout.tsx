@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useSession } from '../hooks/useSession';
@@ -162,6 +162,7 @@ export function RootLayout() {
               <div className="flex items-center gap-3 pl-3 border-l border-white/10">
                 {user ? (
                   <>
+                    {(user.role === 'event_host' || user.isAdmin) && <NavLink to="/events">Host</NavLink>}
                     {user.isAdmin && <NavLink to="/admin">Admin</NavLink>}
                     <Link
                       to="/profile"
@@ -278,7 +279,15 @@ export function RootLayout() {
       </header>
 
       <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-        <Outlet />
+        <Suspense
+          fallback={
+            <div className="flex min-h-full items-center justify-center" role="status" aria-label="Loading">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-chorusify-accent2" />
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
       </main>
 
       <footer className="shrink-0 border-t border-white/[0.06] py-4">

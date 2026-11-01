@@ -15,7 +15,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { artistTrackPools } from '../db/schema';
-import { seedPreviewCacheFromPlaylist, type ArtistTrack } from './deezerService';
+import { deezerFetchJson, seedPreviewCacheFromPlaylist, type ArtistTrack } from './deezerService';
 import { isUnwantedVersion, normalizeTitle } from '../utils/trackFilters';
 import type { SoundtrackTitle, SoundtrackKind } from './soundtracks';
 import { getSettings } from './settingsService';
@@ -133,16 +133,12 @@ interface FetchedAlbum {
 async function fetchAlbumBody(album: SoundtrackTitle): Promise<DeezerAlbumResponse> {
   let lastError = '';
   for (let attempt = 0; attempt < 4; attempt++) {
-    const res = await fetch(`https://api.deezer.com/album/${album.albumId}`, {
-      headers: { Referer: 'https://chorusify.com/' },
-    });
-    if (!res.ok) {
-      lastError = `status ${res.status}`;
-    } else {
-      const body = (await res.json()) as DeezerAlbumResponse;
-      if (!body.error) return body;
-      lastError = JSON.stringify(body.error);
-    }
+    const body = await deezerFetchJson<DeezerAlbumResponse>(
+      `https://api.deezer.com/album/${album.albumId}`,
+      'bulk',
+    );
+    if (body && !body.error) return body;
+    lastError = body ? JSON.stringify(body.error) : 'request failed';
     await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
   }
   throw new Error(`Deezer album ${album.albumId} (${album.movie}) failed: ${lastError}`);

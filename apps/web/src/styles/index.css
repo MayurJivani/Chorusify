@@ -154,3 +154,15 @@ body {
            disabled:opacity-50;
   }
 }
+
+/* Text fields on the event host screens. */
+@layer components {
+  .event-input {
+    @apply w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-normal text-white
+           outline-none transition-colors placeholder:text-slate-500
+           focus:border-chorusify-accent2 focus-visible:ring-1 focus-visible:ring-chorusify-accent2;
+  }
+  select.event-input option {
+    @apply bg-chorusify-surface text-white;
+  }
+}
