@@ -385,8 +385,8 @@ export function SnippetPlayer({
         </p>
       )}
 
-      {/* Volume slider */}
-      <div className="flex items-center gap-2 w-full max-w-[220px]">
+      {/* Volume slider. Phones have volume buttons, and a round needs the room. */}
+      <div className="hidden items-center gap-2 w-full max-w-[220px] sm:flex">
         {/* Speaker icon */}
         <svg
           viewBox="0 0 24 24"

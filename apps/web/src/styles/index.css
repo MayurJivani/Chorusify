@@ -392,15 +392,25 @@ body {
 .album-wall[data-pointer='on'] .album-wall-colour {
   opacity: 1;
 }
-.album-wall > img:hover,
 .album-wall > .album-wall-lit {
   z-index: 2;
   filter: none;
 }
-.album-wall > img:hover {
-  transform: scale(1.12);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
-  transition-duration: 80ms, 260ms, 260ms;
+/* Hover only where there is a pointer: on touch it would stick after a tap. */
+@media (hover: hover) {
+  .album-wall > img:hover {
+    z-index: 2;
+    filter: none;
+    transform: scale(1.12);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+    transition-duration: 80ms, 260ms, 260ms;
+  }
+}
+@media (max-width: 639px) {
+  .album-wall {
+    height: 300px;
+    gap: 6px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .album-wall > img:hover {
