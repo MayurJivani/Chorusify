@@ -646,6 +646,29 @@
   ]
  },
  {
+  "deezerTrackId": "1120766892",
+  "title": "Kali Nagin Ke Jaisi",
+  "artist": "Udit Narayan",
+  "featuredArtists": [
+   "Kavita Krishnamurthy"
+  ],
+  "album": "Mann (Original Motion Picture Soundtrack)",
+  "releaseYear": 1999,
+  "genre": "Bollywood",
+  "scene": "bollywood-90s",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/531aaec8008ed506cf4ffdf784c280fe/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 283,
+  "difficulty": 5,
+  "rank": 70468,
+  "isrc": "INT109900186",
+  "aliases": [
+   "kali nagin ke jaisi"
+  ]
+ },
+ {
   "deezerTrackId": "1147261492",
   "title": "Jo Haal Dil Ka",
   "artist": "Kumar Sanu",
@@ -3451,30 +3474,6 @@
   ]
  },
  {
-  "deezerTrackId": "3365030511",
-  "title": "Rim Jhim Rim Jhim (Jhankar Beats)",
-  "artist": "Kavita Krishnamurthy",
-  "featuredArtists": [
-   "Kumar Sanu"
-  ],
-  "album": "1942 a Love Story - Jhankar Beats",
-  "releaseYear": 2022,
-  "genre": "Bollywood",
-  "scene": "bollywood-90s",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/952eac93dc4c27dbc640cb551feb47df/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 314,
-  "difficulty": 5,
-  "rank": 64415,
-  "isrc": "INH102216008",
-  "aliases": [
-   "rim jhim rim jhim jhankar beats",
-   "rim jhim rim jhim"
-  ]
- },
- {
   "deezerTrackId": "342265801",
   "title": "Phir Bhi Dil Hai Hindustani",
   "artist": "Jatin-Lalit",
@@ -5907,7 +5906,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/d52d61a3fb9eeedc6daadc1bcfdf14b1/250x250-000000-80-0-0.jpg",
   "durationSeconds": 412,
-  "difficulty": 1,
+  "difficulty": 2,
   "rank": 147588,
   "isrc": "INT100100019",
   "aliases": [
@@ -6388,35 +6387,6 @@
   ]
  },
  {
-  "deezerTrackId": "2530736561",
-  "title": "Jeena Yahan Marna Yahan (Jhankar Beats)",
-  "artist": "Mukesh",
-  "featuredArtists": [
-   "Shankar-Jaikishan",
-   "Shaily Shailendra",
-   "DJ SNB IND",
-   "Creative Academy"
-  ],
-  "album": "Jeena Yahan Marna Yahan (Jhankar Beats)",
-  "releaseYear": 2023,
-  "genre": "Bollywood",
-  "scene": "bollywood-classics",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/ad381ab7c9269d1c84f5dfb6f5aa2dd0/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 268,
-  "difficulty": 4,
-  "rank": 52233,
-  "isrc": "INH102315033",
-  "aliases": [
-   "jeena yahan marna yahan jhankar beats",
-   "jeena yahan marna yahan",
-   "jina yahan marna yahan jhankar beats",
-   "jena yahan marna yahan jhankar beats"
-  ]
- },
- {
   "deezerTrackId": "2547065",
   "title": "John Jani Janardhan (From \"Naseeb\")",
   "artist": "Mohammed Rafi",
@@ -6618,32 +6588,6 @@
   ]
  },
  {
-  "deezerTrackId": "3379170461",
-  "title": "Roop Tera Mastana (Jhankar Beats)",
-  "artist": "Kishore Kumar",
-  "featuredArtists": [
-   "Hero And King Of Jhankar Studio"
-  ],
-  "album": "Aradhana (Jhankar Beats)",
-  "releaseYear": 2022,
-  "genre": "Bollywood",
-  "scene": "bollywood-classics",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/1cadf078b685c268012bbe16206a6e13/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 220,
-  "difficulty": 2,
-  "rank": 90406,
-  "isrc": "INH102213339",
-  "aliases": [
-   "roop tera mastana jhankar beats",
-   "roop tera mastana",
-   "rup tera mastana jhankar beats",
-   "rop tera mastana jhankar beats"
-  ]
- },
- {
   "deezerTrackId": "3698838812",
   "title": "Run Down The City - Monica",
   "artist": "Shashwat Sachdev",
@@ -6810,7 +6754,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/dcac87456992023bb8c3de7cdf52b83d/250x250-000000-80-0-0.jpg",
   "durationSeconds": 195,
-  "difficulty": 3,
+  "difficulty": 4,
   "rank": 64280,
   "isrc": "INH109336720",
   "aliases": [
@@ -7820,6 +7764,31 @@
   ]
  },
  {
+  "deezerTrackId": "62045089",
+  "title": "Disco Deewane",
+  "artist": "Nazia Hassan",
+  "featuredArtists": [],
+  "album": "Sangdil & Aangan",
+  "releaseYear": 1905,
+  "genre": "Bollywood",
+  "scene": "bollywood-classics",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": null,
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/69c124ad9d8908237fce563af6e14844/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 246,
+  "difficulty": 1,
+  "rank": 296882,
+  "isrc": "USA561407017",
+  "aliases": [
+   "disco deewane",
+   "disco diwane",
+   "disco deevane",
+   "disco dewane",
+   "disco divane"
+  ]
+ },
+ {
   "deezerTrackId": "624002242",
   "title": "O Daddy Ji Bolo Mera Beta Ji",
   "artist": "Kishore Kumar",
@@ -8153,7 +8122,7 @@
   "dailyEdition": null,
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/b152cb698c55c53d68678685312c98cf/250x250-000000-80-0-0.jpg",
   "durationSeconds": 264,
-  "difficulty": 4,
+  "difficulty": 3,
   "rank": 128009,
   "isrc": "INS172002998",
   "aliases": [
@@ -9397,7 +9366,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/817f9ce1111eb0b0362531af6f2083da/250x250-000000-80-0-0.jpg",
   "durationSeconds": 277,
-  "difficulty": 2,
+  "difficulty": 1,
   "rank": 227115,
   "isrc": "INY091300051",
   "aliases": [
@@ -9890,32 +9859,6 @@
   ]
  },
  {
-  "deezerTrackId": "131485304",
-  "title": "Afreen Afreen (Coke Studio Season 9)",
-  "artist": "Rahat Fateh Ali Khan",
-  "featuredArtists": [
-   "Momina Mustehsan"
-  ],
-  "album": "Afreen Afreen (Coke Studio Season 9)",
-  "releaseYear": 2016,
-  "genre": "Bollywood",
-  "scene": "bollywood-modern",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/9c050c8d52648bc1a95d6629e2d84d0b/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 400,
-  "difficulty": 1,
-  "rank": 271220,
-  "isrc": "USHM21676507",
-  "aliases": [
-   "afreen afreen coke studio season 9",
-   "afreen afreen",
-   "afrin afrin coke studio season 9",
-   "afren afren coke studio season 9"
-  ]
- },
- {
   "deezerTrackId": "131518434",
   "title": "Tamilselvi",
   "artist": "Anirudh Ravichander",
@@ -10040,31 +9983,6 @@
    "han tu hain",
    "haan tu he",
    "han tu he"
-  ]
- },
- {
-  "deezerTrackId": "132274254",
-  "title": "Par Chanaa De (Coke Studio Season 9)",
-  "artist": "Shilpa Rao",
-  "featuredArtists": [
-   "Noori"
-  ],
-  "album": "Par Chanaa De (Coke Studio Season 9)",
-  "releaseYear": 2016,
-  "genre": "Bollywood",
-  "scene": "bollywood-modern",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/f31c579093e0358a42cd47988dc4c2b8/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 666,
-  "difficulty": 2,
-  "rank": 178236,
-  "isrc": "USHM21697857",
-  "aliases": [
-   "par chanaa de coke studio season 9",
-   "par chanaa de",
-   "par chana de coke studio season 9"
   ]
  },
  {
@@ -10634,7 +10552,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/c3214e8a218c3e70a4171653454e70db/250x250-000000-80-0-0.jpg",
   "durationSeconds": 314,
-  "difficulty": 3,
+  "difficulty": 2,
   "rank": 169829,
   "isrc": "INS171200261",
   "aliases": [
@@ -11397,6 +11315,31 @@
   "aliases": [
    "tumhari chup from gentleman",
    "tumhari chup"
+  ]
+ },
+ {
+  "deezerTrackId": "2802409232",
+  "title": "Ro Lain De",
+  "artist": "Pritam",
+  "featuredArtists": [
+   "Sonu Nigam",
+   "Shilpa Rao",
+   "Amitabh Bhattacharya"
+  ],
+  "album": "Rocky Aur Rani Kii Prem Kahaani (Original Motion Picture Soundtrack)",
+  "releaseYear": 2024,
+  "genre": "Bollywood",
+  "scene": "bollywood-modern",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/6a6d9a5d27bb59142cf8b0774889abae/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 241,
+  "difficulty": 3,
+  "rank": 155683,
+  "isrc": "INH102310896",
+  "aliases": [
+   "ro lain de"
   ]
  },
  {
@@ -14402,6 +14345,30 @@
   ]
  },
  {
+  "deezerTrackId": "3183631031",
+  "title": "Nazar Se Nazar Mile",
+  "artist": "Rahat Fateh Ali Khan",
+  "featuredArtists": [
+   "Anupama Raag",
+   "Sajid-Wajid"
+  ],
+  "album": "Miley Naa Miley Hum",
+  "releaseYear": 2011,
+  "genre": "Bollywood",
+  "scene": "bollywood-modern",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/a322fc3da6cab9cb369554ef041f6b8d/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 300,
+  "difficulty": 3,
+  "rank": 148861,
+  "isrc": "INS181103516",
+  "aliases": [
+   "nazar se nazar mile"
+  ]
+ },
+ {
   "deezerTrackId": "3183646301",
   "title": "Singham",
   "artist": "Sukhwinder Singh",
@@ -14992,28 +14959,6 @@
    "sajna ji vari vari from honeymoon travels pvt ltd",
    "sajna ji vari vari from honeymon travels pvt ltd",
    "sajna ji vari vari from honeymun travels pvt ltd"
-  ]
- },
- {
-  "deezerTrackId": "3250559371",
-  "title": "Tajdar-E-Haram (Coke Studio Season 8)",
-  "artist": "Atif Aslam",
-  "featuredArtists": [],
-  "album": "Tajdar-E-Haram (Coke Studio Season 8)",
-  "releaseYear": 2023,
-  "genre": "Bollywood",
-  "scene": "bollywood-modern",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/ac41e8b4e757ac4661f8b3d0f335265b/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 616,
-  "difficulty": 2,
-  "rank": 214104,
-  "isrc": "USHM21573462",
-  "aliases": [
-   "tajdar e haram coke studio season 8",
-   "tajdar e haram"
   ]
  },
  {
@@ -15608,7 +15553,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/aebd06a00a0c448f301088591d66cde0/250x250-000000-80-0-0.jpg",
   "durationSeconds": 244,
-  "difficulty": 3,
+  "difficulty": 2,
   "rank": 170401,
   "isrc": "GBSGZ1200011",
   "aliases": [
@@ -16784,6 +16729,28 @@
   ]
  },
  {
+  "deezerTrackId": "4018809761",
+  "title": "Allah Hu Allah Hu",
+  "artist": "Atif Aslam",
+  "featuredArtists": [],
+  "album": "Allah Hu Allah Hu",
+  "releaseYear": 2024,
+  "genre": "Bollywood",
+  "scene": "bollywood-modern",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/9d7aa68d47e9e5aca9bddb00388296b1/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 283,
+  "difficulty": 5,
+  "rank": 62172,
+  "isrc": "QZLBC2405120",
+  "aliases": [
+   "allah hu allah hu",
+   "alah hu alah hu"
+  ]
+ },
+ {
   "deezerTrackId": "4042793131",
   "title": "Tujhko (From “Cocktail 2”)",
   "artist": "Pritam",
@@ -17224,7 +17191,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/695ed7daf529601dd7a63b88b4bb736a/250x250-000000-80-0-0.jpg",
   "durationSeconds": 208,
-  "difficulty": 2,
+  "difficulty": 1,
   "rank": 226746,
   "isrc": "INS171703387",
   "aliases": [
@@ -17473,6 +17440,29 @@
    "pehla nasha from kuchh bheege alfaz",
    "pehla nasha from kuch bhege alfaz",
    "pehla nasha from kuch bhige alfaz"
+  ]
+ },
+ {
+  "deezerTrackId": "479278892",
+  "title": "Ek Pal Ka Jeena",
+  "artist": "Lucky Ali",
+  "featuredArtists": [],
+  "album": "Kaho Naa Pyaar Hai (Original Motion Picture Soundtrack)",
+  "releaseYear": 2000,
+  "genre": "Bollywood",
+  "scene": "bollywood-modern",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/1af19c2c0f39e5ed17d4e34fb416942f/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 397,
+  "difficulty": 2,
+  "rank": 187479,
+  "isrc": "INH109940060",
+  "aliases": [
+   "ek pal ka jeena",
+   "ek pal ka jina",
+   "ek pal ka jena"
   ]
  },
  {
@@ -18109,7 +18099,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/55e2359fd6aea14bb2960b0894c747f8/250x250-000000-80-0-0.jpg",
   "durationSeconds": 260,
-  "difficulty": 5,
+  "difficulty": 4,
   "rank": 91723,
   "isrc": "INS171300370",
   "aliases": [
@@ -18639,7 +18629,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/8af6069d6405a2440a25cdeda94622fc/250x250-000000-80-0-0.jpg",
   "durationSeconds": 302,
-  "difficulty": 3,
+  "difficulty": 2,
   "rank": 170357,
   "isrc": "INS170800033",
   "aliases": [
@@ -22146,7 +22136,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/bb06c1046a3869e0f210698f4f0e58b1/250x250-000000-80-0-0.jpg",
   "durationSeconds": 192,
-  "difficulty": 2,
+  "difficulty": 3,
   "rank": 55785,
   "isrc": "DER372120806",
   "aliases": [
@@ -22220,7 +22210,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/40f5b1eb63f66d6343c4159cc044b818/250x250-000000-80-0-0.jpg",
   "durationSeconds": 195,
-  "difficulty": 1,
+  "difficulty": 2,
   "rank": 98525,
   "isrc": "FR10S2255389",
   "aliases": [
@@ -22637,7 +22627,7 @@
   "dailyEdition": null,
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/333338786d84aa04c238b771ec375b04/250x250-000000-80-0-0.jpg",
   "durationSeconds": 205,
-  "difficulty": 1,
+  "difficulty": 2,
   "rank": 99904,
   "isrc": "QMFME2372867",
   "aliases": [
@@ -22809,7 +22799,7 @@
   "dailyEdition": null,
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/878fc45b5959a78d3e93b81912b808d6/250x250-000000-80-0-0.jpg",
   "durationSeconds": 170,
-  "difficulty": 2,
+  "difficulty": 3,
   "rank": 58333,
   "isrc": "GBKQU2490871",
   "aliases": [
@@ -23001,6 +22991,32 @@
   ]
  },
  {
+  "deezerTrackId": "3262674091",
+  "title": "Khatta Flow",
+  "artist": "Seedhe Maut",
+  "featuredArtists": [
+   "KR$NA"
+  ],
+  "album": "Lunch Break",
+  "releaseYear": 2023,
+  "genre": "Hip-Hop",
+  "scene": "desi-hiphop",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/a9f93d7a3ab2ff3d1e2a6d4d1c47c105/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 152,
+  "difficulty": 1,
+  "rank": 155228,
+  "isrc": "INA4Z2200140",
+  "aliases": [
+   "khatta flow",
+   "khatta flov",
+   "khata flow",
+   "khata flov"
+  ]
+ },
+ {
   "deezerTrackId": "3267129091",
   "title": "Nanchaku",
   "artist": "Seedhe Maut",
@@ -23155,7 +23171,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/8b2572dbb4f2dc4d0445e3432a6d535e/250x250-000000-80-0-0.jpg",
   "durationSeconds": 211,
-  "difficulty": 3,
+  "difficulty": 4,
   "rank": 32224,
   "isrc": "DGA082555401",
   "aliases": [
@@ -23538,29 +23554,6 @@
   ]
  },
  {
-  "deezerTrackId": "4006903311",
-  "title": "SADAK 2.0",
-  "artist": "Emiway Bantai",
-  "featuredArtists": [
-   "Token"
-  ],
-  "album": "SADAK 2.0",
-  "releaseYear": 2026,
-  "genre": "Hip-Hop",
-  "scene": "desi-hiphop",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/465b8823d56a320ff62e9ab31afc14d5/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 237,
-  "difficulty": 3,
-  "rank": 32222,
-  "isrc": "FR96X2684222",
-  "aliases": [
-   "sadak 2 0"
-  ]
- },
- {
   "deezerTrackId": "4026297321",
   "title": "KUAN",
   "artist": "citimall",
@@ -23624,29 +23617,6 @@
   "aliases": [
    "what s my name",
    "vhat s my name"
-  ]
- },
- {
-  "deezerTrackId": "4063352341",
-  "title": "Fall Off (Interlude)",
-  "artist": "KR$NA",
-  "featuredArtists": [],
-  "album": "Still Here",
-  "releaseYear": 2021,
-  "genre": "Hip-Hop",
-  "scene": "desi-hiphop",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/3aaf530d5f58856d482466becd48417a/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 121,
-  "difficulty": 4,
-  "rank": 25351,
-  "isrc": "INK492100137",
-  "aliases": [
-   "fall off interlude",
-   "fall off",
-   "fal of interlude"
   ]
  },
  {
@@ -23874,6 +23844,29 @@
   "isrc": "PLA247114804",
   "aliases": [
    "pietrek"
+  ]
+ },
+ {
+  "deezerTrackId": "760445252",
+  "title": "Lean On",
+  "artist": "Celina Sharma",
+  "featuredArtists": [
+   "Emiway Bantai"
+  ],
+  "album": "Lean On",
+  "releaseYear": 2019,
+  "genre": "Hip-Hop",
+  "scene": "desi-hiphop",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": null,
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/339ae85698c0d06a6301212d4fdad622/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 172,
+  "difficulty": 1,
+  "rank": 238689,
+  "isrc": "GBUM71905012",
+  "aliases": [
+   "lean on"
   ]
  },
  {
@@ -27535,6 +27528,28 @@
   ]
  },
  {
+  "deezerTrackId": "118105750",
+  "title": "Aaj Jane Ki Zid Na Karo",
+  "artist": "Farida Khanum",
+  "featuredArtists": [],
+  "album": "Showcase Southasia, Vol.12",
+  "releaseYear": 2016,
+  "genre": "Ghazal",
+  "scene": "ghazal-sufi",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/977d11a605ca8dc5757264016868ad17/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 453,
+  "difficulty": 2,
+  "rank": 67974,
+  "isrc": "QMDA61522226",
+  "aliases": [
+   "aaj jane ki zid na karo",
+   "aj jane ki zid na karo"
+  ]
+ },
+ {
   "deezerTrackId": "118105752",
   "title": "Mohabbat Karne Wale",
   "artist": "Farida Khanum",
@@ -27719,7 +27734,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/12d93f30a84a87efb32ba06fe7041755/250x250-000000-80-0-0.jpg",
   "durationSeconds": 322,
-  "difficulty": 4,
+  "difficulty": 5,
   "rank": 25795,
   "isrc": "INV119300499",
   "aliases": [
@@ -27775,30 +27790,6 @@
   "isrc": "INV119400085",
   "aliases": [
    "na kajare ki dhar"
-  ]
- },
- {
-  "deezerTrackId": "130670868",
-  "title": "Aaqa - Coke Studio Season 9",
-  "artist": "Abida Parveen",
-  "featuredArtists": [
-   "Ali Sethi"
-  ],
-  "album": "Aaqa - Coke Studio Season 9",
-  "releaseYear": 2016,
-  "genre": "Ghazal",
-  "scene": "ghazal-sufi",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/baf79402980dcf933c4e552fb27de306/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 507,
-  "difficulty": 1,
-  "rank": 158926,
-  "isrc": "USHM21662547",
-  "aliases": [
-   "aaqa coke studio season 9",
-   "aqa coke studio season 9"
   ]
  },
  {
@@ -27893,6 +27884,27 @@
   ]
  },
  {
+  "deezerTrackId": "2022975",
+  "title": "Zahid Ne",
+  "artist": "Abida Parveen",
+  "featuredArtists": [],
+  "album": "Raqs-e-Bismil",
+  "releaseYear": 2005,
+  "genre": "Ghazal",
+  "scene": "ghazal-sufi",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/69fcd189289cdcf71b6291ecfa0f34d9/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 455,
+  "difficulty": 2,
+  "rank": 65788,
+  "isrc": "USA560586482",
+  "aliases": [
+   "zahid ne"
+  ]
+ },
+ {
   "deezerTrackId": "2413961",
   "title": "Duniya Kisi Ke Pyar Mein",
   "artist": "Mehdi Hassan",
@@ -27912,31 +27924,6 @@
   "aliases": [
    "duniya kisi ke pyar mein",
    "duniya kisi ke pyar mai"
-  ]
- },
- {
-  "deezerTrackId": "2422233825",
-  "title": "Hungama Hai (Flip Beats)",
-  "artist": "Ghulam Ali",
-  "featuredArtists": [
-   "Veshesh The Percussionist"
-  ],
-  "album": "Hungama Hai (Flip Beats)",
-  "releaseYear": 2023,
-  "genre": "Ghazal",
-  "scene": "ghazal-sufi",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/d42288f3e54cbcb65c31d0dcf6049b12/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 184,
-  "difficulty": 5,
-  "rank": 21463,
-  "isrc": "INH102311750",
-  "aliases": [
-   "hungama hai flip beats",
-   "hungama hai",
-   "hungama he flip beats"
   ]
  },
  {
@@ -28074,35 +28061,12 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/9132f7e599f7e775b654ec95b646f0d4/250x250-000000-80-0-0.jpg",
   "durationSeconds": 386,
-  "difficulty": 2,
+  "difficulty": 3,
   "rank": 63558,
   "isrc": "INS180021433",
   "aliases": [
    "yaad nahin kya kya dekha tha",
    "yad nahin kya kya dekha tha"
-  ]
- },
- {
-  "deezerTrackId": "3250535181",
-  "title": "Aaj Jane Ki Zid Na Karo (Coke Studio Season 8)",
-  "artist": "Farida Khanum",
-  "featuredArtists": [],
-  "album": "Aaj Jane Ki Zid Na Karo (Coke Studio Season 8)",
-  "releaseYear": 2023,
-  "genre": "Ghazal",
-  "scene": "ghazal-sufi",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/61c03ebe2056fb03c8790017cbdbd72f/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 190,
-  "difficulty": 3,
-  "rank": 38167,
-  "isrc": "USHM21573486",
-  "aliases": [
-   "aaj jane ki zid na karo coke studio season 8",
-   "aaj jane ki zid na karo",
-   "aj jane ki zid na karo coke studio season 8"
   ]
  },
  {
@@ -28443,7 +28407,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/d5786438d0298109bc490b983c7a41eb/250x250-000000-80-0-0.jpg",
   "durationSeconds": 277,
-  "difficulty": 2,
+  "difficulty": 3,
   "rank": 63378,
   "isrc": "TCADJ1722390",
   "aliases": [
@@ -28466,7 +28430,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/48860fe694590ca892c4db1630f0fb0d/250x250-000000-80-0-0.jpg",
   "durationSeconds": 331,
-  "difficulty": 3,
+  "difficulty": 4,
   "rank": 38712,
   "isrc": "TCADJ1753806",
   "aliases": [
@@ -29198,32 +29162,6 @@
   ]
  },
  {
-  "deezerTrackId": "1115739182",
-  "title": "Thing You Want (Hindi)",
-  "artist": "Ikka",
-  "featuredArtists": [
-   "Shalmali Kholgade",
-   "WENGIE"
-  ],
-  "album": "COLLABS VOL. 1 (INT’L VER.)",
-  "releaseYear": 2020,
-  "genre": "Indian Indie",
-  "scene": "hindi-indie",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/16515d63f3548d315127413d1bde0823/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 207,
-  "difficulty": 4,
-  "rank": 54118,
-  "isrc": "CA5KR2102411",
-  "aliases": [
-   "thing you want hindi",
-   "thing you want",
-   "thing you vant hindi"
-  ]
- },
- {
   "deezerTrackId": "112835632",
   "title": "Ma Rewa",
   "artist": "Indian Ocean",
@@ -29662,29 +29600,6 @@
   ]
  },
  {
-  "deezerTrackId": "1220815642",
-  "title": "Jeet 2.0",
-  "artist": "Ritviz",
-  "featuredArtists": [],
-  "album": "Ved",
-  "releaseYear": 2019,
-  "genre": "Indian Indie",
-  "scene": "hindi-indie",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/0d6a03d9ec7c93ad31203f09216cfbf1/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 186,
-  "difficulty": 5,
-  "rank": 21407,
-  "isrc": "FR2X41928580",
-  "aliases": [
-   "jeet 2 0",
-   "jit 2 0",
-   "jet 2 0"
-  ]
- },
- {
   "deezerTrackId": "1220815652",
   "title": "Sage",
   "artist": "Ritviz",
@@ -30031,7 +29946,7 @@
   "dailyEdition": "desi",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/f068520aa94ddf60086036e7ae505c6e/250x250-000000-80-0-0.jpg",
   "durationSeconds": 237,
-  "difficulty": 3,
+  "difficulty": 4,
   "rank": 64071,
   "isrc": "INS171100116",
   "aliases": [
@@ -30763,6 +30678,36 @@
   ]
  },
  {
+  "deezerTrackId": "1752541617",
+  "title": "Bheegi Si Bhaagi Si",
+  "artist": "Kedrock",
+  "featuredArtists": [
+   "SD Style",
+   "Mohit Chauhan",
+   "Antara Mitra",
+   "Pritam"
+  ],
+  "album": "Bheegi Si Bhaagi Si",
+  "releaseYear": 2025,
+  "genre": "Indian Indie",
+  "scene": "hindi-indie",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": null,
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/ac417c27841766924825c221492e0bbb/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 185,
+  "difficulty": 3,
+  "rank": 70487,
+  "isrc": "INS172201689",
+  "aliases": [
+   "bheegi si bhaagi si",
+   "bhigi si bhaagi si",
+   "bheegi si bhagi si",
+   "bhegi si bhagi si",
+   "bhigi si bhagi si"
+  ]
+ },
+ {
   "deezerTrackId": "1786133367",
   "title": "Blur",
   "artist": "dhruv",
@@ -30936,6 +30881,27 @@
   "aliases": [
    "thandi hawa",
    "thandi hava"
+  ]
+ },
+ {
+  "deezerTrackId": "1897277857",
+  "title": "Chandamama",
+  "artist": "Ritviz",
+  "featuredArtists": [],
+  "album": "Mimmi",
+  "releaseYear": 2022,
+  "genre": "Indian Indie",
+  "scene": "hindi-indie",
+  "language": "hi",
+  "region": "India",
+  "dailyEdition": "desi",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/32ff3bf1ab65263e7d682aa08ffdffa9/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 166,
+  "difficulty": 4,
+  "rank": 56633,
+  "isrc": "TCAGL2220331",
+  "aliases": [
+   "chandamama"
   ]
  },
  {
@@ -34581,32 +34547,6 @@
   "aliases": [
    "raat bhar",
    "rat bhar"
-  ]
- },
- {
-  "deezerTrackId": "3643512052",
-  "title": "Chikiri Chikiri (From \"Peddi\")[Hindi]",
-  "artist": "A.R. Rahman",
-  "featuredArtists": [
-   "Mohit Chauhan",
-   "Raqueeb Alam"
-  ],
-  "album": "Chikiri Chikiri (From \"Peddi\")[Hindi]",
-  "releaseYear": 2025,
-  "genre": "Indian Indie",
-  "scene": "hindi-indie",
-  "language": "hi",
-  "region": "India",
-  "dailyEdition": "desi",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/8c399773cacd2143bed99c7db520e81f/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 273,
-  "difficulty": 4,
-  "rank": 41431,
-  "isrc": "INS182504134",
-  "aliases": [
-   "chikiri chikiri from peddi hindi",
-   "chikiri chikiri",
-   "chikiri chikiri from pedi hindi"
   ]
  },
  {
@@ -60548,28 +60488,6 @@
   ]
  },
  {
-  "deezerTrackId": "15489392",
-  "title": "What Goes Around.../...Comes Around (Interlude)",
-  "artist": "Justin Timberlake",
-  "featuredArtists": [],
-  "album": "FutureSex/LoveSounds Deluxe Edition",
-  "releaseYear": 2006,
-  "genre": "Pop",
-  "scene": "pop",
-  "language": "en",
-  "region": "North America and Europe",
-  "dailyEdition": "english",
-  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/615bb58abf2e5fd86741ed5311d364b1/250x250-000000-80-0-0.jpg",
-  "durationSeconds": 449,
-  "difficulty": 4,
-  "rank": 739476,
-  "isrc": "USJI10600479",
-  "aliases": [
-   "what goes around comes around interlude",
-   "what goes around comes around"
-  ]
- },
- {
   "deezerTrackId": "15586296",
   "title": "Don't Stop 'Til You Get Enough",
   "artist": "Michael Jackson",
@@ -65575,6 +65493,29 @@
   ]
  },
  {
+  "deezerTrackId": "78213551",
+  "title": "Love Never Felt So Good",
+  "artist": "Michael Jackson",
+  "featuredArtists": [
+   "Justin Timberlake"
+  ],
+  "album": "XSCAPE",
+  "releaseYear": 2014,
+  "genre": "Pop",
+  "scene": "pop",
+  "language": "en",
+  "region": "North America and Europe",
+  "dailyEdition": "english",
+  "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/8d0164d7161ac43452ec58201e56e3a4/250x250-000000-80-0-0.jpg",
+  "durationSeconds": 246,
+  "difficulty": 3,
+  "rank": 772469,
+  "isrc": "USSM11401760",
+  "aliases": [
+   "love never felt so good"
+  ]
+ },
+ {
   "deezerTrackId": "78671337",
   "title": "Confident",
   "artist": "Justin Bieber",
@@ -66359,7 +66300,7 @@
   "dailyEdition": "english",
   "albumArtUrl": "https://cdn-images.dzcdn.net/images/cover/ad42bda38fe69628922ec2a11b76be8f/250x250-000000-80-0-0.jpg",
   "durationSeconds": 194,
-  "difficulty": 3,
+  "difficulty": 4,
   "rank": 763967,
   "isrc": "USUM71923485",
   "aliases": [

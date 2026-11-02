@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import type { MultiplayerRoomSnapshot, SongSearchResult } from '../../types/api';
 import { SyncedAudio } from '../events/SyncedAudio';
+import { Disc } from '../game/Disc';
 import { SnippetPlayer } from '../game/SnippetPlayer';
 import { SnippetProgressBar } from '../game/SnippetProgressBar';
 import { GuessInput } from '../game/GuessInput';
@@ -58,17 +59,23 @@ function useReached(at: number): boolean {
   return reached;
 }
 
-/** A row of bars that moves only while music is meant to be playing, and sits still otherwise. */
-function ListenBars({ active }: { active: boolean }) {
+/** The answer's record slides halfway out of its sleeve, the one flourish a reveal earns. */
+function SleeveReveal({ art }: { art: string }) {
   return (
-    <span aria-hidden="true" className="flex h-8 items-end gap-1">
-      {[0.55, 1, 0.7, 0.9, 0.5].map((height, i) => (
-        <span
-          key={i}
-          className={`w-1.5 origin-bottom rounded-full bg-chorusify-accent2 ${active ? 'motion-safe:animate-listen' : 'opacity-40'}`}
-          style={{ height: `${height * 100}%`, animationDelay: `${i * 90}ms` }}
-        />
-      ))}
+    <span className="disc-sleeve mr-7 h-16 w-16">
+      <motion.span
+        className="absolute left-0 top-0"
+        initial={{ x: 0, rotate: -40 }}
+        animate={{ x: 28, rotate: 0 }}
+        transition={{ type: 'spring', stiffness: 170, damping: 20, delay: 0.12 }}
+      >
+        <Disc size={64} art={art} />
+      </motion.span>
+      <img
+        src={art}
+        alt=""
+        className="absolute inset-0 h-16 w-16 rounded-md object-cover shadow-lg shadow-black/50 ring-1 ring-white/15"
+      />
     </span>
   );
 }
@@ -81,7 +88,7 @@ function EventQuestion({ listening, active }: { listening: string; active: boole
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       className="flex flex-col items-center gap-2 py-3 text-center"
     >
-      <ListenBars active={active} />
+      <Disc size={120} spinning={active} />
       <p className="text-sm font-medium text-slate-200">{listening}</p>
     </motion.div>
   );
@@ -196,8 +203,12 @@ export function MultiplayerGame({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="flex w-full flex-col items-center gap-5 text-center"
+            className="relative flex w-full flex-col items-center gap-5 text-center"
           >
+            {/* The screen takes its colour from the record that just played. */}
+            {roundEnd.correct?.albumArtUrl && (
+              <img src={roundEnd.correct.albumArtUrl} alt="" className="reveal-glow" />
+            )}
             <h2 className="text-lg font-bold text-white">🎵 It was…</h2>
             <motion.div
               initial={{ scale: 0.92 }}
@@ -206,11 +217,7 @@ export function MultiplayerGame({
               className="flex w-full max-w-md items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
             >
               {roundEnd.correct?.albumArtUrl ? (
-                <img
-                  src={roundEnd.correct.albumArtUrl}
-                  alt=""
-                  className="h-14 w-14 flex-shrink-0 rounded-xl object-cover shadow-lg ring-1 ring-white/10"
-                />
+                <SleeveReveal art={roundEnd.correct.albumArtUrl} />
               ) : (
                 <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-xl">
                   🎵

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { deleteEvent, deletePlaylist, listMyEvents, listPlaylists } from '../api/events';
 import { EventForm } from '../features/events/EventForm';
+import { Disc } from '../features/game/Disc';
 import { formatDuration, PlaylistBuilder } from '../features/events/PlaylistBuilder';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useSession } from '../hooks/useSession';
@@ -121,7 +122,11 @@ export function EventsPage() {
                   New event
                 </button>
               </div>
-              {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+              {error && (
+                <p role="alert" className="text-sm text-red-300">
+                  {error}
+                </p>
+              )}
               {events?.length === 0 && (
                 <p className="py-4 text-sm text-slate-400">
                   {playlists.length === 0
@@ -145,12 +150,19 @@ export function EventsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {event.status !== 'ended' && (
-                        <Link to={`/events/${event.id}/live`} className="btn-primary !rounded-lg !px-3 !py-1.5 !text-xs">
+                        <Link
+                          to={`/events/${event.id}/live`}
+                          className="btn-primary !rounded-lg !px-3 !py-1.5 !text-xs"
+                        >
                           {event.status === 'live' ? 'Back to console' : 'Open console'}
                         </Link>
                       )}
                       {event.status === 'open' && (
-                        <button type="button" onClick={() => setView({ kind: 'event', event })} className="btn-secondary !rounded-lg !px-3 !py-1.5 !text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setView({ kind: 'event', event })}
+                          className="btn-secondary !rounded-lg !px-3 !py-1.5 !text-xs"
+                        >
                           Edit
                         </button>
                       )}
@@ -176,13 +188,21 @@ export function EventsPage() {
             <section className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-xl font-bold text-white">Playlists</h2>
-                <button type="button" onClick={() => setView({ kind: 'playlist', playlist: null })} className="btn-secondary !rounded-xl !py-2 !text-sm">
+                <button
+                  type="button"
+                  onClick={() => setView({ kind: 'playlist', playlist: null })}
+                  className="btn-secondary !rounded-xl !py-2 !text-sm"
+                >
                   New playlist
                 </button>
               </div>
               <ul className="divide-y divide-white/[0.07]">
                 {playlists.map((playlist) => (
-                  <li key={playlist.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+                  <li
+                    key={playlist.id}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3"
+                  >
+                    <Disc kind="cd" size={44} art={playlist.tracks[0]?.albumArtUrl} />
                     <div className="min-w-0 flex-1 basis-56">
                       <p className="truncate font-semibold text-white">{playlist.name}</p>
                       <p className="text-xs text-slate-400">
@@ -191,13 +211,21 @@ export function EventsPage() {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setView({ kind: 'playlist', playlist })} className="btn-secondary !rounded-lg !px-3 !py-1.5 !text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setView({ kind: 'playlist', playlist })}
+                        className="btn-secondary !rounded-lg !px-3 !py-1.5 !text-xs"
+                      >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`Delete "${playlist.name}"? Events already made from it keep their songs.`)) {
+                          if (
+                            window.confirm(
+                              `Delete "${playlist.name}"? Events already made from it keep their songs.`,
+                            )
+                          ) {
                             void act(() => deletePlaylist(playlist.id));
                           }
                         }}

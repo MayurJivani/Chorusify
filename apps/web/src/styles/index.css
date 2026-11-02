@@ -166,3 +166,256 @@ body {
     @apply bg-chorusify-surface text-white;
   }
 }
+
+/* ── Records and CDs ───────────────────────────────────────
+   See Disc.tsx. Sizes are percentages, so a 36px disc and a 300px disc are the same object. */
+.disc {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.55),
+    0 2px 5px rgba(0, 0, 0, 0.5);
+}
+.disc-body,
+.disc-light,
+.disc-label {
+  position: absolute;
+  border-radius: 9999px;
+}
+.disc-body,
+.disc-light {
+  inset: 0;
+}
+.disc-light {
+  pointer-events: none;
+}
+.disc-label {
+  inset: 32%;
+  overflow: hidden;
+  background: radial-gradient(circle at 35% 30%, #a78bfa, #6d3fe0 65%, #4c1d95);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.disc-label img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.disc-hole,
+.disc-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+}
+.disc-hole {
+  width: 6%;
+  height: 6%;
+  min-width: 3px;
+  min-height: 3px;
+  background: #0d0d0f;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+.disc-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.disc-spinning {
+  animation: disc-turn 1.8s linear infinite;
+}
+@keyframes disc-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .disc-spinning {
+    animation: none;
+  }
+}
+
+/* Vinyl: fine grooves, wider bands between tracks, and a dead wax ring by the label. */
+.disc-vinyl .disc-body {
+  background:
+    radial-gradient(circle, transparent 33%, rgba(255, 255, 255, 0.05) 33.4%, transparent 34.5%),
+    radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.75) 54.5%, transparent 55.5%),
+    radial-gradient(circle, transparent 66%, rgba(0, 0, 0, 0.75) 66.5%, transparent 67.5%),
+    repeating-radial-gradient(circle, #101012 0 1px, #1a1a1d 1px 2px, #0c0c0e 2px 3px),
+    #101012;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    inset 0 0 0 3px #08080a;
+}
+.disc-vinyl .disc-light {
+  /* Two opposite wedges, the shape a single room light makes on a record. */
+  background: conic-gradient(
+    from 28deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.2) 16deg,
+    rgba(200, 215, 255, 0.05) 34deg,
+    transparent 52deg,
+    transparent 180deg,
+    rgba(255, 255, 255, 0.15) 196deg,
+    rgba(255, 220, 200, 0.04) 214deg,
+    transparent 232deg,
+    transparent 360deg
+  );
+  mask: radial-gradient(circle, transparent 32.5%, #000 33%);
+}
+
+/* Gold record: the same grooves, plated. */
+.disc-gold .disc-body {
+  background:
+    radial-gradient(circle, transparent 54%, rgba(90, 60, 0, 0.6) 54.5%, transparent 55.5%),
+    radial-gradient(circle, transparent 66%, rgba(90, 60, 0, 0.6) 66.5%, transparent 67.5%),
+    repeating-radial-gradient(circle, #b8860b 0 1px, #e2b93b 1px 2px, #a67c00 2px 3px);
+  box-shadow: inset 0 0 0 2px #7a5a00;
+}
+.disc-gold .disc-label {
+  background: radial-gradient(circle at 35% 30%, #4b4b52, #17171a);
+}
+.disc-gold .disc-light {
+  background: conic-gradient(
+    from 20deg,
+    transparent 0deg,
+    rgba(255, 250, 215, 0.7) 18deg,
+    transparent 48deg,
+    transparent 180deg,
+    rgba(255, 250, 215, 0.55) 198deg,
+    transparent 228deg,
+    transparent 360deg
+  );
+  mask: radial-gradient(circle, transparent 32.5%, #000 33%);
+}
+
+/* CD: a mirror band with the rainbow a data track throws, and a clear hub. */
+.disc-cd .disc-body {
+  background:
+    radial-gradient(circle, #d8dbe2 0 15%, #9ca0a8 15.5% 17%, transparent 17.5%),
+    repeating-radial-gradient(circle, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 2px),
+    #c9ccd4;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+.disc-cd .disc-label {
+  inset: 17.5%;
+  background: transparent;
+  box-shadow: none;
+  /* Printed art leaves the hub showing, as on a real pressing. */
+  mask: radial-gradient(circle, transparent 28%, #000 28.5%);
+}
+.disc-cd .disc-light {
+  background: conic-gradient(
+    from 15deg,
+    rgba(255, 255, 255, 0.55) 0deg,
+    rgba(255, 90, 130, 0.5) 22deg,
+    rgba(255, 215, 90, 0.5) 42deg,
+    rgba(90, 255, 170, 0.45) 62deg,
+    rgba(90, 170, 255, 0.5) 84deg,
+    rgba(190, 110, 255, 0.45) 106deg,
+    rgba(255, 255, 255, 0) 130deg,
+    rgba(0, 0, 0, 0.1) 180deg,
+    rgba(255, 255, 255, 0.5) 195deg,
+    rgba(255, 90, 130, 0.45) 215deg,
+    rgba(255, 215, 90, 0.45) 235deg,
+    rgba(90, 255, 170, 0.4) 255deg,
+    rgba(90, 170, 255, 0.45) 275deg,
+    rgba(190, 110, 255, 0.4) 295deg,
+    rgba(255, 255, 255, 0) 320deg,
+    rgba(255, 255, 255, 0.55) 360deg
+  );
+  mask: radial-gradient(circle, transparent 17%, #000 17.5%);
+  mix-blend-mode: normal;
+}
+.disc-cd .disc-hole {
+  width: 15%;
+  height: 15%;
+  background: #121214;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+/* A record sliding out of its sleeve, for the answer reveal. */
+.disc-sleeve {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* The solo player's record uses the same surface, on its existing turntable markup. */
+.disc-vinyl-face {
+  background:
+    radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.75) 54.5%, transparent 55.5%),
+    radial-gradient(circle, transparent 66%, rgba(0, 0, 0, 0.75) 66.5%, transparent 67.5%),
+    repeating-radial-gradient(circle, #101012 0 1px, #1a1a1d 1px 2px, #0c0c0e 2px 3px);
+}
+.disc-label-blank {
+  background: radial-gradient(circle at 35% 30%, #a78bfa, #6d3fe0 65%, #4c1d95);
+}
+
+/* The album wall on the home page. Fades out before the cards so they stay on plain ground. */
+.album-wall {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(84px, 11vw, 150px), 1fr));
+  gap: 10px;
+  height: 680px;
+  overflow: hidden;
+  mask: linear-gradient(#000 55%, transparent);
+}
+.album-wall img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  filter: grayscale(1) brightness(0.32);
+  transition:
+    filter 500ms ease,
+    transform 300ms ease;
+}
+/* Hovering shows the cover in full colour, and so does the one lit by itself. */
+.album-wall img:hover,
+.album-wall-lit {
+  filter: none;
+}
+.album-wall img:hover {
+  transform: scale(1.06);
+  transition-duration: 80ms;
+}
+/* The wall sits behind the page, so empty parts of the page let the pointer through to it. */
+.home-over {
+  pointer-events: none;
+}
+.home-over a,
+.home-over button,
+.home-over input,
+.home-over section,
+.home-over audio {
+  pointer-events: auto;
+}
+.home-over h1 {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+}
+.reveal-glow {
+  position: absolute;
+  inset: -40px;
+  z-index: -1;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  max-width: none;
+  object-fit: cover;
+  opacity: 0.32;
+  filter: blur(42px) saturate(1.4);
+  pointer-events: none;
+}
+main:has(.album-wall) {
+  position: relative;
+  isolation: isolate;
+}

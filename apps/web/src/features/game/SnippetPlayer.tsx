@@ -319,25 +319,10 @@ export function SnippetPlayer({
               'w-32 h-32 sm:w-48 sm:h-48 lg:w-56 lg:h-56 rounded-full ' +
               'shadow-[0_20px_50px_rgba(0,0,0,0.6)] border-4 border-neutral-900 ' +
               'transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] ' +
-              (isPlaying ? 'animate-[spin_12s_linear_infinite]' : '') +
+              'disc-vinyl-face ' +
+              (isPlaying ? 'animate-[spin_12s_linear_infinite] ' : '') +
               (disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : '')
             }
-            style={{
-              background: `
-              radial-gradient(circle,
-                #151515 0%,
-                #1d1d1d 20%,
-                #0a0a0a 30%,
-                #1c1c1c 40%,
-                #050505 50%,
-                #181818 60%,
-                #000 65%,
-                #222 72%,
-                #0a0a0a 82%,
-                #181818 100%
-              )
-            `,
-            }}
             aria-label={isPlaying ? 'Playing snippet' : 'Play snippet'}
           >
             {/* Inner label with artist picture */}
@@ -349,9 +334,7 @@ export function SnippetPlayer({
                   className="absolute inset-0 h-full w-full rounded-full object-cover"
                 />
               ) : (
-                <span className="text-2xl sm:text-3xl select-none" aria-hidden>
-                  🎵
-                </span>
+                <span className="disc-label-blank absolute inset-0" aria-hidden />
               )}
               {/* Center spindle hole */}
               <div className="absolute w-2 h-2 rounded-full bg-neutral-950 border border-neutral-800 z-20 shadow-md" />

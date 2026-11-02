@@ -1,3 +1,5 @@
+import { Disc } from '../features/game/Disc';
+import { AlbumWall } from '../features/home/AlbumWall';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -9,21 +11,6 @@ import { ArtistModeDemo, MultiplayerDemo } from '../features/home/ModeDemos';
 import { QuickRound, useSampler } from '../features/home/QuickRound';
 import type { StatsResponse } from '../types/api';
 
-function AnimatedWaveform({ isPlaying = true }: { isPlaying?: boolean }) {
-  return (
-    <div className="flex h-8 items-end gap-1.5">
-      {(['waveform-1', 'waveform-2', 'waveform-3', 'waveform-4', 'waveform-5'] as const).map(
-        (anim, i) => (
-          <span
-            key={i}
-            className={`w-1.5 rounded-full bg-white/70 ${isPlaying ? `animate-${anim}` : 'h-2'} transition-all duration-300`}
-            style={{ animationDelay: `${i * 120}ms` }}
-          />
-        ),
-      )}
-    </div>
-  );
-}
 
 /**
  * The remaining modes.
@@ -78,17 +65,23 @@ export function HomePage() {
   // but the spare room sits underneath, so the hero rides nearer the top rather than floating in
   // the middle of the viewport.
   return (
-    <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-4 px-4 pt-2 pb-8 sm:gap-8 sm:pt-4 sm:pb-14">
+    <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-4 px-4 pt-2 pb-8 sm:gap-8 sm:pt-4 sm:pb-14">
       {/* Hero kept at its original scale and wording - it is the page's anchor, and shrinking
           it to buy vertical space made the whole page read as a settings screen. */}
+      <AlbumWall songs={songs} />
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
         className="flex flex-col items-center gap-5 text-center"
       >
-        <div className="animate-float">
-          <AnimatedWaveform />
+        <div className="relative flex h-24 w-44 items-center justify-center" aria-hidden="true">
+          <span className="absolute left-0 top-0 -rotate-6">
+            <Disc kind="cd" size={92} />
+          </span>
+          <span className="absolute right-0 top-0">
+            <Disc size={92} spinning />
+          </span>
         </div>
         <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl">
           Guess your <span className="text-purple-400">favourite</span> music!
@@ -245,27 +238,6 @@ export function HomePage() {
           <span className="shrink-0 text-sm font-semibold text-slate-300">Play →</span>
         </Link>
       </motion.div>
-
-      {songs.length > 12 && (
-        <ul aria-label="Songs in the bank" className="flex w-full gap-1 overflow-x-auto pb-2 pt-2">
-          {songs.slice(12, 48).map((song) => (
-            <li
-              key={song.id}
-              className="w-20 flex-none transition-transform duration-200 hover:-translate-y-1 hover:-rotate-2 sm:w-24"
-            >
-              <img
-                src={song.albumArtUrl ?? undefined}
-                alt={`${song.title} by ${song.artist}`}
-                title={`${song.title} · ${song.artist}`}
-                loading="lazy"
-                width={96}
-                height={96}
-                className="aspect-square w-full rounded object-cover"
-              />
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

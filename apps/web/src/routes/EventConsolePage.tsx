@@ -5,6 +5,7 @@ import { getHostedEvent } from '../api/events';
 import { MultipleChoiceGuess } from '../features/artist/MultipleChoiceGuess';
 import { SharePanel } from '../features/events/SharePanel';
 import { SyncedAudio } from '../features/events/SyncedAudio';
+import { Disc } from '../features/game/Disc';
 import { LiveScoreboard } from '../features/multiplayer/MultiplayerScoreboard';
 import { useScores } from '../features/multiplayer/scoresStore';
 import { useCountdownTo } from '../features/multiplayer/useCountdownTo';
@@ -295,17 +296,7 @@ function NowPlaying({
   const left = useCountdownTo(revealing ? revealEndsAt : round.roundEndsAt);
   return (
     <div className="flex items-center gap-3.5">
-      {round.albumArtUrl ? (
-        <img
-          src={round.albumArtUrl}
-          alt=""
-          width={64}
-          height={64}
-          className="h-16 w-16 shrink-0 rounded-xl object-cover"
-        />
-      ) : (
-        <span className="h-16 w-16 shrink-0 rounded-xl bg-white/10" />
-      )}
+      <Disc size={72} art={round.albumArtUrl} spinning={!revealing && !paused} />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-slate-400">
           Song {round.roundIndex + 1} of {round.totalRounds}

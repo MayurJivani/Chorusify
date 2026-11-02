@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { MultiplayerRoomSnapshot, MultiplayerScoreEntry } from '../../types/api';
 import { SharePanel } from '../events/SharePanel';
+import { Disc } from '../game/Disc';
 import { Avatar, MultiplayerScoreboard } from './MultiplayerScoreboard';
 import { KnockAnnounceButton } from './KnockAnnounceButton';
 import { ensureMediaUnlocked } from '../game/SnippetPlayer';
@@ -33,11 +34,16 @@ function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onL
   return (
     <div className="mx-auto flex min-h-full w-full max-w-xl flex-col items-center justify-center gap-5 px-4 py-6 text-center">
       <h1 className="text-3xl font-extrabold text-white">{room.event?.name}</h1>
-      {room.event?.description && <p className="text-sm text-slate-400">{room.event.description}</p>}
-      <p className="text-sm text-slate-300">
-        <span className="text-4xl font-bold tabular-nums text-white">{count}</span>{' '}
-        {count === 1 ? 'player' : 'players'} in. The host starts when everyone is ready.
-      </p>
+      {room.event?.description && (
+        <p className="text-sm text-slate-400">{room.event.description}</p>
+      )}
+      <Disc size={190} spinning>
+        <span className="text-3xl font-bold leading-none tabular-nums">{count}</span>
+        <span className="text-[10px] font-medium opacity-90">
+          {count === 1 ? 'player' : 'players'}
+        </span>
+      </Disc>
+      <p className="text-sm text-slate-300">The host starts when everyone is ready.</p>
       <ul className="flex min-h-9 flex-wrap justify-center gap-1.5" aria-label="Newest players">
         <AnimatePresence initial={false} mode="popLayout">
           {room.players.slice(-12).map((p) => (
@@ -64,7 +70,11 @@ function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onL
         <p className="mb-3 text-sm text-slate-300">Bring someone in</p>
         <SharePanel code={room.code} eventName={room.event?.name} />
       </div>
-      <button type="button" onClick={onLeave} className="text-xs text-slate-400 underline decoration-dotted transition-colors hover:text-slate-200">
+      <button
+        type="button"
+        onClick={onLeave}
+        className="text-xs text-slate-400 underline decoration-dotted transition-colors hover:text-slate-200"
+      >
         Leave event
       </button>
     </div>

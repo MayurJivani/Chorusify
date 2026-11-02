@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import type { MultiplayerGameOver } from './useMultiplayerGame';
 import { MultiplayerScoreboard } from './MultiplayerScoreboard';
+import { Disc } from '../game/Disc';
 import { SongPreviewButton } from '../game/SongPreviewButton';
 import { SourcePicker, type PickedSource } from './SourcePicker';
 import { buildRoomShareText } from '../stats/shareText';
@@ -86,7 +87,14 @@ export function MultiplayerResults({
         <h1 className="text-2xl font-extrabold text-white">Game over!</h1>
         {gameOver.winner ? (
           <div className="flex flex-col items-center gap-1">
-            <p className="text-4xl">👑</p>
+            <motion.span
+              initial={{ scale: 0.6, rotate: -120, opacity: 0 }}
+              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+              className="mb-2 inline-block"
+            >
+              <Disc kind="gold" size={132} />
+            </motion.span>
             <p className="text-xl font-bold text-chorusify-accent2">
               {gameOver.winner.displayName}
             </p>

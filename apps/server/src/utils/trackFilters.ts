@@ -155,10 +155,10 @@ function trailingQualifiers(title: string): string[] {
  * guessing game, which wants the recognizable original recording. */
 /** Re-versions that only show in a qualifier or at the end: "Kaanta Laga (Trap Mix)" and "Jab Koi Baat - Recreated", not "Super Bass". */
 const REWORK_QUALIFIER =
-  /[([-]\s*[^)\]]*\b(lo-?fi|jhankar|reverb|8d|reprise|flip|cover|trap|bootleg|remake|recreated|revival|rework|refix|extended|mix|new version|(male|female|happy|sad|duet|arabic|telugu|tamil|kannada|malayalam|marathi)( version)?|2\.0|3\.0)\s*[)\]]?\s*$/i;
+  /[([-]\s*[^)\]]*\b(lo-?fi|jhankar( beats)?|reverb|8d|reprise|flip( beats)?|cover|trap|synthwave|interlude|hindi|coke studio( season \d+)?|mixed with love|bootleg|remake|recreated|revival|rework|refix|extended|mix|new version|(male|female|happy|sad|duet|arabic|telugu|tamil|kannada|malayalam|marathi)( version)?|2\.0|3\.0)\s*[)\]]?\s*$/i;
 
 export function isUnwantedVersion(title: string): boolean {
-  if (REWORK_QUALIFIER.test(title)) return true;
+  if (REWORK_QUALIFIER.test(title) || /\s\d\.0$/.test(title)) return true;
   const normalized = normalizeTitle(title);
   if (UNWANTED_VERSION_TERMS.some((term) => matchesTerm(normalized, term))) return true;
 

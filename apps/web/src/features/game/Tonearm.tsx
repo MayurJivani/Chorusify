@@ -3,10 +3,10 @@ import { motion } from 'motion/react';
 
 const REST = 2;
 // The needle stays on the grooves: the end of the run is short of the label.
-const START = 14;
-const END = 24;
+const START = 8;
+const END = 23;
 // Past this the needle is over the record, so letting go drops it.
-const DROP = 10;
+const DROP = 6;
 
 interface TonearmProps {
   playing: boolean;

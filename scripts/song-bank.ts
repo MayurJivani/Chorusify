@@ -218,12 +218,13 @@ async function build(): Promise<void> {
   for (const extra of extras) {
     const scene = scenes.find((s) => s.id === extra.scene);
     const found = await deezer<{ data?: DeezerTrack[] }>(
-      `/search?q=${encodeURIComponent(`artist:"${extra.artist}" track:"${extra.title}"`)}&limit=10`,
+      `/search?q=${encodeURIComponent(`${extra.artist} ${extra.title}`)}&limit=10`,
     );
     const hit = found.data?.find(
       (t) =>
         foldForSearch(t.artist.name) === foldForSearch(extra.artist) &&
-        foldForSearch(stripVersionSuffix(t.title).replace(/\s*[([].*$/, '')) === foldForSearch(extra.title) &&
+        foldForSearch(stripVersionSuffix(t.title).replace(/\s*[([].*$/, '')) ===
+          foldForSearch(extra.title) &&
         !isUnwantedVersion(t.title) &&
         t.preview,
     );
