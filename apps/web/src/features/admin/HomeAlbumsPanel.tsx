@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAdminSettings, saveAdminSettings } from '../../api/admin';
 import { getSampler } from '../../api/songs';
-import { SongPicker } from './SongPicker';
+import { CoverPicker } from './CoverPicker';
 
 interface Album {
   id: number;
@@ -113,9 +113,8 @@ export function HomeAlbumsPanel() {
         </button>
       )}
       {albums.length < MAX_ALBUMS && picking && (
-        <SongPicker
-          heading="Add a cover"
-          onCancel={() => setPicking(false)}
+        <CoverPicker
+          onClose={() => setPicking(false)}
           onPick={(song) => {
             if (albums.some((a) => a.id === song.id)) return;
             void save([...albums, song]);

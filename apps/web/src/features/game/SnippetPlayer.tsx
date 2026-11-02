@@ -58,6 +58,8 @@ interface SnippetPlayerProps {
   fixedOffsetSeconds?: number;
   /** Desi Daily and Survival play from a cassette, labelled with this. Everything else gets the record. */
   cassetteLabel?: string;
+  /** Multiplayer spins a CD: no tonearm, the laser is inside. */
+  disc?: 'vinyl' | 'cd';
 }
 
 /** Plays a snippet of the Deezer preview clip (from a fixed offset when provided,
@@ -75,6 +77,7 @@ export function SnippetPlayer({
   playSignal,
   fixedOffsetSeconds,
   cassetteLabel,
+  disc = 'vinyl',
 }: SnippetPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -305,12 +308,14 @@ export function SnippetPlayer({
       ) : (
         /* Vinyl Record Player Container */
         <div className="relative">
-          <Tonearm
-            playing={isPlaying}
-            progress={progress}
-            disabled={disabled}
-            onToggle={handlePlayPause}
-          />
+          {disc === 'vinyl' && (
+            <Tonearm
+              playing={isPlaying}
+              progress={progress}
+              disabled={disabled}
+              onToggle={handlePlayPause}
+            />
+          )}
           {isPlaying && (
             <span
               className="absolute inset-0 rounded-full pointer-events-none scale-110 animate-pulse"
@@ -328,7 +333,7 @@ export function SnippetPlayer({
             aria-label={isPlaying ? 'Stop the snippet' : 'Play the snippet'}
             className="block h-32 w-32 rounded-full transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56"
           >
-            <Disc size="100%" spinning={isPlaying} art={artistPictureUrl} />
+            <Disc kind={disc} size="100%" spinning={isPlaying} art={artistPictureUrl} />
           </button>
         </div>
       )}

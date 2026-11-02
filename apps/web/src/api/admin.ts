@@ -18,11 +18,36 @@ export function getDailyPuzzles(from?: string): Promise<AdminDailyPuzzleList> {
   );
 }
 
-export async function searchAdminSongs(q: string): Promise<AdminSong[]> {
-  const res = await apiRequest<{ songs: AdminSong[] }>(
-    `/admin/songs${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`,
-  );
+export async function searchAdminSongs(q: string, offset = 0): Promise<AdminSong[]> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set('q', q.trim());
+  if (offset) params.set('offset', String(offset));
+  const query = params.toString();
+  const res = await apiRequest<{ songs: AdminSong[] }>(`/admin/songs${query ? `?${query}` : ''}`);
   return res.songs;
+}
+
+export interface DeezerSearchHit {
+  deezerTrackId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  albumArtUrl: string | null;
+}
+
+export async function searchDeezer(q: string): Promise<DeezerSearchHit[]> {
+  const res = await apiRequest<{ results: DeezerSearchHit[] }>(
+    `/admin/deezer-search?q=${encodeURIComponent(q.trim())}`,
+  );
+  return res.results;
+}
+
+export async function addSongFromDeezer(deezerTrackId: string): Promise<AdminSong> {
+  const res = await apiRequest<{ song: AdminSong }>('/admin/songs/from-deezer', {
+    method: 'POST',
+    body: { deezerTrackId },
+  });
+  return res.song;
 }
 
 export function setDailyPuzzle(

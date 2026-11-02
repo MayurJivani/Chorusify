@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { getLeaderboard } from '../api/leaderboard';
 import { formatDuration } from '../features/stats/formatDuration';
+import { Disc } from '../features/game/Disc';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 import type { GlobalLeaderboardEntry, LeaderboardResponse, MostPlayedArtist } from '../types/api';
 
-const MEDALS = ['🥇', '🥈', '🥉'];
+/** Gold, a silver CD, then black vinyl: the shelf's own podium. */
+const PODIUM = ['gold', 'cd', 'vinyl'] as const;
 
 type Board = 'artist' | 'category';
 
@@ -229,7 +231,21 @@ function TopPlayers({
                   }`}
                 >
                   <td className="py-2 font-mono text-xs text-slate-500">
-                    {MEDALS[player.rank - 1] ?? player.rank}
+                    {PODIUM[player.rank - 1] ? (
+                      <span
+                        role="img"
+                        aria-label={`Rank ${player.rank}`}
+                        className="inline-flex align-middle"
+                      >
+                        <Disc
+                          kind={PODIUM[player.rank - 1]}
+                          size={26}
+                          spinning={player.rank === 1}
+                        />
+                      </span>
+                    ) : (
+                      player.rank
+                    )}
                   </td>
                   <td className="max-w-[10rem] truncate py-2 font-medium">
                     {player.displayName}

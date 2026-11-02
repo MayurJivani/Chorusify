@@ -38,7 +38,11 @@ describe('skipping a daily song', () => {
     });
 
     expect(submitGuess).toHaveBeenCalledTimes(1);
-    expect(submitGuess).toHaveBeenCalledWith({ songId: undefined, guessNumber: 5, edition: 'english' });
+    expect(submitGuess).toHaveBeenCalledWith({
+      songId: undefined,
+      guessNumber: 5,
+      edition: 'english',
+    });
     expect(result.current.status).toBe('revealing');
   });
 });

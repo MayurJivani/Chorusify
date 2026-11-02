@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { AlbumSleeve } from './AlbumSleeve';
 import type { RevealedSlot } from './useGameState';
 import { SongPreviewButton } from './SongPreviewButton';
 
@@ -13,6 +15,12 @@ interface SlotRevealCardProps {
  *  hear it, before moving on to the next one (or to the day's overall results). */
 export function SlotRevealCard({ slot, totalSlots, isLastSlot, onContinue }: SlotRevealCardProps) {
   const { song } = slot;
+  // Starts tucked in, then slides, so the sleeve opening is something you see happen.
+  const [showDisc, setShowDisc] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShowDisc(true), 250);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20, scale: 0.96 }}
@@ -33,35 +41,21 @@ export function SlotRevealCard({ slot, totalSlots, isLastSlot, onContinue }: Slo
         Song {slot.position} of {totalSlots}
       </p>
 
-      <div className="flex items-center gap-4">
-        {song.albumArtUrl && (
-          // The record slides out of its sleeve as the answer lands.
-          <div className="relative mr-7 h-20 w-20 flex-shrink-0">
-            <motion.span
-              aria-hidden="true"
-              className="absolute inset-1 rounded-full bg-neutral-950 ring-1 ring-white/15"
-              initial={{ x: 0 }}
-              animate={{ x: 26 }}
-              transition={{ type: 'spring', stiffness: 110, damping: 16, delay: 0.15 }}
-            >
-              <span className="absolute inset-[34%] rounded-full bg-chorusify-accent" />
-            </motion.span>
-            <img
-              src={song.albumArtUrl}
-              alt=""
-              className={
-                'relative h-20 w-20 rounded-xl object-cover shadow-xl ' +
-                (slot.won
-                  ? 'shadow-chorusify-accent/30 ring-2 ring-chorusify-accent/40'
-                  : 'shadow-chorusify-danger/20')
-              }
-            />
-          </div>
-        )}
-        <div className="text-left">
-          <p className="text-lg font-bold text-slate-100 leading-snug">{song.title}</p>
-          <p className="text-sm text-slate-400">{song.artist}</p>
-        </div>
+      {song.albumArtUrl && (
+        <img src={song.albumArtUrl} alt="" aria-hidden="true" className="reveal-glow" />
+      )}
+      {/* The record slides out of its sleeve as the answer lands. */}
+      <motion.div
+        className="w-44 sm:w-52"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 170, damping: 20 }}
+      >
+        <AlbumSleeve cover={song.albumArtUrl} out={showDisc} />
+      </motion.div>
+      <div>
+        <p className="text-lg font-bold leading-snug text-slate-100">{song.title}</p>
+        <p className="text-sm text-slate-300">{song.artist}</p>
       </div>
 
       {slot.previewUrl && <SongPreviewButton previewUrl={slot.previewUrl} />}

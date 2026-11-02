@@ -16,6 +16,7 @@ import { and, asc, desc, eq, gte, ilike, inArray, ne, or, sql } from 'drizzle-or
 import { db } from '../db/client';
 import { artistTrackPools, dailyPuzzles, events, gameResults, songs, users } from '../db/schema';
 import { effectiveRole } from '../auth/roles';
+import { deezerFetchJson } from '../services/deezerService';
 import { closeEventsOwnedBy } from '../services/eventService';
 import { metricsSnapshot } from '../services/metrics';
 import { CATEGORIES, findCategory, isSoundtrackCategory } from '../services/categories';
@@ -109,9 +110,17 @@ adminRouter.get(
  *  automatic picker actually draws from, so they are what an admin usually wants. */
 adminRouter.get(
   '/songs',
-  validate(z.object({ q: z.string().trim().max(80).optional() }), 'query'),
+  validate(
+    z.object({
+      q: z.string().trim().max(80).optional(),
+      offset: z.coerce.number().int().min(0).max(100000).optional(),
+    }),
+    'query',
+  ),
   asyncHandler(async (req, res) => {
-    const { q } = req.query as { q?: string };
+    const { q, offset = 0 } = req.query as unknown as { q?: string; offset?: number };
+    // Every word must appear in the title or the artist, so "Tightrope Zayn" finds it.
+    const words = (q ?? '').split(/\s+/).filter(Boolean);
 
     const rows = await db
       .select({
@@ -123,11 +132,97 @@ adminRouter.get(
         manualOverride: songs.manualOverride,
       })
       .from(songs)
-      .where(q ? or(ilike(songs.title, `%${q}%`), ilike(songs.artist, `%${q}%`)) : undefined)
+      .where(
+        words.length
+          ? and(
+              ...words.map((word) =>
+                or(ilike(songs.title, `%${word}%`), ilike(songs.artist, `%${word}%`)),
+              ),
+            )
+          : undefined,
+      )
       .orderBy(desc(songs.manualOverride), asc(songs.artist), asc(songs.title))
-      .limit(50);
+      .limit(50)
+      .offset(offset);
 
     res.json({ songs: rows });
+  }),
+);
+
+interface DeezerHit {
+  id: number;
+  title: string;
+  duration: number;
+  preview?: string;
+  artist: { name: string };
+  album?: { title?: string; cover_medium?: string };
+}
+
+/** Anything on Deezer, for the home wall: it need not be in the game's song bank. */
+adminRouter.get(
+  '/deezer-search',
+  validate(z.object({ q: z.string().trim().min(1).max(80) }), 'query'),
+  asyncHandler(async (req, res) => {
+    const { q } = req.query as { q: string };
+    const body = await deezerFetchJson<{ data?: DeezerHit[] }>(
+      `https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=15`,
+    );
+    res.json({
+      results: (body?.data ?? []).map((t) => ({
+        deezerTrackId: String(t.id),
+        title: t.title,
+        artist: t.artist.name,
+        album: t.album?.title ?? null,
+        albumArtUrl: t.album?.cover_medium ?? null,
+      })),
+    });
+  }),
+);
+
+/**
+ * Saves a Deezer track so the wall can refer to it. Inactive on purpose: choosing a cover for
+ * the home page must not add a song to the pool the games draw answers from.
+ */
+adminRouter.post(
+  '/songs/from-deezer',
+  validate(z.object({ deezerTrackId: z.string().regex(/^\d{1,20}$/) })),
+  asyncHandler(async (req, res) => {
+    const { deezerTrackId } = req.body as { deezerTrackId: string };
+    const columns = {
+      id: songs.id,
+      title: songs.title,
+      artist: songs.artist,
+      albumArtUrl: songs.albumArtUrl,
+      active: songs.active,
+      manualOverride: songs.manualOverride,
+    };
+    const [existing] = await db
+      .select(columns)
+      .from(songs)
+      .where(eq(songs.deezerTrackId, deezerTrackId))
+      .limit(1);
+    if (existing) {
+      res.json({ song: existing });
+      return;
+    }
+    const track = await deezerFetchJson<DeezerHit & { error?: unknown }>(
+      `https://api.deezer.com/track/${deezerTrackId}`,
+    );
+    if (!track || track.error || !track.id) throw new HttpError(404, 'Deezer has no such track');
+    const [song] = await db
+      .insert(songs)
+      .values({
+        title: track.title,
+        artist: track.artist.name,
+        deezerTrackId,
+        previewUrl: track.preview ?? `https://api.deezer.com/track/${deezerTrackId}`,
+        albumArtUrl: track.album?.cover_medium ?? null,
+        durationSeconds: track.duration,
+        album: track.album?.title ?? null,
+        active: false,
+      })
+      .returning(columns);
+    res.json({ song });
   }),
 );
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { getMyStats } from '../api/stats';
+import { Disc } from '../features/game/Disc';
 import { useSession } from '../hooks/useSession';
 import { GuessDistributionChart } from '../features/stats/GuessDistributionChart';
 import { ShareCard } from '../features/stats/ShareCard';
@@ -16,6 +17,7 @@ export function StatsPage() {
 
   const { user, guestId } = useSession();
   const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [desi, setDesi] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Re-fetch whenever the underlying identity changes (login/register/logout), not just once
@@ -23,6 +25,9 @@ export function StatsPage() {
   const userId = user?.id;
   useEffect(() => {
     setLoading(true);
+    getMyStats('desi')
+      .then(setDesi)
+      .catch(() => setDesi(null));
     getMyStats()
       .then(setStats)
       .finally(() => setLoading(false));
@@ -51,7 +56,7 @@ export function StatsPage() {
   // show, and a screen of zeroes beside an empty chart reads as broken rather than empty. Their
   // progression still belongs here though: someone who has played fifty artist runs and no
   // dailies used to be told they had no stats at all.
-  if (stats.gamesPlayed === 0) {
+  if (stats.gamesPlayed === 0 && !desi?.gamesPlayed) {
     return (
       <div className="mx-auto flex min-h-full max-w-xl flex-col items-center justify-center gap-4 sm:gap-6 px-4 py-4 sm:py-8 text-center">
         <motion.div
@@ -97,17 +102,25 @@ export function StatsPage() {
         Your Stats
       </motion.h1>
 
+      {/* The number that brings people back gets the whole width. */}
+      <div className="grid w-full grid-cols-2 gap-2">
+        <StreakPoster title="Daily streak" days={stats.currentStreak} best={stats.maxStreak} />
+        <StreakPoster
+          title="Desi streak"
+          days={desi?.currentStreak ?? 0}
+          best={desi?.maxStreak ?? 0}
+        />
+      </div>
+
       {/* Headline counters */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="grid w-full grid-cols-4 gap-2 text-center"
+        className="grid w-full grid-cols-2 gap-2 text-center"
       >
         <Stat label="Played" value={stats.gamesPlayed} />
         <Stat label="Win %" value={`${winRate}%`} />
-        <Stat label="Streak" value={stats.currentStreak} accent={stats.currentStreak > 0} />
-        <Stat label="Best" value={stats.maxStreak} />
       </motion.div>
 
       {/* A win only needs one song of five; a perfect day is the stricter, rarer thing worth
@@ -209,5 +222,28 @@ function Stat({
       </p>
       <p className="mt-1 text-[11px] leading-tight text-slate-400">{label}</p>
     </div>
+  );
+}
+
+function StreakPoster({ title, days, best }: { title: string; days: number; best: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass relative overflow-hidden rounded-2xl p-4"
+    >
+      <span aria-hidden="true" className="absolute -right-8 -top-8 opacity-70">
+        <Disc size={96} spinning={days > 0} />
+      </span>
+      <p className="relative text-xs font-semibold uppercase tracking-wider text-slate-300">
+        {title}
+      </p>
+      <p className="relative text-6xl font-black leading-none tracking-tight text-white sm:text-7xl">
+        {days}
+      </p>
+      <p className="relative mt-1 text-xs text-slate-400">
+        {days === 1 ? 'day' : 'days'}, best {best}
+      </p>
+    </motion.div>
   );
 }

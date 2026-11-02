@@ -490,3 +490,30 @@ describe('GET /api/admin/dashboard', () => {
     expect(res.body.liveRooms).toMatchObject({ total: expect.any(Number) });
   });
 });
+
+describe('GET /api/admin/songs search', () => {
+  it('matches every word across title and artist, and pages through the rest', async () => {
+    const { agent } = await signIn('boss@example.test', true);
+    await seedSong(1, 'Tightrope');
+    await seedSong(2, 'Something Else');
+    await db.update(songs).set({ artist: 'Zayn' }).where(eq(songs.id, 1));
+
+    const hit = await agent.get('/api/admin/songs?q=Tightrope%20Zayn');
+    expect(hit.body.songs.map((s: { id: number }) => s.id)).toEqual([1]);
+
+    const miss = await agent.get('/api/admin/songs?q=Tightrope%20Nobody');
+    expect(miss.body.songs).toEqual([]);
+
+    const paged = await agent.get('/api/admin/songs?offset=1');
+    expect(paged.body.songs).toHaveLength(1);
+  });
+
+  it('refuses a Deezer id that is not a number', async () => {
+    const { agent, csrf } = await signIn('boss@example.test', true);
+    const res = await agent
+      .post('/api/admin/songs/from-deezer')
+      .set('X-CSRF-Token', csrf)
+      .send({ deezerTrackId: '../user/1' });
+    expect(res.status).toBe(400);
+  });
+});

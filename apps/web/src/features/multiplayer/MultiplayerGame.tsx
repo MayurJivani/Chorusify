@@ -278,6 +278,7 @@ export function MultiplayerGame({
 
             {showPlayer && (
               <SnippetPlayer
+                disc="cd"
                 previewUrl={round.previewUrl}
                 stageSeconds={stageSeconds}
                 playSignal={stageIndex + 1}

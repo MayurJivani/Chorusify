@@ -635,3 +635,27 @@ main:has(.album-wall) {
     animation: none;
   }
 }
+
+/* The 404 record: stuck in a groove, it never gets past the same quarter turn. */
+.record-skip {
+  animation: record-skip 1.4s cubic-bezier(0.3, 0, 0.7, 1) infinite;
+}
+@keyframes record-skip {
+  0% {
+    transform: rotate(0deg);
+  }
+  84% {
+    transform: rotate(82deg);
+  }
+  88% {
+    transform: rotate(82deg) translateY(2px);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .record-skip {
+    animation: none;
+  }
+}

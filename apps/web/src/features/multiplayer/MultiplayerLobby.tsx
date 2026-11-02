@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { MultiplayerRoomSnapshot, MultiplayerScoreEntry } from '../../types/api';
 import { SharePanel } from '../events/SharePanel';
+import { CassetteArt } from '../game/Cassette';
 import { Disc } from '../game/Disc';
 import { Avatar, MultiplayerScoreboard } from './MultiplayerScoreboard';
 import { KnockAnnounceButton } from './KnockAnnounceButton';
@@ -115,11 +116,11 @@ export function MultiplayerLobby({ room, selfId, onStart, onLeave }: Multiplayer
           </p>
         </div>
 
-        {/* Room code */}
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Room code
-          </p>
+        {/* The code is printed on a tape, turning while the room fills up. */}
+        <div className="flex w-full max-w-xs flex-col items-center gap-2">
+          <div className="w-full drop-shadow-[0_16px_24px_rgba(0,0,0,0.6)]">
+            <CassetteArt playing={false} progress={0.3} label={`Room ${room.code}`} spinIdle />
+          </div>
           <p className="font-mono text-4xl font-black tracking-[0.3em] text-chorusify-accent2">
             {room.code}
           </p>

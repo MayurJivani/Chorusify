@@ -3,6 +3,8 @@ interface CassetteArtProps {
   /** How far through the tape, 0 to 1: the wound tape moves from one spool to the other. */
   progress: number;
   label: string;
+  /** Turns gently with no sound behind it: for a tape that is only showing, like a lobby's. */
+  spinIdle?: boolean;
 }
 
 const SCREWS = [
@@ -43,7 +45,8 @@ function Spool({ x, tape, playing }: { x: number; tape: number; playing: boolean
 }
 
 /** A C-60 drawn part by part: moulded shell, screws, paper label, tape window, head opening. */
-export function CassetteArt({ playing, progress, label }: CassetteArtProps) {
+export function CassetteArt({ playing, progress, label, spinIdle = false }: CassetteArtProps) {
+  const turning = playing || spinIdle;
   return (
     <svg viewBox="0 0 320 200" className="block h-auto w-full" aria-hidden="true">
       <defs>
@@ -97,8 +100,8 @@ export function CassetteArt({ playing, progress, label }: CassetteArtProps) {
 
       {/* Window: the spools and the tape on them, seen through scuffed plastic. */}
       <rect x="62" y="54" width="196" height="72" rx="6" fill="#0d0d0f" stroke="#57534a" />
-      <Spool x={108} tape={35 - progress * 15} playing={playing} />
-      <Spool x={212} tape={20 + progress * 15} playing={playing} />
+      <Spool x={108} tape={35 - progress * 15} playing={turning} />
+      <Spool x={212} tape={20 + progress * 15} playing={turning} />
       <rect x="62" y="54" width="196" height="72" rx="6" fill="url(#glass)" />
       <rect
         x="146"
