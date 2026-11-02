@@ -1,183 +1,221 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion } from 'motion/react';
 import { getSampler, type SamplerSong } from '../api/songs';
-import { LinerNotes } from '../features/home/LinerNotes';
-import { SnippetRidges } from '../features/home/SnippetRidges';
+import { LYRICS, lineAt } from '../features/about/lyrics';
+import { PlayableKeys } from '../features/about/PlayableKeys';
+import { useSectionProgress } from '../hooks/useSectionProgress';
 import { usePageTitle } from '../hooks/usePageTitle';
 
-/** Every mode, in the same order the home page lists them. */
-const MODES: [string, string][] = [
-  ['Artist Mode', 'pick any artist and name ten songs from their discography.'],
-  [
-    'Multiplayer',
-    'share a room by QR or code and race friends on the same snippet - fastest correct answer scores most. The host picks how many songs, up to 25, and can switch to a different artist or category between games without anyone leaving the room.',
-  ],
-  ['Categories', 'ten songs from one chart, year or genre, every track by a different artist.'],
-  [
-    'Soundtracks',
-    'the answer is what the music is from, not the song. Hollywood and Bollywood films, video games, anime, and film scores where the music is orchestral rather than sung. Playable solo, in a room, or as a rated duel on its own ladder.',
-  ],
-  ['Survival', 'endless songs, one wrong answer ends the run. How far can you get?'],
-  ['Guess the Year', 'hear a song and place it in time. Harder than it sounds.'],
-  ['Duels', 'rated 1v1 over the same ten songs. Win and your rating climbs.'],
-  ['Daily Challenge', 'one shared song per day, the same for everyone. Keep your streak alive.'],
-];
-
-const sections = [
-  {
-    icon: '🎵',
-    title: 'How it works',
-    body: null,
-    jsx: (
-      <div className="flex flex-col gap-2 leading-relaxed text-slate-400">
-        <p>
-          You start with a short snippet of a song. Name it in as few seconds of audio as you can -
-          the earlier you get it, the more the round is worth.
-        </p>
-        {/*
-          Spelled out because it is the single most misread thing in the game: "Hear more" and
-          "Skip" sat side by side looking identical, so players treated the free one as another
-          way of giving up and guessed off one second.
-        */}
-        <p>
-          <span className="font-medium text-slate-200">Hear more</span> stretches the clip - one
-          second, then two, four, seven, and so on. In every mode except the daily it is{' '}
-          <span className="font-medium text-slate-200">free</span> and costs you no guess, so there
-          is never a reason to guess blind. On the Daily Challenge an attempt is what grows the
-          snippet, so there it does use one of your tries.
-        </p>
-      </div>
-    ),
-  },
-  {
-    icon: '🎤',
-    // No count here: this list includes the daily, which the home page's heading does not,
-    // so a number would contradict it every time a mode is added.
-    title: 'Ways to play',
-    body: null,
-    jsx: (
-      <ul className="flex flex-col gap-1.5 text-sm leading-relaxed text-slate-400">
-        {MODES.map(([name, blurb]) => (
-          <li key={name}>
-            <span className="font-medium text-slate-200">{name}</span>: {blurb}
-          </li>
-        ))}
-      </ul>
-    ),
-  },
-  {
-    icon: '🏆',
-    title: 'Leaderboards',
-    body: 'Artist and Category runs are ranked on everything you have played, not one lucky run, so playing more counts as well as scoring well. Survival ranks your longest streak. Only registered accounts appear: a guest is a browser cookie, which is neither stable nor attributable enough to rank.',
-  },
-  {
-    icon: '🎧',
-    title: 'Music credit',
-    body: null,
-    jsx: (
-      <p className="leading-relaxed text-slate-400">
-        Song previews are provided by{' '}
-        <a
-          href="https://www.deezer.com"
-          className="font-medium text-chorusify-accent2 hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Deezer
-        </a>
-        . All rights to the underlying recordings belong to their respective artists and labels.
-        Chorusify only plays short preview clips for the purpose of the guessing game.
-      </p>
-    ),
-  },
-  {
-    icon: '🔒',
-    title: 'Your data',
-    body: 'You can play as a guest with no account. Your streak and stats are tied to your browser session. Creating an account lets you keep your stats permanently and across devices, and puts you on the leaderboards.',
-  },
-];
-
 const team = [
-  {
-    name: 'Mayur Jivani',
-    github: 'https://github.com/MayurJivani',
-  },
-  {
-    name: 'Ritwik Garg',
-    github: 'https://github.com/ritwikgarg',
-  },
+  { name: 'Mayur Jivani', github: 'https://github.com/MayurJivani' },
+  { name: 'Ritwik Garg', github: 'https://github.com/ritwikgarg' },
 ];
+
+const linkClass = 'underline underline-offset-2 hover:text-white';
+
+/** Every line in order, each knowing its section. */
+const SHEET = LYRICS.flatMap((section, s) => section.lines.map((text) => ({ text, section: s })));
+
+function Links() {
+  return (
+    <p className="text-xs leading-relaxed text-slate-300">
+      Previews by{' '}
+      <a href="https://www.deezer.com" target="_blank" rel="noreferrer" className={linkClass}>
+        Deezer
+      </a>
+      . Built by{' '}
+      {team.map((member, i) => (
+        <span key={member.github}>
+          {i > 0 && ' and '}
+          <a href={member.github} target="_blank" rel="noreferrer" className={linkClass}>
+            {member.name}
+          </a>
+        </span>
+      ))}
+      .
+    </p>
+  );
+}
+
+/** For anyone who asked for less motion: the same words, just a page to read. */
+function PlainSheet() {
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-8">
+      <h1 className="text-4xl font-extrabold text-white">About Chorusify</h1>
+      {LYRICS.map((section) => (
+        <section key={section.title} className="flex flex-col gap-2">
+          <h2 className="text-xl font-bold text-white">{section.title}</h2>
+          {section.lines.map((line) => (
+            <p key={line} className="leading-relaxed text-slate-300">
+              {line}
+            </p>
+          ))}
+        </section>
+      ))}
+      <Links />
+    </div>
+  );
+}
 
 export function AboutPage() {
   usePageTitle('About');
+  const reduced = useReducedMotion();
+  return (
+    <>
+      {reduced ? <PlainSheet /> : <LyricSheet />}
+      <section className="overflow-hidden bg-black px-4 pt-14 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-2">
+            <h2 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
+              Play the chorus.
+            </h2>
+            <p className="hidden font-mono text-xs uppercase tracking-widest text-slate-400 lg:block">
+              Keyboard: A S D F G H J K, W E T Y U
+            </p>
+          </div>
+          <PlayableKeys />
+        </div>
+        {/* Cropped by the page edge on purpose: the name as a closing poster. */}
+        <p
+          aria-hidden="true"
+          className="-mb-[0.32em] mt-10 whitespace-nowrap text-center text-[clamp(4rem,20vw,20rem)] font-black leading-none tracking-tighter text-neutral-200"
+        >
+          Chorusify
+        </p>
+      </section>
+    </>
+  );
+}
+
+/** The page as a lyric sheet: scrolling sings it, one line at a time, over the record's colours. */
+function LyricSheet() {
   const [songs, setSongs] = useState<SamplerSong[]>([]);
+  const track = useRef<HTMLDivElement | null>(null);
+  const viewport = useRef<HTMLDivElement | null>(null);
+  const sheet = useRef<HTMLDivElement | null>(null);
+  const bar = useRef<HTMLDivElement | null>(null);
+  const progress = useSectionProgress(track, 0, 1);
+  const [active, setActive] = useState(0);
+  const [offset, setOffset] = useState(0);
+
   useEffect(() => {
     getSampler()
       .then((r) => setSongs(r.songs))
       .catch(() => setSongs([]));
   }, []);
 
+  // One cover per section. Falls back to plain ground if the sampler has none.
+  const covers = useMemo(
+    () => [...new Set(songs.map((s) => s.albumArtUrl).filter(Boolean))] as string[],
+    [songs],
+  );
+  const section = SHEET[active]?.section ?? 0;
+  const cover = covers.length ? covers[section % covers.length] : null;
+
+  useMotionValueEvent(progress, 'change', (p) => {
+    const { index, through } = lineAt(p, SHEET.length);
+    setActive(index);
+    if (bar.current) bar.current.style.transform = `scaleX(${p})`;
+    // Fill word by word without a re-render per scroll tick.
+    const words = sheet.current?.children[index]?.querySelectorAll<HTMLElement>('.lyric-word');
+    if (!words) return;
+    const total = words.length;
+    words.forEach((word, i) => {
+      const fill = Math.min(1, Math.max(0, through * total - i));
+      word.style.setProperty('--p', `${fill * 124 - 12}%`);
+    });
+  });
+
+  // Hold the current line just above the middle of the window.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const line = sheet.current?.children[active] as HTMLElement | undefined;
+      const height = viewport.current?.clientHeight ?? 0;
+      if (line) setOffset(height * 0.42 - (line.offsetTop + line.offsetHeight / 2));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [active]);
+
   return (
-    <div className="mx-auto flex min-h-full max-w-4xl flex-col gap-4 sm:gap-6 px-4 py-4 sm:py-8">
-      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="mb-2">
-        <h1 className="text-4xl font-extrabold gradient-text">About Chorusify</h1>
-        <p className="mt-2 text-slate-400">Guess your favourite music.</p>
-      </motion.div>
+    <div ref={track} style={{ height: `${SHEET.length * 42}vh` }} className="relative">
+      <div className="sticky top-0 h-[calc(100dvh-89px)] overflow-hidden sm:h-[calc(100dvh-114px)]">
+        <div aria-hidden="true" className="absolute inset-0 bg-black">
+          <AnimatePresence initial={false}>
+            {cover && (
+              <motion.img
+                key={cover}
+                src={cover}
+                alt=""
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.8 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.2 }}
+                className="absolute inset-0 h-full w-full scale-[1.4] object-cover blur-[70px] saturate-[1.6]"
+              />
+            )}
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-black/55" />
+        </div>
 
-      <LinerNotes songs={songs} />
-      <SnippetRidges />
-
-      <div className="flex flex-col gap-4">
-        {sections.map(({ icon, title, body, jsx }, i) => (
-          <motion.div
-            key={title}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.08 }}
-            className="glass rounded-2xl p-6 flex gap-4"
-          >
-            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-chorusify-accent/15 text-xl">
-              {icon}
-            </span>
-            <div className="flex flex-col gap-1.5">
-              <h2 className="font-bold text-white">{title}</h2>
-              {jsx ?? <p className="text-slate-400 leading-relaxed">{body}</p>}
+        <div className="relative mx-auto grid h-full max-w-6xl grid-rows-[auto_1fr] gap-4 px-4 py-4 lg:grid-cols-[0.8fr_1.3fr] lg:grid-rows-1 lg:gap-14 lg:px-8">
+          <aside className="flex flex-col justify-center gap-3 lg:gap-6">
+            <h1 className="hidden text-5xl font-black leading-none tracking-tight text-white lg:block">
+              About
+              <br />
+              Chorusify
+            </h1>
+            <div className="max-w-sm rounded-2xl border border-white/15 bg-black/40 p-3 backdrop-blur-xl lg:p-4">
+              <div className="flex items-center gap-3">
+                {cover ? (
+                  <img src={cover} alt="" className="h-11 w-11 rounded-md object-cover" />
+                ) : (
+                  <span className="h-11 w-11 rounded-md bg-white/10" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-white">{LYRICS[section]?.title}</p>
+                  <p className="text-xs text-slate-300">
+                    Line {active + 1} of {SHEET.length}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-white/15">
+                <div ref={bar} className="h-full origin-left scale-x-0 rounded-full bg-white" />
+              </div>
+              <div className="mt-3">
+                <Links />
+              </div>
             </div>
-          </motion.div>
-        ))}
-      </div>
+            <p className="hidden text-sm text-slate-300 lg:block">Scroll to sing along.</p>
+          </aside>
 
-      {/* Built by */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 + sections.length * 0.08 }}
-        className="glass rounded-2xl p-6 flex gap-4"
-      >
-        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-chorusify-accent/15 text-xl">
-          👥
-        </span>
-        <div className="flex flex-col gap-3">
-          <h2 className="font-bold text-white">Built by</h2>
-          <div className="flex flex-wrap gap-3">
-            {team.map((member) => (
-              <a
-                key={member.github}
-                href={member.github}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 transition-all duration-200 hover:border-chorusify-accent/40 hover:bg-chorusify-accent/10 hover:-translate-y-0.5"
-              >
-                {/* GitHub icon */}
-                <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-slate-400">
-                  <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.607.069-.607 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10Z" />
-                </svg>
-                <span className="text-sm font-medium text-slate-200">{member.name}</span>
-              </a>
-            ))}
+          <div
+            ref={viewport}
+            className="relative min-h-0 overflow-hidden [mask-image:linear-gradient(180deg,transparent,#000_16%,#000_78%,transparent)]"
+          >
+            <motion.div
+              ref={sheet}
+              animate={{ y: offset }}
+              transition={{ type: 'spring', stiffness: 90, damping: 20 }}
+            >
+              {SHEET.map((line, i) => (
+                <p
+                  key={line.text}
+                  aria-current={i === active ? 'true' : undefined}
+                  className={`lyric-line ${i === active ? 'lyric-line-active' : i < active ? 'lyric-line-past' : ''}`}
+                >
+                  {line.text.split(' ').map((word, w) => (
+                    <span key={w} className="lyric-word">
+                      {word}{' '}
+                    </span>
+                  ))}
+                </p>
+              ))}
+            </motion.div>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

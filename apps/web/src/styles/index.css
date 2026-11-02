@@ -501,3 +501,37 @@ main:has(.album-wall) {
   position: relative;
   isolation: isolate;
 }
+
+/* The About page, sung. The current line is lit word by word, finished lines blur into the past. */
+.lyric-line {
+  padding: 0.18em 0;
+  font-size: clamp(1.7rem, 4vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  transform-origin: left center;
+  opacity: 0.3;
+  color: #fff;
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease,
+    filter 300ms ease;
+}
+.lyric-line-past {
+  opacity: 0.25;
+  transform: scale(0.97);
+  filter: blur(2px);
+}
+.lyric-line-active {
+  opacity: 1;
+}
+.lyric-line-active .lyric-word {
+  --p: -12%;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    #fff var(--p),
+    rgba(255, 255, 255, 0.35) calc(var(--p) + 12%)
+  );
+  background-clip: text;
+}
