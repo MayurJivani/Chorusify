@@ -149,7 +149,7 @@ export function RootLayout() {
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden items-center gap-7 sm:flex">
+          <div className="hidden items-center gap-5 whitespace-nowrap sm:flex lg:gap-7">
             {/* No "play" entry: the home page *is* the mode picker, and the logo already goes
                 there. Listing the modes individually ran this bar to eight items. */}
             <NavLink to="/leaderboard">Leaderboard</NavLink>
@@ -162,7 +162,9 @@ export function RootLayout() {
               <div className="flex items-center gap-3 pl-3 border-l border-white/10">
                 {user ? (
                   <>
-                    {(user.role === 'event_host' || user.isAdmin) && <NavLink to="/events">Host</NavLink>}
+                    {(user.role === 'event_host' || user.isAdmin) && (
+                      <NavLink to="/events">Host</NavLink>
+                    )}
                     {user.isAdmin && <NavLink to="/admin">Admin</NavLink>}
                     <Link
                       to="/profile"
@@ -226,6 +228,9 @@ export function RootLayout() {
               {MOBILE_LINKS.map(({ to, label }) => (
                 <MobileLink key={to} to={to} label={label} onNavigate={() => setMenuOpen(false)} />
               ))}
+              {(user?.role === 'event_host' || user?.isAdmin) && (
+                <MobileLink to="/events" label="Host" onNavigate={() => setMenuOpen(false)} />
+              )}
               {user?.isAdmin && (
                 <MobileLink to="/admin" label="Admin" onNavigate={() => setMenuOpen(false)} />
               )}
@@ -281,7 +286,11 @@ export function RootLayout() {
       <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
         <Suspense
           fallback={
-            <div className="flex min-h-full items-center justify-center" role="status" aria-label="Loading">
+            <div
+              className="flex min-h-full items-center justify-center"
+              role="status"
+              aria-label="Loading"
+            >
               <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-chorusify-accent2" />
             </div>
           }
