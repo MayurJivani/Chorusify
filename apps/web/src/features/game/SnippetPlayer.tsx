@@ -56,10 +56,10 @@ interface SnippetPlayerProps {
   /** When set, the snippet always starts at this offset instead of a random one, so all
    *  players hear the same slice of the clip (used for fair multiplayer rounds). */
   fixedOffsetSeconds?: number;
-  /** Desi Daily and Survival play from a cassette, labelled with this. Everything else gets the record. */
+  /** Desi Daily plays from a cassette, labelled with this. Everything else gets the record. */
   cassetteLabel?: string;
-  /** Multiplayer spins a CD: no tonearm, the laser is inside. */
-  disc?: 'vinyl' | 'cd';
+  /** Multiplayer's header already counts the round down; a second clock here would compete. */
+  hideClock?: boolean;
 }
 
 /** Plays a snippet of the Deezer preview clip (from a fixed offset when provided,
@@ -77,7 +77,7 @@ export function SnippetPlayer({
   playSignal,
   fixedOffsetSeconds,
   cassetteLabel,
-  disc = 'vinyl',
+  hideClock = false,
 }: SnippetPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,14 +308,12 @@ export function SnippetPlayer({
       ) : (
         /* Vinyl Record Player Container */
         <div className="relative">
-          {disc === 'vinyl' && (
-            <Tonearm
-              playing={isPlaying}
-              progress={progress}
-              disabled={disabled}
-              onToggle={handlePlayPause}
-            />
-          )}
+          <Tonearm
+            playing={isPlaying}
+            progress={progress}
+            disabled={disabled}
+            onToggle={handlePlayPause}
+          />
           {isPlaying && (
             <span
               className="absolute inset-0 rounded-full pointer-events-none scale-110 animate-pulse"
@@ -333,7 +331,7 @@ export function SnippetPlayer({
             aria-label={isPlaying ? 'Stop the snippet' : 'Play the snippet'}
             className="block h-32 w-32 rounded-full transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56"
           >
-            <Disc kind={disc} size="100%" spinning={isPlaying} art={artistPictureUrl} />
+            <Disc size="100%" spinning={isPlaying} art={artistPictureUrl} />
           </button>
         </div>
       )}
@@ -382,11 +380,13 @@ export function SnippetPlayer({
           })}
         </div>
 
-        <span
-          className={`text-xs font-mono font-semibold ${isPlaying ? 'text-chorusify-accent2' : 'text-slate-400'}`}
-        >
-          {timeLeft != null ? `${timeLeft}s` : `${stageSeconds}s`}
-        </span>
+        {!hideClock && (
+          <span
+            className={`text-xs font-mono font-semibold ${isPlaying ? 'text-chorusify-accent2' : 'text-slate-400'}`}
+          >
+            {timeLeft != null ? `${timeLeft}s` : `${stageSeconds}s`}
+          </span>
+        )}
       </div>
 
       {/* Autoplay refusals used to be invisible: the record span and the state said "playing"

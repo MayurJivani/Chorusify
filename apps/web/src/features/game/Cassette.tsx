@@ -147,7 +147,7 @@ interface CassetteProps {
   onToggle: () => void;
 }
 
-/** The player for Desi Daily and Survival. The reels only turn while audio really plays. */
+/** The player for Desi Daily. The reels only turn while audio really plays. */
 export function Cassette({ playing, progress, label, disabled, onToggle }: CassetteProps) {
   return (
     <button

@@ -84,7 +84,7 @@ export function RootLayout() {
   return (
     <div className="h-dvh flex flex-col bg-chorusify-bg text-slate-100 overflow-hidden">
       {/* Sticky dark header */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-chorusify-bg/90 backdrop-blur-md">
+      <header className="top-bar sticky top-0 z-50 border-b border-white/[0.1] bg-[#16161a]/75 backdrop-blur-xl backdrop-saturate-150">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-1.5 sm:px-6 sm:py-3.5">
           {/* Logo with vinyl disc */}
           <Link

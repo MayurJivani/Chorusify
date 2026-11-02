@@ -8,9 +8,6 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 import type { GlobalLeaderboardEntry, LeaderboardResponse, MostPlayedArtist } from '../types/api';
 
-/** Gold, a silver CD, then black vinyl: the shelf's own podium. */
-const PODIUM = ['gold', 'cd', 'vinyl'] as const;
-
 type Board = 'artist' | 'category';
 
 export function LeaderboardPage() {
@@ -231,17 +228,12 @@ function TopPlayers({
                   }`}
                 >
                   <td className="py-2 font-mono text-xs text-slate-500">
-                    {PODIUM[player.rank - 1] ? (
-                      <span
-                        role="img"
-                        aria-label={`Rank ${player.rank}`}
-                        className="inline-flex align-middle"
-                      >
-                        <Disc
-                          kind={PODIUM[player.rank - 1]}
-                          size={26}
-                          spinning={player.rank === 1}
-                        />
+                    {player.rank <= 3 ? (
+                      // The top three get a record with their place on the label.
+                      <span aria-label={`Rank ${player.rank}`} className="inline-flex align-middle">
+                        <Disc size={30} spinning={player.rank === 1}>
+                          <span className="text-[11px] font-bold leading-none">{player.rank}</span>
+                        </Disc>
                       </span>
                     ) : (
                       player.rank

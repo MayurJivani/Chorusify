@@ -241,14 +241,11 @@ body {
   }
 }
 
-/* Vinyl: fine grooves, wider bands between tracks, and a dead wax ring by the label. */
+/* Vinyl: fine grooves and a dead wax ring by the label. */
 .disc-vinyl .disc-body {
   background:
     radial-gradient(circle, transparent 33%, rgba(255, 255, 255, 0.05) 33.4%, transparent 34.5%),
-    radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.75) 54.5%, transparent 55.5%),
-    radial-gradient(circle, transparent 66%, rgba(0, 0, 0, 0.75) 66.5%, transparent 67.5%),
-    repeating-radial-gradient(circle, #101012 0 1px, #1a1a1d 1px 2px, #0c0c0e 2px 3px),
-    #101012;
+    repeating-radial-gradient(circle, #101012 0 1px, #1a1a1d 1px 2px, #0c0c0e 2px 3px), #101012;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.09),
     inset 0 0 0 3px #08080a;
@@ -270,37 +267,11 @@ body {
   mask: radial-gradient(circle, transparent 32.5%, #000 33%);
 }
 
-/* Gold record: the same grooves, plated. */
-.disc-gold .disc-body {
-  background:
-    radial-gradient(circle, transparent 54%, rgba(90, 60, 0, 0.6) 54.5%, transparent 55.5%),
-    radial-gradient(circle, transparent 66%, rgba(90, 60, 0, 0.6) 66.5%, transparent 67.5%),
-    repeating-radial-gradient(circle, #b8860b 0 1px, #e2b93b 1px 2px, #a67c00 2px 3px);
-  box-shadow: inset 0 0 0 2px #7a5a00;
-}
-.disc-gold .disc-label {
-  background: radial-gradient(circle at 35% 30%, #4b4b52, #17171a);
-}
-.disc-gold .disc-light {
-  background: conic-gradient(
-    from 20deg,
-    transparent 0deg,
-    rgba(255, 250, 215, 0.7) 18deg,
-    transparent 48deg,
-    transparent 180deg,
-    rgba(255, 250, 215, 0.55) 198deg,
-    transparent 228deg,
-    transparent 360deg
-  );
-  mask: radial-gradient(circle, transparent 32.5%, #000 33%);
-}
-
 /* CD: a mirror band with the rainbow a data track throws, and a clear hub. */
 .disc-cd .disc-body {
   background:
     radial-gradient(circle, #d8dbe2 0 15%, #9ca0a8 15.5% 17%, transparent 17.5%),
-    repeating-radial-gradient(circle, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 2px),
-    #c9ccd4;
+    repeating-radial-gradient(circle, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 2px), #c9ccd4;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
 }
 .disc-cd .disc-label {
@@ -357,7 +328,8 @@ body {
   overflow: hidden;
   pointer-events: auto;
   perspective: 1400px;
-  mask: linear-gradient(#000 60%, transparent);
+  /* Fades out at the top too, so covers drift away under the bar instead of being cut by it. */
+  mask: linear-gradient(transparent, #000 110px, #000 60%, transparent);
 }
 .album-wall-stage {
   position: absolute;
@@ -534,11 +506,7 @@ main:has(.album-wall) {
 .lyric-line-active .lyric-word {
   --p: -12%;
   color: transparent;
-  background: linear-gradient(
-    90deg,
-    #fff var(--p),
-    rgba(255, 255, 255, 0.35) calc(var(--p) + 12%)
-  );
+  background: linear-gradient(90deg, #fff var(--p), rgba(255, 255, 255, 0.35) calc(var(--p) + 12%));
   background-clip: text;
 }
 
@@ -662,4 +630,25 @@ main:has(.album-wall) {
   .record-skip {
     animation: none;
   }
+}
+
+/* The top bar: lit along its top edge, with a soft shadow, so it reads as a layer above the page. */
+.top-bar {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 30px -12px rgba(0, 0, 0, 0.85);
+}
+.top-bar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(139, 92, 246, 0.55),
+    rgba(34, 211, 238, 0.4),
+    transparent
+  );
 }

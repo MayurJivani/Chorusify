@@ -344,7 +344,6 @@ export function SurvivalPage() {
         <SnippetProgressBar stageIndex={stageIndex} />
 
         <SnippetPlayer
-          cassetteLabel="Survival: no B side"
           previewUrl={round.previewUrl}
           stageSeconds={stageSeconds}
           disabled={submitting}

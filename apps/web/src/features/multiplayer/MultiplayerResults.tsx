@@ -93,7 +93,7 @@ export function MultiplayerResults({
               transition={{ type: 'spring', stiffness: 120, damping: 14 }}
               className="mb-2 inline-block"
             >
-              <Disc kind="gold" size={132} />
+              <Disc size={132} spinning />
             </motion.span>
             <p className="text-xl font-bold text-chorusify-accent2">
               {gameOver.winner.displayName}

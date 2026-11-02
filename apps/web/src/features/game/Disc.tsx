@@ -1,8 +1,8 @@
 import { memo, type ReactNode } from 'react';
 
 interface DiscProps {
-  /** Vinyl with grooves, a CD with a mirror band, or a gold record for the winner. */
-  kind?: 'vinyl' | 'cd' | 'gold';
+  /** Vinyl with grooves, or a CD with a mirror band (the About page's case). */
+  kind?: 'vinyl' | 'cd';
   /** CSS size, so a disc can follow its container. */
   size?: number | string;
   spinning?: boolean;

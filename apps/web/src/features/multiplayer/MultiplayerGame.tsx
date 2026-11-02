@@ -233,9 +233,6 @@ export function MultiplayerGame({
 
             {revealPreview && <SongPreviewButton previewUrl={revealPreview} />}
 
-            <p className="text-sm text-slate-400">
-              Next round in <Countdown to={nextRoundAt} />
-            </p>
             {isHost && !isEvent && (
               <button type="button" onClick={onNextRound} className="btn-ghost w-full !rounded-xl">
                 Skip reveal →
@@ -278,7 +275,7 @@ export function MultiplayerGame({
 
             {showPlayer && (
               <SnippetPlayer
-                disc="cd"
+                hideClock
                 previewUrl={round.previewUrl}
                 stageSeconds={stageSeconds}
                 playSignal={stageIndex + 1}
