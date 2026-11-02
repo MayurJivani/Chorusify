@@ -4,6 +4,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
 import { gameResults, type DailyPuzzle } from '../db/schema';
 import {
+  DAILY_EDITIONS,
+  type DailyEdition,
   getOrCreateDailyPuzzles,
   getElapsedPuzzleSeconds,
   getSongById,
@@ -72,12 +74,22 @@ async function revealSong(songId: number) {
   return { title: song.title, artist: song.artist, albumArtUrl: song.albumArtUrl };
 }
 
+/** Each edition's streak lives under its own stats row; English keeps the original key. */
+export function editionOwnerKey(ownerKey: string, edition: DailyEdition): string {
+  return edition === 'english' ? ownerKey : `${edition}:${ownerKey}`;
+}
+
+function parseEdition(value: unknown): DailyEdition {
+  return value === 'desi' ? 'desi' : 'english';
+}
+
 puzzleRouter.get(
   '/today',
   asyncHandler(async (req, res) => {
     await ensureDailyPlaylistsFresh();
+    const edition = parseEdition(req.query.edition);
     const puzzleDate = getUtcDateString();
-    const puzzles = await getOrCreateDailyPuzzles(puzzleDate);
+    const puzzles = await getOrCreateDailyPuzzles(puzzleDate, edition);
     const resultsByPuzzleId = await loadTodaysResults(puzzles, req);
 
     const completedSlots = await Promise.all(
@@ -144,6 +156,7 @@ const guessSchema = z.object({
   // Bounded by the largest schedule any setting allows, because a zod schema is built at
   // import time and cannot await the live one; the handler rejects anything over it.
   guessNumber: z.number().int().min(1).max(MAX_GUESSES_LIMIT),
+  edition: z.enum(DAILY_EDITIONS).default('english'),
 });
 
 puzzleRouter.post(
@@ -152,8 +165,9 @@ puzzleRouter.post(
   validate(guessSchema),
   asyncHandler(async (req, res) => {
     await ensureDailyPlaylistsFresh();
+    const { songId, guessNumber, edition } = req.body as z.infer<typeof guessSchema>;
     const puzzleDate = getUtcDateString();
-    const puzzles = await getOrCreateDailyPuzzles(puzzleDate);
+    const puzzles = await getOrCreateDailyPuzzles(puzzleDate, edition);
     const resultsByPuzzleId = await loadTodaysResults(puzzles, req);
     // Never trust a client-supplied slot: the current slot is always the first one this player
     // hasn't got a result for yet, so there's nothing to skip ahead to or replay.
@@ -164,7 +178,6 @@ puzzleRouter.post(
       return;
     }
 
-    const { songId, guessNumber } = req.body as z.infer<typeof guessSchema>;
     const snippetSchedule = await getSnippetSchedule();
     if (guessNumber > snippetSchedule.length) {
       throw new HttpError(400, 'That guess number is past the end of the snippet schedule');
@@ -207,12 +220,13 @@ puzzleRouter.post(
       if (todaysResults.size === puzzles.length) {
         dayComplete = true;
         const rows = [...todaysResults.values()];
+        const statsKey = editionOwnerKey(ownerKey, edition);
         await recordGameResult({
-          ownerKey,
+          ownerKey: statsKey,
           puzzleDate,
           slots: rows.map((r) => ({ won: r.won, guessesUsed: r.guessesUsed })),
         });
-        const stats = await getStats(ownerKey);
+        const stats = await getStats(statsKey);
         daySummary = {
           correctCount: rows.filter((r) => r.won).length,
           totalSlots: puzzles.length,

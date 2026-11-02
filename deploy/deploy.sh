@@ -59,9 +59,9 @@ fi
 [ -d /opt/apps/Chorus/.git ] || git clone -q https://github.com/MayurJivani/Chorusify.git /opt/apps/Chorus
 cd /opt/apps/Chorus
 git pull -q --ff-only
-HUSKY=0 npm ci --legacy-peer-deps --no-audit --no-fund --loglevel=error
+HUSKY=0 npm ci --no-audit --no-fund --loglevel=error
 VITE_API_URL=/api npm run build:full
-npm prune --omit=dev --legacy-peer-deps
+npm prune --omit=dev
 # The box npm may rewrite the lockfile in its own dialect; put it back so the next pull fast-forwards.
 git checkout -- package-lock.json
 sudo -n systemctl restart "$NAME"

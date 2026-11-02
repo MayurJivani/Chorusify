@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { Cassette } from './Cassette';
+import { Tonearm } from './Tonearm';
 
 let mediaUnlocked = false;
 
@@ -52,6 +54,8 @@ interface SnippetPlayerProps {
   /** When set, the snippet always starts at this offset instead of a random one, so all
    *  players hear the same slice of the clip (used for fair multiplayer rounds). */
   fixedOffsetSeconds?: number;
+  /** Desi Daily and Survival play from a cassette, labelled with this. Everything else gets the record. */
+  cassetteLabel?: string;
 }
 
 /** Plays a snippet of the Deezer preview clip (from a fixed offset when provided,
@@ -68,6 +72,7 @@ export function SnippetPlayer({
   autoPlay,
   playSignal,
   fixedOffsetSeconds,
+  cassetteLabel,
 }: SnippetPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,6 +86,7 @@ export function SnippetPlayer({
   const wantPlayRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
   /** The browser refused to start playback without a gesture. */
   const [blocked, setBlocked] = useState(false);
   const [volume, setVolume] = useState(() => {
@@ -227,6 +233,10 @@ export function SnippetPlayer({
         const elapsed = (Date.now() - playStartedAtRef.current) / 1000;
         const remaining = Math.max(0, Math.ceil(stageSeconds - elapsed));
         setTimeLeft(remaining);
+        // From the audio clock, not the wall clock: the arm must not move if the audio stalls.
+        const audio = audioRef.current;
+        if (audio)
+          setProgress(Math.min(1, (audio.currentTime - seekOffsetRef.current) / stageSeconds));
       };
       tick();
       countdownRef.current = setInterval(tick, 200);
@@ -235,6 +245,7 @@ export function SnippetPlayer({
       };
     } else {
       setTimeLeft(null);
+      setProgress(0);
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
@@ -274,30 +285,45 @@ export function SnippetPlayer({
         onEnded={() => setIsPlaying(false)}
       />
 
-      {/* Vinyl Record Player Container */}
-      <div className="relative">
-        {isPlaying && (
-          <span
-            className="absolute inset-0 rounded-full pointer-events-none scale-110 animate-pulse"
-            style={{
-              boxShadow: '0 0 30px rgba(139, 92, 246, 0.5), 0 0 60px rgba(139, 92, 246, 0.25)',
-            }}
+      {cassetteLabel ? (
+        <Cassette
+          playing={isPlaying}
+          progress={progress}
+          label={cassetteLabel}
+          disabled={disabled}
+          onToggle={handlePlayPause}
+        />
+      ) : (
+        /* Vinyl Record Player Container */
+        <div className="relative">
+          <Tonearm
+            playing={isPlaying}
+            progress={progress}
+            disabled={disabled}
+            onToggle={handlePlayPause}
           />
-        )}
-        <div
-          onClick={handlePlayPause}
-          className={
-            'relative cursor-pointer select-none ' +
-            // Stepped down on small screens: at 192px the record plus the transport, pips,
-            // input and guess list overflowed a 375x812 viewport and cut off the Skip button.
-            'w-32 h-32 sm:w-48 sm:h-48 lg:w-56 lg:h-56 rounded-full ' +
-            'shadow-[0_20px_50px_rgba(0,0,0,0.6)] border-4 border-neutral-900 ' +
-            'transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] ' +
-            (isPlaying ? 'animate-[spin_12s_linear_infinite]' : '') +
-            (disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : '')
-          }
-          style={{
-            background: `
+          {isPlaying && (
+            <span
+              className="absolute inset-0 rounded-full pointer-events-none scale-110 animate-pulse"
+              style={{
+                boxShadow: '0 0 30px rgba(139, 92, 246, 0.5), 0 0 60px rgba(139, 92, 246, 0.25)',
+              }}
+            />
+          )}
+          <div
+            onClick={handlePlayPause}
+            className={
+              'relative cursor-pointer select-none ' +
+              // Stepped down on small screens: at 192px the record plus the transport, pips,
+              // input and guess list overflowed a 375x812 viewport and cut off the Skip button.
+              'w-32 h-32 sm:w-48 sm:h-48 lg:w-56 lg:h-56 rounded-full ' +
+              'shadow-[0_20px_50px_rgba(0,0,0,0.6)] border-4 border-neutral-900 ' +
+              'transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] ' +
+              (isPlaying ? 'animate-[spin_12s_linear_infinite]' : '') +
+              (disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : '')
+            }
+            style={{
+              background: `
               radial-gradient(circle,
                 #151515 0%,
                 #1d1d1d 20%,
@@ -311,28 +337,29 @@ export function SnippetPlayer({
                 #181818 100%
               )
             `,
-          }}
-          aria-label={isPlaying ? 'Playing snippet' : 'Play snippet'}
-        >
-          {/* Inner label with artist picture */}
-          <div className="absolute inset-[30%] rounded-full border-[3px] border-neutral-950 bg-neutral-900 shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)] flex items-center justify-center overflow-hidden">
-            {artistPictureUrl ? (
-              <img
-                src={artistPictureUrl}
-                alt=""
-                className="absolute inset-0 h-full w-full rounded-full object-cover"
-              />
-            ) : (
-              <span className="text-2xl sm:text-3xl select-none" aria-hidden>
-                🎵
-              </span>
-            )}
-            {/* Center spindle hole */}
-            <div className="absolute w-2 h-2 rounded-full bg-neutral-950 border border-neutral-800 z-20 shadow-md" />
-            <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none" />
+            }}
+            aria-label={isPlaying ? 'Playing snippet' : 'Play snippet'}
+          >
+            {/* Inner label with artist picture */}
+            <div className="absolute inset-[30%] rounded-full border-[3px] border-neutral-950 bg-neutral-900 shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)] flex items-center justify-center overflow-hidden">
+              {artistPictureUrl ? (
+                <img
+                  src={artistPictureUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-2xl sm:text-3xl select-none" aria-hidden>
+                  🎵
+                </span>
+              )}
+              {/* Center spindle hole */}
+              <div className="absolute w-2 h-2 rounded-full bg-neutral-950 border border-neutral-800 z-20 shadow-md" />
+              <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none" />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Play capsule with play button and soundwave visualizer */}
       <div className="flex items-center gap-4 bg-white/[0.04] border border-white/[0.08] rounded-full pl-3 pr-5 py-2 backdrop-blur-md shadow-lg">

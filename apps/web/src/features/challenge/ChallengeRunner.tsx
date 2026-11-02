@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { SnippetPlayer } from '../game/SnippetPlayer';
 import { VinylSpinner } from '../easter-eggs/VinylSpinner';
 import { SongPreviewButton } from '../game/SongPreviewButton';

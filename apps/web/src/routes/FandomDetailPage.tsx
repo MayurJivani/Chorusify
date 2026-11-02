@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useSession } from '../hooks/useSession';
 import { useToast } from '../hooks/useToast';
 import { getFandomDetail, getMembership, joinFandom, leaveFandom } from '../api/fandom';

@@ -52,3 +52,9 @@ apps/server/pool.json
 # Brag/demo video renders
 brag-output*/
 chorusify-demo-*/
+
+# Song bank API response cache
+data/song-bank/.cache/
+
+# Impeccable local state
+.impeccable/

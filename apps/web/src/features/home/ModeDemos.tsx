@@ -13,8 +13,8 @@
  * All of them stop when `prefers-reduced-motion` is set, falling back to a still final frame —
  * looping motion behind text is exactly what that setting exists to switch off.
  */
-import { motion } from 'framer-motion';
-import { useReducedMotion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { useReducedMotion } from 'motion/react';
 
 /** Artist Mode: a name is typed, an artist resolves, ten songs queue up. */
 export function ArtistModeDemo() {

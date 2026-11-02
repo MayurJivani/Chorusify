@@ -10,7 +10,7 @@
  * The label states the actual gain ("+3s") rather than the vague "Reveal more", and the free-ness
  * is said outright instead of being something you infer after using it once.
  */
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 interface RevealMoreButtonProps {
   onRevealMore: () => void;

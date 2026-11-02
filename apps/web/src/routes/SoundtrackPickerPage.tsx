@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { getSoundtrackCollections } from '../api/soundtracks';
 import { usePageTitle } from '../hooks/usePageTitle';
 import type { SoundtrackCollection } from '../types/api';

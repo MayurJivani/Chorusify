@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { getHostedEvent } from '../api/events';
 import { MultipleChoiceGuess } from '../features/artist/MultipleChoiceGuess';
 import { SharePanel } from '../features/events/SharePanel';

@@ -5,6 +5,10 @@ import { hashString } from '../utils/deterministic';
 import { timeDecayScore } from '../utils/scoring';
 import { getSettings } from './settingsService';
 
+/** The two dailies. English is the original; each has its own songs and streak. */
+export const DAILY_EDITIONS = ['english', 'desi'] as const;
+export type DailyEdition = (typeof DAILY_EDITIONS)[number];
+
 /** A daily session is this many songs, Songless-style, not one. */
 export const SLOTS_PER_DAY = 5;
 
@@ -46,14 +50,16 @@ export function getUtcDateString(date: Date = new Date()): string {
  * shift after any UPDATE (the chart sync rewrites `active`/`verified_at` constantly), so the
  * "deterministic" pick would quietly resolve to a different song from one day to the next.
  */
-async function selectPool(curatedOnly: boolean) {
+async function selectPool(curatedOnly: boolean, edition: DailyEdition | null = null) {
   return db
     .select({ id: songs.id })
     .from(songs)
     .where(
-      curatedOnly
-        ? and(eq(songs.active, true), eq(songs.manualOverride, true))
-        : eq(songs.active, true),
+      and(
+        eq(songs.active, true),
+        curatedOnly ? eq(songs.manualOverride, true) : undefined,
+        edition ? eq(songs.dailyEdition, edition) : undefined,
+      ),
     )
     .orderBy(asc(songs.id));
 }
@@ -81,7 +87,12 @@ export function pickSongForDate(
 }
 
 /** The eligible song ids, honouring the curated-only setting with its degrade-not-fail fallback. */
-async function eligibleSongIds(): Promise<number[]> {
+async function eligibleSongIds(edition: DailyEdition = 'english'): Promise<number[]> {
+  const tagged = await selectPool(false, edition);
+  // Desi never falls back: an unlabelled song could be anything, and English before the song bank
+  // is imported keeps working exactly as it did.
+  if (tagged.length > 0 || edition !== 'english') return tagged.map((s) => s.id);
+
   const { dailyCuratedOnly } = await getSettings();
   const curated = dailyCuratedOnly ? await selectPool(true) : [];
   const active = curated.length > 0 ? curated : await selectPool(false);
@@ -114,6 +125,7 @@ export async function previewUpcomingPuzzles(days = 14): Promise<UpcomingSlot[]>
       ? await db
           .select({ songId: dailyPuzzles.songId })
           .from(dailyPuzzles)
+          .where(eq(dailyPuzzles.edition, 'english'))
           .orderBy(desc(dailyPuzzles.puzzleDate), desc(dailyPuzzles.position))
           .limit(recentWindow)
       : [];
@@ -130,7 +142,9 @@ export async function previewUpcomingPuzzles(days = 14): Promise<UpcomingSlot[]>
       songId: dailyPuzzles.songId,
     })
     .from(dailyPuzzles)
-    .where(gte(dailyPuzzles.puzzleDate, getUtcDateString()));
+    .where(
+      and(eq(dailyPuzzles.edition, 'english'), gte(dailyPuzzles.puzzleDate, getUtcDateString())),
+    );
   const pinnedByKey = new Map(pinned.map((p) => [`${p.puzzleDate}#${p.position}`, p.songId]));
 
   const result: UpcomingSlot[] = [];
@@ -167,11 +181,14 @@ export async function previewUpcomingPuzzles(days = 14): Promise<UpcomingSlot[]>
  * whatever this same call has already picked for an earlier position today — a day's five songs
  * must be distinct from each other, not just from recent days.
  */
-export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<DailyPuzzle[]> {
+export async function getOrCreateDailyPuzzles(
+  puzzleDate: string,
+  edition: DailyEdition = 'english',
+): Promise<DailyPuzzle[]> {
   const existingRows = await db
     .select()
     .from(dailyPuzzles)
-    .where(eq(dailyPuzzles.puzzleDate, puzzleDate))
+    .where(and(eq(dailyPuzzles.edition, edition), eq(dailyPuzzles.puzzleDate, puzzleDate)))
     .orderBy(asc(dailyPuzzles.position));
   if (existingRows.length >= SLOTS_PER_DAY) {
     return existingRows;
@@ -184,9 +201,9 @@ export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<Daily
   // would often be something most players have never heard. The chart sync still keeps the
   // bank fresh; it just doesn't decide the daily. If curation hasn't run yet, fall back to
   // every active song so the game degrades instead of failing.
-  const activeSongIds = await eligibleSongIds();
+  const activeSongIds = await eligibleSongIds(edition);
   if (activeSongIds.length === 0) {
-    throw new Error('No active songs available to build a daily puzzle');
+    throw new Error(`No active songs available to build the ${edition} daily puzzle`);
   }
 
   // Never repeat a song until every other active song has had a turn: exclude whatever was
@@ -199,6 +216,7 @@ export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<Daily
       ? await db
           .select({ songId: dailyPuzzles.songId })
           .from(dailyPuzzles)
+          .where(eq(dailyPuzzles.edition, edition))
           .orderBy(desc(dailyPuzzles.puzzleDate), desc(dailyPuzzles.position))
           .limit(recentWindow)
       : [];
@@ -212,7 +230,11 @@ export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<Daily
     if (existingPositions.has(position)) continue;
 
     const exclude = new Set([...recentlyUsedIds, ...pickedThisDay]);
-    const chosenId = pickSongForDate(`${puzzleDate}#${position}`, activeSongIds, exclude);
+    const chosenId = pickSongForDate(
+      `${edition === 'english' ? '' : `${edition}:`}${puzzleDate}#${position}`,
+      activeSongIds,
+      exclude,
+    );
     if (chosenId == null) {
       throw new Error('Failed to select a song for the daily puzzle');
     }
@@ -222,8 +244,10 @@ export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<Daily
     // the winner's pick instead of erroring — everyone still ends up on the same five songs.
     const insertedRows = await db
       .insert(dailyPuzzles)
-      .values({ puzzleDate, position, songId: chosenId })
-      .onConflictDoNothing({ target: [dailyPuzzles.puzzleDate, dailyPuzzles.position] })
+      .values({ edition, puzzleDate, position, songId: chosenId })
+      .onConflictDoNothing({
+        target: [dailyPuzzles.edition, dailyPuzzles.puzzleDate, dailyPuzzles.position],
+      })
       .returning();
     const row =
       insertedRows[0] ??
@@ -231,7 +255,13 @@ export async function getOrCreateDailyPuzzles(puzzleDate: string): Promise<Daily
         await db
           .select()
           .from(dailyPuzzles)
-          .where(and(eq(dailyPuzzles.puzzleDate, puzzleDate), eq(dailyPuzzles.position, position)))
+          .where(
+            and(
+              eq(dailyPuzzles.edition, edition),
+              eq(dailyPuzzles.puzzleDate, puzzleDate),
+              eq(dailyPuzzles.position, position),
+            ),
+          )
           .limit(1)
       )[0];
     if (!row) {

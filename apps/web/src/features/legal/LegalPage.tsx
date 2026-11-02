@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 /** Shared chrome for Privacy/Terms/Cookie pages: a title, a last-updated date, and a plain prose

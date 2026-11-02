@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getTodaysPuzzle, submitGuess } from '../../api/puzzle';
+import { getTodaysPuzzle, submitGuess, type DailyEdition } from '../../api/puzzle';
 import { getMyStats } from '../../api/stats';
 import { useGameConfig } from '../../hooks/useGameConfig';
 import type { DailySlotRecap, PuzzleResponse, SongSearchResult } from '../../types/api';
@@ -49,7 +49,7 @@ interface GameState {
   continueAfterReveal: () => Promise<void>;
 }
 
-export function useGameState(): GameState {
+export function useGameState(edition: DailyEdition = 'english'): GameState {
   const { maxGuesses } = useGameConfig();
   const [status, setStatus] = useState<GameStatus>('loading');
   const [puzzle, setPuzzle] = useState<PuzzleResponse | null>(null);
@@ -85,12 +85,12 @@ export function useGameState(): GameState {
   useEffect(() => {
     (async () => {
       try {
-        const today = await getTodaysPuzzle();
+        const today = await getTodaysPuzzle(edition);
         applyPuzzle(today);
         // A fresh page load after the day is already finished has no streak from this
         // session's own guesses to fall back on — ask for it directly.
         if (today.completed) {
-          const stats = await getMyStats();
+          const stats = await getMyStats(edition);
           setStreak({ current: stats.currentStreak, max: stats.maxStreak });
         }
       } catch {
@@ -98,7 +98,7 @@ export function useGameState(): GameState {
         setErrorMessage("Couldn't load today's puzzle. Please try again.");
       }
     })();
-  }, [applyPuzzle]);
+  }, [applyPuzzle, edition]);
 
   const submit = useCallback(
     async (song: SongSearchResult | null, guessNumber = attemptNumber) => {
@@ -113,6 +113,7 @@ export function useGameState(): GameState {
         const result = await submitGuess({
           songId: song?.id as number | undefined,
           guessNumber,
+          edition,
         });
         setHistory((prev) => [
           ...prev,
@@ -156,7 +157,7 @@ export function useGameState(): GameState {
         setSubmitting(false);
       }
     },
-    [status, submitting, attemptNumber, puzzle],
+    [status, submitting, attemptNumber, puzzle, edition],
   );
 
   const continueAfterReveal = useCallback(async () => {
@@ -171,12 +172,12 @@ export function useGameState(): GameState {
     try {
       // Not done for the day — ask for the next song. Its `completedSlots` recap already
       // reflects the one we just finished, so there's nothing to append locally here.
-      applyPuzzle(await getTodaysPuzzle());
+      applyPuzzle(await getTodaysPuzzle(edition));
     } catch {
       setStatus('error');
       setErrorMessage("Couldn't load the next song. Please try again.");
     }
-  }, [status, pendingDayComplete, applyPuzzle]);
+  }, [status, pendingDayComplete, applyPuzzle, edition]);
 
   const guess = useCallback((song: SongSearchResult) => submit(song), [submit]);
   const skip = useCallback(() => submit(null), [submit]);

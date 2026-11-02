@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { saveEvent } from '../../api/events';
 import type { EventAudioMode, EventInput, HostedEvent, Playlist } from '../../types/api';
 

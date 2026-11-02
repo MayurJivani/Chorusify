@@ -185,3 +185,19 @@ describe('isUnwantedVersion — "live" and friends only count as qualifiers', ()
     expect(isUnwantedVersion(title)).toBe(true);
   });
 });
+
+describe('reworks of a song', () => {
+  it.each([
+    'Chori Chori Chupke Chupke (Trap Mix)',
+    'Tune O Rangeele (Brazilian Funk Mix)',
+    'Agar Tum Na Hote (Female Version)',
+    'Jab Koi Baat - Recreated',
+    'Kal Ho Naa Ho (Reprise)',
+    'Aankhon Se Tune 2.0',
+    'Pushpa Pushpa (Telugu)',
+  ])('rejects %s', (title) => expect(isUnwantedVersion(title)).toBe(true));
+  it.each(['Super Bass', 'Happiness Is So Sad', 'TRAP AIBA', 'In Da Club', 'Ek Pal Ka Jeena'])(
+    'keeps %s',
+    (title) => expect(isUnwantedVersion(title)).toBe(false),
+  );
+});

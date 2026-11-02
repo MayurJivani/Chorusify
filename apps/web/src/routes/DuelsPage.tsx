@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useSession } from '../hooks/useSession';
 import { getMyDuels, getRatingLeaderboard, type DuelMode } from '../api/duels';
 import { SourcePicker, type PickedSource } from '../features/multiplayer/SourcePicker';

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { animate, motion, useMotionValue, useTransform } from 'motion/react';
+import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import type { DailySlotRecap } from '../../types/api';
 import { buildRunShareText } from '../stats/shareText';
@@ -11,6 +12,7 @@ interface WinLoseOverlayProps {
   totalSlots: number;
   puzzleDate: string;
   streak: { current: number; max: number };
+  edition?: 'english' | 'desi';
 }
 
 export function WinLoseOverlay({
@@ -19,9 +21,22 @@ export function WinLoseOverlay({
   totalSlots,
   puzzleDate,
   streak,
+  edition = 'english',
 }: WinLoseOverlayProps) {
   const [copied, setCopied] = useState(false);
   const perfectDay = correctCount === totalSlots;
+  const name = edition === 'desi' ? 'Desi Daily' : 'Daily';
+  const other =
+    edition === 'desi'
+      ? { to: '/play', label: 'Play the Daily too' }
+      : { to: '/desi', label: 'Play Desi Daily too' };
+  const shown = useMotionValue(0);
+  const score = useTransform(shown, (v) => String(Math.round(v)));
+
+  useEffect(() => {
+    const controls = animate(shown, correctCount, { duration: 0.7, ease: 'easeOut' });
+    return () => controls.stop();
+  }, [shown, correctCount]);
 
   useEffect(() => {
     if (perfectDay) {
@@ -37,14 +52,14 @@ export function WinLoseOverlay({
   const handleShare = async () => {
     const text =
       buildRunShareText({
-        subject: `Daily · ${puzzleDate}`,
+        subject: `${name} · ${puzzleDate}`,
         history: slots.map((s) => s.won),
         songsCorrect: correctCount,
         totalRounds: totalSlots,
       }) + `\n🔥 ${streak.current} day streak`;
 
     const blob = await renderResultCard({
-      subject: `Daily ${puzzleDate}`,
+      subject: `${name} ${puzzleDate}`,
       headline: `${correctCount}/${totalSlots}`,
       caption: `🔥 ${streak.current} day streak`,
       history: slots.map((s) => s.won),
@@ -79,7 +94,13 @@ export function WinLoseOverlay({
       className="glass flex w-full max-w-md flex-col items-center gap-5 rounded-2xl p-6 text-center"
     >
       <h2 className={`text-2xl font-extrabold ${perfectDay ? 'gradient-text' : 'text-slate-100'}`}>
-        {perfectDay ? '🎉 Perfect day!' : `${correctCount}/${totalSlots} today`}
+        {perfectDay ? (
+          '🎉 Perfect day!'
+        ) : (
+          <>
+            <motion.span>{score}</motion.span>/{totalSlots} today
+          </>
+        )}
       </h2>
 
       <p className="text-sm text-slate-400">
@@ -113,6 +134,9 @@ export function WinLoseOverlay({
       <button type="button" onClick={handleShare} className="btn-primary w-full !rounded-xl">
         {copied ? '✓ Copied!' : 'Share result'}
       </button>
+      <Link to={other.to} className="btn-secondary w-full !rounded-xl">
+        {other.label}
+      </Link>
     </motion.div>
   );
 }

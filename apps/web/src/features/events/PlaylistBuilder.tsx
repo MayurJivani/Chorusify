@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, Reorder } from 'framer-motion';
+import { AnimatePresence, motion, Reorder } from 'motion/react';
 import { ApiError } from '../../api/client';
 import { savePlaylist, searchEventSongs, type SearchField } from '../../api/events';
 import { SongPreviewButton } from '../game/SongPreviewButton';

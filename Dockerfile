@@ -10,7 +10,7 @@ COPY apps/server/package.json apps/server/package.json
 # the prepare/husky hook. Force development here; runtime stage sets production below.
 ENV HUSKY=0
 ENV NODE_ENV=development
-RUN npm ci --legacy-peer-deps
+RUN npm ci
 
 COPY tsconfig.base.json eslint.config.js .prettierrc.json ./
 COPY apps/web/ apps/web/
@@ -19,7 +19,7 @@ COPY apps/server/ apps/server/
 ENV VITE_API_URL=/api
 RUN npm run build:full
 
-RUN npm prune --omit=dev --legacy-peer-deps
+RUN npm prune --omit=dev
 
 FROM node:22-alpine
 WORKDIR /app

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useSession } from '../hooks/useSession';
 import { getProfile, updateDisplayName, changePassword, type ProfileData } from '../api/profile';
 import { usePageTitle } from '../hooks/usePageTitle';

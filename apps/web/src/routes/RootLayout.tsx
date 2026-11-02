@@ -1,12 +1,13 @@
 import { Suspense, useState, type ReactNode } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useSession } from '../hooks/useSession';
 import { useLogoClickEasterEgg } from '../features/easter-eggs/LogoClickEasterEgg';
 
 /** The drawer's links. The home page is the mode picker, so there is no separate "play" entry. */
 const MOBILE_LINKS: { to: string; label: string }[] = [
   { to: '/', label: 'Home' },
+  { to: '/desi', label: 'Desi Daily' },
   { to: '/leaderboard', label: 'Leaderboard' },
   { to: '/stats', label: 'Stats' },
   { to: '/fandoms', label: 'Fandoms' },
@@ -152,6 +153,7 @@ export function RootLayout() {
           <div className="hidden items-center gap-5 whitespace-nowrap sm:flex lg:gap-7">
             {/* No "play" entry: the home page *is* the mode picker, and the logo already goes
                 there. Listing the modes individually ran this bar to eight items. */}
+            <NavLink to="/desi">Desi Daily</NavLink>
             <NavLink to="/leaderboard">Leaderboard</NavLink>
             <NavLink to="/stats">Stats</NavLink>
             <NavLink to="/fandoms">Fandoms</NavLink>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { listPublicEvents } from '../api/events';
 import { createMultiplayerRoom, MULTIPLAYER_MAX_ROUNDS } from '../api/multiplayer';
 import { SourcePicker, type PickedSource } from '../features/multiplayer/SourcePicker';

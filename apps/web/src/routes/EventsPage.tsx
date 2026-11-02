@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { deleteEvent, deletePlaylist, listMyEvents, listPlaylists } from '../api/events';
 import { EventForm } from '../features/events/EventForm';
 import { formatDuration, PlaylistBuilder } from '../features/events/PlaylistBuilder';

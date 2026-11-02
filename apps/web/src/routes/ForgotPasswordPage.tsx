@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { forgotPassword, resetPassword } from '../api/auth';
 import { usePageTitle } from '../hooks/usePageTitle';
 

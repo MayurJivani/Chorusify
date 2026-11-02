@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { animate, AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { animate, AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { MultiplayerScoreEntry } from '../../types/api';
 import { useGameConfig } from '../../hooks/useGameConfig';
 import type { MultiplayerStanding } from './useMultiplayerGame';

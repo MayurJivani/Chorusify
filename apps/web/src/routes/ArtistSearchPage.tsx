@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { ArtistSearchInput } from '../features/artist/ArtistSearchInput';
 import { ArtistModeGuide } from '../features/game/ModeGuide';
 import { usePageTitle } from '../hooks/usePageTitle';

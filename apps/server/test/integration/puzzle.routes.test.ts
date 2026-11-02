@@ -4,7 +4,12 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { songs, dailyPuzzles, gameResults, userStats, sessions } from '../../src/db/schema';
-import { getUtcDateString, SLOTS_PER_DAY } from '../../src/services/puzzleService';
+import {
+  getOrCreateDailyPuzzles,
+  getUtcDateString,
+  SLOTS_PER_DAY,
+} from '../../src/services/puzzleService';
+import { editionOwnerKey } from '../../src/routes/puzzle.routes';
 
 // The real handler fetches a fresh preview URL live from Deezer (its signed URLs expire in
 // minutes, so the value stored at curation time is never reused directly). Mock that lookup
@@ -386,5 +391,36 @@ describe('same-artist hint', () => {
 
     expect(res.body.isFinal).toBe(true);
     expect(res.body.sameArtist).toBeUndefined();
+  });
+});
+
+describe('daily editions', () => {
+  it('serves Desi Daily from desi songs only, with its own slots and streak key', async () => {
+    const rows = await db
+      .insert(songs)
+      .values(
+        ['desi', 'english'].flatMap((dailyEdition) =>
+          [1, 2, 3, 4, 5].map((n) => ({
+            title: `${dailyEdition} ${n}`,
+            artist: 'Someone',
+            deezerTrackId: `edition-${dailyEdition}-${n}`,
+            previewUrl: 'https://example.test/p.mp3',
+            durationSeconds: 200,
+            dailyEdition,
+          })),
+        ),
+      )
+      .returning();
+
+    const desi = await getOrCreateDailyPuzzles('2031-01-01', 'desi');
+    const english = await getOrCreateDailyPuzzles('2031-01-01');
+    const editionOf = new Map(rows.map((r) => [r.id, r.dailyEdition]));
+
+    expect(desi.every((p) => editionOf.get(p.songId) === 'desi')).toBe(true);
+    expect(english.every((p) => editionOf.get(p.songId) === 'english')).toBe(true);
+    expect(new Set(desi.map((p) => p.songId)).size).toBe(5);
+    expect(editionOwnerKey('abc', 'english')).toBe('abc');
+    expect(editionOwnerKey('abc', 'desi')).toBe('desi:abc');
+    await db.delete(dailyPuzzles).where(eq(dailyPuzzles.puzzleDate, '2031-01-01'));
   });
 });

@@ -12,7 +12,7 @@ statsRouter.get(
   asyncHandler(async (req, res) => {
     const ownerKey = req.session.userId ?? req.session.guestId;
     const [stats, solveTimes] = await Promise.all([
-      getStats(ownerKey),
+      getStats(req.query.edition === 'desi' ? `desi:${ownerKey}` : ownerKey),
       getSolveTimeStats(ownerKey),
     ]);
 

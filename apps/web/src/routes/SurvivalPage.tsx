@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { SnippetPlayer } from '../features/game/SnippetPlayer';
 import { SongPreviewButton } from '../features/game/SongPreviewButton';
@@ -344,6 +344,7 @@ export function SurvivalPage() {
         <SnippetProgressBar stageIndex={stageIndex} />
 
         <SnippetPlayer
+          cassetteLabel="Survival: no B side"
           previewUrl={round.previewUrl}
           stageSeconds={stageSeconds}
           disabled={submitting}

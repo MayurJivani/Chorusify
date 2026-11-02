@@ -9,7 +9,7 @@
  * those have to stay distinct from each other; adding a second decorative set here is how you
  * end up with the same glyph meaning two different things on adjacent screens.
  */
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 interface GuideStep {

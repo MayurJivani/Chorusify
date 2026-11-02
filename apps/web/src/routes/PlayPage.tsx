@@ -8,12 +8,15 @@ import { GuessHistory } from '../features/game/GuessHistory';
 import { GuessInput } from '../features/game/GuessInput';
 import { WinLoseOverlay } from '../features/game/WinLoseOverlay';
 import { SlotRevealCard } from '../features/game/SlotRevealCard';
+import { useLocation } from 'react-router-dom';
+import type { DailyEdition } from '../api/puzzle';
 import { useGameConfig } from '../hooks/useGameConfig';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 
 export function PlayPage() {
-  usePageTitle('Daily Puzzle');
+  const edition: DailyEdition = useLocation().pathname === '/desi' ? 'desi' : 'english';
+  usePageTitle(edition === 'desi' ? 'Desi Daily' : 'Daily Puzzle');
 
   const {
     status,
@@ -33,7 +36,7 @@ export function PlayPage() {
     skip,
     skipSong,
     continueAfterReveal,
-  } = useGameState();
+  } = useGameState(edition);
   const { snippetSchedule } = useGameConfig();
 
   const [guessFeedback, setGuessFeedback] = useState<'correct' | 'wrong' | null>(null);
@@ -88,7 +91,9 @@ export function PlayPage() {
           without the page scrolling. */}
       <div className="glass w-full rounded-2xl p-4 sm:p-6 flex flex-col items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2.5 text-center">
-          <h1 className="text-xl font-bold text-white">Daily</h1>
+          <h1 className="text-xl font-bold text-white">
+            {edition === 'desi' ? 'Desi Daily' : 'Daily'}
+          </h1>
           <span className="h-4 w-px bg-white/15" />
           <p className="text-xs text-slate-500 font-mono">{puzzle.puzzleDate}</p>
         </div>
@@ -113,6 +118,7 @@ export function PlayPage() {
             previewUrl={previewUrl}
             stageSeconds={stageSeconds}
             disabled={submitting}
+            cassetteLabel={edition === 'desi' ? `Desi Daily, track ${position}` : undefined}
           />
         )}
 
@@ -161,6 +167,7 @@ export function PlayPage() {
           totalSlots={totalSlots}
           puzzleDate={puzzle.puzzleDate}
           streak={streak}
+          edition={edition}
         />
       )}
     </div>

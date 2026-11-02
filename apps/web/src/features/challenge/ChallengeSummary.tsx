@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { SourceStandings, ChallengeStandings } from './ChallengeLeaderboard';
 import { ChallengeGuessDistribution } from './ChallengeGuessDistribution';

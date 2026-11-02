@@ -443,8 +443,7 @@ async function main() {
   const dbUrl = process.env.LOADTEST_DATABASE_URL;
   if (!dbUrl) throw new Error('LOADTEST_DATABASE_URL is required');
   const dbHost = new URL(dbUrl).hostname;
-  // The local .env points at production through a tunnel on 127.0.0.1, so localhost alone is not
-  // enough: only a database explicitly named for this can be written to.
+  // Localhost alone is not enough: only a database explicitly named for this can be written to.
   if (
     !['127.0.0.1', 'localhost'].includes(dbHost) ||
     !/local|loadtest/.test(new URL(dbUrl).pathname)

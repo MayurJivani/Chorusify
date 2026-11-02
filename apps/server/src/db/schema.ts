@@ -23,6 +23,20 @@ export const songs = pgTable('songs', {
   verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull().defaultNow(),
   active: boolean('active').notNull().default(true),
   manualOverride: boolean('manual_override').notNull().default(false),
+  // Song bank metadata (data/song-bank). Null on rows that came from the chart sync.
+  featuredArtists: jsonb('featured_artists').$type<string[]>(),
+  album: text('album'),
+  releaseYear: integer('release_year'),
+  genre: text('genre'),
+  scene: text('scene'),
+  language: text('language'),
+  region: text('region'),
+  // Which daily this song can be the answer to: 'english', 'desi', or neither.
+  dailyEdition: text('daily_edition'),
+  difficulty: integer('difficulty'),
+  rank: integer('rank'),
+  isrc: text('isrc'),
+  aliases: jsonb('aliases').$type<string[]>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -31,6 +45,7 @@ export const dailyPuzzles = pgTable(
   {
     id: serial('id').primaryKey(),
     puzzleDate: text('puzzle_date').notNull(),
+    edition: text('edition').notNull().default('english'),
     // Which of the day's songs this is (1..SLOTS_PER_DAY in puzzleService.ts). A day used to be
     // one song, one row; it's now a small sequence, so the date alone no longer identifies a row.
     position: integer('position').notNull().default(1),
@@ -39,7 +54,12 @@ export const dailyPuzzles = pgTable(
       .references(() => songs.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('daily_puzzles_date_position_idx').on(table.puzzleDate, table.position)],
+  (table) => [uniqueIndex('daily_puzzles_edition_date_position_idx').on(
+      table.edition,
+      table.puzzleDate,
+      table.position,
+    ),
+  ],
 );
 
 export const users = pgTable('users', {

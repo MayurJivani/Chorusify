@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq, exists, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { dailyPuzzles, songs } from '../db/schema';
+import { foldForSearch } from '../utils/songAliases';
 import { validate } from '../middleware/validate';
 import { searchRateLimiter } from '../middleware/rateLimiters';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { HttpError } from '../middleware/errorHandler';
+import { getFreshPreviewUrl } from '../services/deezerService';
 
 export const songsRouter = Router();
 
@@ -53,6 +56,8 @@ songsRouter.get(
             sql`${songs.title} ILIKE ${prefix}`,
             sql`${songs.artist} ILIKE ${prefix}`,
             sql`to_tsvector('english', ${songs.title} || ' ' || ${songs.artist}) @@ websearch_to_tsquery('english', ${q})`,
+            // Alternative spellings: "kabhi kabhi" finds "Kabhie Kabhie".
+            sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(${songs.aliases}) a WHERE a LIKE ${`${foldForSearch(q)}%`})`,
           ),
         ),
       )
@@ -63,5 +68,57 @@ songsRouter.get(
       .limit(8);
 
     res.json({ results: rows });
+  }),
+);
+
+/** Well-known songs from the bank for the shop window: the landing page's free round and shelf. */
+songsRouter.get(
+  '/sampler',
+  searchRateLimiter,
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: songs.id,
+        title: songs.title,
+        artist: songs.artist,
+        albumArtUrl: songs.albumArtUrl,
+        dailyEdition: songs.dailyEdition,
+      })
+      .from(songs)
+      .where(
+        and(
+          eq(songs.active, true),
+          isNotNull(songs.dailyEdition),
+          isNotNull(songs.albumArtUrl),
+          lte(songs.difficulty, 2),
+        ),
+      )
+      .orderBy(sql`random()`)
+      .limit(72);
+    const [total] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(songs)
+      .where(and(eq(songs.active, true), isNotNull(songs.scene)));
+    res.json({ songs: rows, total: total?.count ?? 0 });
+  }),
+);
+
+const previewSchema = z.object({ id: z.coerce.number().int().positive() });
+
+songsRouter.get(
+  '/:id/preview',
+  searchRateLimiter,
+  validate(previewSchema, 'params'),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof previewSchema>;
+    const [song] = await db
+      .select({ deezerTrackId: songs.deezerTrackId })
+      .from(songs)
+      .where(and(eq(songs.id, id), isNotNull(songs.scene)))
+      .limit(1);
+    if (!song) throw new HttpError(404, 'No such song');
+    const fresh = await getFreshPreviewUrl(song.deezerTrackId);
+    if (!fresh) throw new HttpError(503, 'That preview is unavailable right now');
+    res.json({ previewUrl: fresh.previewUrl });
   }),
 );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { getCategories } from '../api/categories';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 import { usePageTitle } from '../hooks/usePageTitle';

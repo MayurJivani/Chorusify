@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { getLeaderboard } from '../api/leaderboard';
 import { formatDuration } from '../features/stats/formatDuration';
 import { usePageTitle } from '../hooks/usePageTitle';

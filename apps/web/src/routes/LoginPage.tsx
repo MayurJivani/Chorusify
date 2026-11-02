@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { LoginForm } from '../features/auth/LoginForm';
 import { usePageTitle } from '../hooks/usePageTitle';
 

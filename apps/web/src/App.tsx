@@ -1,6 +1,6 @@
 import { lazy, type ComponentType } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import { MotionConfig } from 'framer-motion';
+import { MotionConfig } from 'motion/react';
 import { SessionProvider } from './hooks/useSession';
 import { GameConfigProvider } from './hooks/useGameConfig';
 import { RootLayout } from './routes/RootLayout';
@@ -74,6 +74,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomePage /> },
       { path: '/play', element: <PlayPage /> },
+      { path: '/desi', element: <PlayPage /> },
       { path: '/stats', element: <StatsPage /> },
       { path: '/leaderboard', element: <LeaderboardPage /> },
       { path: '/login', element: <LoginPage /> },

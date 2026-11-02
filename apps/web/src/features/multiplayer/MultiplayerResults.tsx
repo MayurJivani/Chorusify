@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import type { MultiplayerGameOver } from './useMultiplayerGame';
 import { MultiplayerScoreboard } from './MultiplayerScoreboard';

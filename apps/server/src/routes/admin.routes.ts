@@ -92,7 +92,12 @@ adminRouter.get(
       })
       .from(dailyPuzzles)
       .innerJoin(songs, eq(songs.id, dailyPuzzles.songId))
-      .where(from ? gte(dailyPuzzles.puzzleDate, from) : undefined)
+      .where(
+        and(
+          eq(dailyPuzzles.edition, 'english'),
+          from ? gte(dailyPuzzles.puzzleDate, from) : undefined,
+        ),
+      )
       .orderBy(desc(dailyPuzzles.puzzleDate), asc(dailyPuzzles.position))
       .limit(limit);
 
@@ -148,7 +153,13 @@ async function assertEditable(date: string, position: number) {
   const rows = await db
     .select()
     .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.puzzleDate, date), eq(dailyPuzzles.position, position)))
+    .where(
+      and(
+        eq(dailyPuzzles.edition, 'english'),
+        eq(dailyPuzzles.puzzleDate, date),
+        eq(dailyPuzzles.position, position),
+      ),
+    )
     .limit(1);
   const existing = rows[0];
   if (!existing) return null;
@@ -307,7 +318,13 @@ adminRouter.post(
     const siblingRows = await db
       .select({ songId: dailyPuzzles.songId })
       .from(dailyPuzzles)
-      .where(and(eq(dailyPuzzles.puzzleDate, date), ne(dailyPuzzles.position, position)));
+      .where(
+        and(
+          eq(dailyPuzzles.edition, 'english'),
+          eq(dailyPuzzles.puzzleDate, date),
+          ne(dailyPuzzles.position, position),
+        ),
+      );
     const siblingIds = new Set(siblingRows.map((r) => r.songId));
 
     const eligible = await db
@@ -549,7 +566,8 @@ adminRouter.patch(
         'Event host access changed',
       );
       // A revoked host loses the events they are running now, not just the next one.
-      if (patch.role === 'user') await closeEventsOwnedBy(user.id, 'The host of this event was removed.');
+      if (patch.role === 'user')
+        await closeEventsOwnedBy(user.id, 'The host of this event was removed.');
     }
 
     res.json({ user: withEffectiveRole(user) });

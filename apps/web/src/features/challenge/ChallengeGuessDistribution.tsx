@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { VinylSpinner } from '../easter-eggs/VinylSpinner';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import type { GuessDistributionBucket } from '../../types/api';
 
 interface ChallengeGuessDistributionProps {

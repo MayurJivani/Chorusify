@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useCountdownToNextPuzzle } from '../hooks/useCountdown';
 import { useSession } from '../hooks/useSession';
 import { getMyStats } from '../api/stats';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { ArtistModeDemo, MultiplayerDemo } from '../features/home/ModeDemos';
+import { QuickRound, useSampler } from '../features/home/QuickRound';
 import type { StatsResponse } from '../types/api';
 
 function AnimatedWaveform({ isPlaying = true }: { isPlaying?: boolean }) {
@@ -71,6 +72,7 @@ export function HomePage() {
   }, [userId, guestId]);
 
   const streak = stats?.currentStreak ?? 0;
+  const songs = useSampler();
 
   // Padding is deliberately top-light: the block still centres while it is short enough to fit,
   // but the spare room sits underneath, so the hero rides nearer the top rather than floating in
@@ -95,6 +97,8 @@ export function HomePage() {
           Hear a growing snippet and name the song in as few listens as you can.
         </p>
       </motion.div>
+
+      {songs.length > 0 && <QuickRound songs={songs} />}
 
       {/* The two headline modes, each showing what happens rather than describing it */}
       <motion.section
@@ -228,7 +232,40 @@ export function HomePage() {
           </div>
           <span className="shrink-0 text-sm font-semibold text-slate-300">Play →</span>
         </Link>
+        <Link
+          to="/desi"
+          className="glass mt-2 flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 transition-all duration-200 hover:border-white/25"
+        >
+          <div className="min-w-0">
+            <span className="block text-sm font-semibold text-white">Desi Daily</span>
+            <span className="block text-[11px] text-slate-400">
+              Bollywood, Hindi classics, indie and Punjabi. Its own five songs and streak.
+            </span>
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-slate-300">Play →</span>
+        </Link>
       </motion.div>
+
+      {songs.length > 12 && (
+        <ul aria-label="Songs in the bank" className="flex w-full gap-1 overflow-x-auto pb-2 pt-2">
+          {songs.slice(12, 48).map((song) => (
+            <li
+              key={song.id}
+              className="w-20 flex-none transition-transform duration-200 hover:-translate-y-1 hover:-rotate-2 sm:w-24"
+            >
+              <img
+                src={song.albumArtUrl ?? undefined}
+                alt={`${song.title} by ${song.artist}`}
+                title={`${song.title} · ${song.artist}`}
+                loading="lazy"
+                width={96}
+                height={96}
+                className="aspect-square w-full rounded object-cover"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

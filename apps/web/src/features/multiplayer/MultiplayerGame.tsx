@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import type { MultiplayerRoomSnapshot, SongSearchResult } from '../../types/api';
 import { SyncedAudio } from '../events/SyncedAudio';
 import { SnippetPlayer } from '../game/SnippetPlayer';

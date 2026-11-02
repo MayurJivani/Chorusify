@@ -168,23 +168,26 @@ function round1(value: number | null): number | null {
 /** Migrates a guest's history onto a freshly-registered user account. */
 export async function mergeGuestStatsIntoUser(guestId: string, userId: string): Promise<void> {
   await db.transaction(async (tx) => {
-    const guestStatsRows = await tx
-      .select()
-      .from(userStats)
-      .where(eq(userStats.ownerKey, guestId))
-      .limit(1);
-    const guestStats = guestStatsRows[0];
-    const userStatsRows = await tx
-      .select()
-      .from(userStats)
-      .where(eq(userStats.ownerKey, userId))
-      .limit(1);
-    const userStatsRow = userStatsRows[0];
+    // Once per edition: Desi Daily's streak is the same player's under a prefixed key.
+    for (const prefix of ['', 'desi:']) {
+      const guestStatsRows = await tx
+        .select()
+        .from(userStats)
+        .where(eq(userStats.ownerKey, prefix + guestId))
+        .limit(1);
+      const guestStats = guestStatsRows[0];
+      const userStatsRows = await tx
+        .select()
+        .from(userStats)
+        .where(eq(userStats.ownerKey, prefix + userId))
+        .limit(1);
+      const userStatsRow = userStatsRows[0];
 
-    // A brand-new account should never already have stats, but guard defensively rather than clobber.
-    if (guestStats && !userStatsRow) {
-      await tx.insert(userStats).values({ ...guestStats, ownerKey: userId });
-      await tx.delete(userStats).where(eq(userStats.ownerKey, guestId));
+      // A brand-new account should never already have stats, but guard defensively rather than clobber.
+      if (guestStats && !userStatsRow) {
+        await tx.insert(userStats).values({ ...guestStats, ownerKey: prefix + userId });
+        await tx.delete(userStats).where(eq(userStats.ownerKey, prefix + guestId));
+      }
     }
 
     await tx

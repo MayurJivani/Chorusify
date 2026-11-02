@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { SnippetPlayer } from '../features/game/SnippetPlayer';
 import { SongPreviewButton } from '../features/game/SongPreviewButton';
 import { SnippetProgressBar } from '../features/game/SnippetProgressBar';
