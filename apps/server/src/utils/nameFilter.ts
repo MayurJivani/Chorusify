@@ -72,12 +72,70 @@ const EXTRA = [
   'kkk',
 ];
 
+/**
+ * Names that are fine word by word and offensive together, matched with spaces and punctuation gone.
+ * Each is a person or phrase, so the parts stay usable: Mia and Johnny are ordinary names.
+ */
+const PHRASES = [
+  // Adult performers and sites. People pick these to get a laugh out of a projected leaderboard.
+  'johnny sins',
+  'johny sins',
+  'mia khalifa',
+  'mia kalifa',
+  'sunny leone',
+  'sunny leon',
+  'dani daniels',
+  'lana rhoades',
+  'riley reid',
+  'abella danger',
+  'angela white',
+  'brandi love',
+  'lisa ann',
+  'asa akira',
+  'eva elfie',
+  'nicole aniston',
+  'alexis texas',
+  'jordi el nino',
+  'keanu sins',
+  'tori black',
+  'pornhub',
+  'xvideos',
+  'xhamster',
+  'xnxx',
+  'onlyfans',
+  'brazzers',
+  'youporn',
+  'redtube',
+  // Terror and hate, whatever name is put in front of them.
+  'bin laden',
+  'osama bin',
+  'al qaeda',
+  'alqaida',
+  'ajmal kasab',
+  'dawood ibrahim',
+  'white power',
+  'heil hitler',
+  'gas the',
+  'kill all',
+];
 /** Short enough to be inside ordinary names, so these only match as a whole word... */
 const NOT_INSIDE_WORDS_BELOW = 5;
 /** ...except these, which nothing innocent contains and which people run into other words. */
-const ALWAYS_INSIDE = ['fuck', 'bhench', 'madarch', 'chutiy', 'bhosd'];
+const ALWAYS_INSIDE = [
+  'fuck',
+  'bhench',
+  'madarch',
+  'chutiy',
+  'bhosd',
+  'bomb',
+  'terrorist',
+  'jihad',
+  'taliban',
+  'lashkar',
+  'suicide',
+];
 /** Innocent text a long blocked word sits inside ("the-rapist"). Cut out before matching. */
-const SAFE_PARTS = /therapist|nigeri|nigel|nigam/g;
+const SAFE_PARTS = /therapist|nigeri|nigel|nigam|bombay|bombshel/g;
 
 const LOOKALIKES: Record<string, string> = {
   '0': 'o',
@@ -133,6 +191,7 @@ for (const list of [...Object.values(naughtyWords as unknown as Record<string, s
   }
 }
 insideWords.push(...ALWAYS_INSIDE.map(normalize));
+const phrases = PHRASES.map((p) => normalize(p).replace(/ /g, ''));
 
 /** True when the name contains a blocked word, including spaced ("f u c k") or disguised forms. */
 export function isOffensiveName(name: string): boolean {
@@ -141,6 +200,8 @@ export function isOffensiveName(name: string): boolean {
   // Runs of single letters are one word somebody spaced out.
   const joined = text.replace(/(?<![\p{L}])(\p{L})[^\p{L}]+(?=\p{L}(?:[^\p{L}]|$))/gu, '$1');
   const candidates = [...tokens, ...joined.split(/[^\p{L}]+/u).filter(Boolean)];
+  const compact = text.replace(/[^\p{L}]+/gu, '');
+  if (phrases.some((phrase) => compact.includes(phrase))) return true;
   for (const candidate of candidates) {
     const token = candidate.replace(SAFE_PARTS, ' ');
     if (wholeWords.has(token)) return true;
