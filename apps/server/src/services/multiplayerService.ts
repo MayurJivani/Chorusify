@@ -17,6 +17,7 @@ import { seededShuffle } from '../utils/deterministic';
 import { timeDecayScore } from '../utils/scoring';
 import { getSettings } from './settingsService';
 import { logger } from '../logger';
+import { isOffensiveName } from '../utils/nameFilter';
 import { answerProcessingMs, count, registerMetricSources } from './metrics';
 
 /** Seconds of audio revealed at each reveal stage, Heardle-style. Players advance their own
@@ -182,11 +183,17 @@ export interface MpEvent {
 
 export interface EventHooks {
   /** Finds a stored event whose room is not in memory (first join, or after a restart). */
-  load(code: string): Promise<{ event: MpEvent; tracks: ArtistTrack[]; config: EventRoomConfig } | 'ended' | null>;
+  load(
+    code: string,
+  ): Promise<{ event: MpEvent; tracks: ArtistTrack[]; config: EventRoomConfig } | 'ended' | null>;
   canHost(userId: string): Promise<boolean>;
   checkPassword(event: MpEvent, password: string): boolean;
   onStarted(eventId: string): void;
-  onFinished(eventId: string, playerCount: number, top: { rank: number; displayName: string; score: number }[]): void;
+  onFinished(
+    eventId: string,
+    playerCount: number,
+    top: { rank: number; displayName: string; score: number }[],
+  ): void;
 }
 
 export interface EventRoomConfig {
@@ -522,21 +529,37 @@ export function unregisterConnection(playerId: string): void {
   identities.delete(playerId);
 }
 
-async function resolveDisplayName(identity: Identity, nickname?: string): Promise<string> {
-  if (nickname) return nickname;
-  if (identity.userId) {
+/**
+ * The name this player appears under, or null after telling them why they cannot have it. Everyone
+ * has a name: guests must type one, and it is checked here because the client's check is a courtesy.
+ */
+async function resolveDisplayName(
+  playerId: string,
+  identity: Identity,
+  nickname?: string,
+): Promise<string | null> {
+  let name = nickname;
+  if (!name && identity.userId) {
     const rows = await db
       .select({ displayName: users.displayName })
       .from(users)
       .where(eq(users.id, identity.userId))
       .limit(1);
-    const user = rows[0];
-    if (user) return user.displayName;
+    name = rows[0]?.displayName;
   }
-  if (identity.guestId) {
-    return `Guest-${identity.guestId.slice(0, 4).toUpperCase()}`;
+  if (!name) {
+    sendTo(playerId, { type: 'error', code: 'name_required', message: 'Enter a name to join.' });
+    return null;
   }
-  return 'Guest';
+  if (isOffensiveName(name)) {
+    sendTo(playerId, {
+      type: 'error',
+      code: 'name_rejected',
+      message: 'That name is not allowed. Please choose another.',
+    });
+    return null;
+  }
+  return name;
 }
 
 export async function handleClientMessage(playerId: string, message: unknown): Promise<void> {
@@ -687,9 +710,9 @@ async function joinRoom(
     }
   }
 
-  const displayName = await resolveDisplayName(identity, nickname);
+  const displayName = await resolveDisplayName(playerId, identity, nickname);
   // The lookup above yields, so re-check: the room may have filled, or the socket gone, meanwhile.
-  if (!sockets.has(playerId)) return;
+  if (!displayName || !sockets.has(playerId)) return;
   if (room.phase !== 'lobby') return sendError(playerId, 'That game is already in progress.');
   if (room.players.size >= room.maxPlayers) return sendError(playerId, 'Room is full.');
 
@@ -760,11 +783,12 @@ async function joinEvent(
         code: password ? 'wrong_password' : 'password_required',
         message: password ? 'That password is not right.' : 'This event needs a password.',
       });
-      if (attempts >= MAX_PASSWORD_ATTEMPTS) sockets.get(playerId)?.close(1008, 'Too many attempts');
+      if (attempts >= MAX_PASSWORD_ATTEMPTS)
+        sockets.get(playerId)?.close(1008, 'Too many attempts');
       return;
     }
-    const displayName = await resolveDisplayName(identity, nickname);
-    if (!sockets.has(playerId)) return;
+    const displayName = await resolveDisplayName(playerId, identity, nickname);
+    if (!displayName || !sockets.has(playerId)) return;
     if (room.seats.has(seatKey)) return joinEvent(room, playerId, identity, nickname, password);
     if (room.seats.size >= room.maxPlayers) return sendError(playerId, 'This event is full.');
 
@@ -849,7 +873,11 @@ function dropFromRoom(playerId: string): void {
 function resolveRoundIfComplete(room: MpRoom): void {
   if (room.phase !== 'playing' || room.paused) return;
   for (const p of room.players.values()) {
-    if (!p.roundAnswered && p.disconnectedAt === null && !(p.playerId === room.hostId && !room.hostPlayable)) {
+    if (
+      !p.roundAnswered &&
+      p.disconnectedAt === null &&
+      !(p.playerId === room.hostId && !room.hostPlayable)
+    ) {
       return;
     }
   }
@@ -872,7 +900,12 @@ async function attachHost(playerId: string, eventId: string, code: string): Prom
   const userId = identity?.userId;
   const loaded = rooms.get(code) ?? (await loadEventRoom(code));
   const room = loaded && loaded !== 'ended' && loaded.event?.id === eventId ? loaded : null;
-  const refuse = () => sendTo(playerId, { type: 'error', code: 'not_host', message: 'Only the event host can do that.' });
+  const refuse = () =>
+    sendTo(playerId, {
+      type: 'error',
+      code: 'not_host',
+      message: 'Only the event host can do that.',
+    });
   if (!userId || !eventHooks || !(await eventHooks.canHost(userId))) return refuse();
   if (!room || room.event?.ownerUserId !== userId) return refuse();
   if (!sockets.has(playerId)) return;
@@ -895,7 +928,11 @@ async function attachHost(playerId: string, eventId: string, code: string): Prom
 function withControl(playerId: string, action: (room: MpRoom) => void): void {
   const room = roomFor(playerId);
   if (!room?.event || room.hostId !== playerId) {
-    return sendTo(playerId, { type: 'error', code: 'not_host', message: 'Only the event host can do that.' });
+    return sendTo(playerId, {
+      type: 'error',
+      code: 'not_host',
+      message: 'Only the event host can do that.',
+    });
   }
   action(room);
 }
@@ -1017,9 +1054,16 @@ async function startEventRound(room: MpRoom, roundIndex: number): Promise<void> 
       startRound(room, index);
       return;
     }
-    logger.warn({ code: room.code, deezerTrackId: track.deezerTrackId }, 'Event song has no audio; skipping');
+    logger.warn(
+      { code: room.code, deezerTrackId: track.deezerTrackId },
+      'Event song has no audio; skipping',
+    );
     if (room.hostId) {
-      sendTo(room.hostId, { type: 'song_skipped', title: track.title, reason: 'No audio available from Deezer' });
+      sendTo(room.hostId, {
+        type: 'song_skipped',
+        title: track.title,
+        reason: 'No audio available from Deezer',
+      });
     }
   }
   finishGame(room);
@@ -1169,6 +1213,10 @@ export async function startGame(playerId: string): Promise<void> {
   if (room.hostId !== playerId) return sendError(playerId, 'Only the host can start the game.');
   if (room.phase !== 'lobby' && (room.phase !== 'finished' || room.event)) {
     return sendError(playerId, 'Game already in progress.');
+  }
+
+  if (room.event && room.players.size === 0) {
+    return sendError(playerId, 'Nobody has joined yet.');
   }
 
   // Claimed synchronously, before the first await. Everything below can take tens of seconds on
@@ -1716,20 +1764,14 @@ function rankedPlayers(room: MpRoom): MpPlayer[] {
   const shown = (p: MpPlayer) => (room.phase === 'playing' ? p.scoreAtRoundStart : p.score);
   // Join time last (the sort is stable), so level players never swap places between two frames.
   return [...room.players.values()].sort(
-    (a, b) =>
-      shown(b) - shown(a) ||
-      a.totalAnswerMs - b.totalAnswerMs ||
-      a.joinedAt - b.joinedAt,
+    (a, b) => shown(b) - shown(a) || a.totalAnswerMs - b.totalAnswerMs || a.joinedAt - b.joinedAt,
   );
 }
 
 function buildScores(room: MpRoom, reveal = false): MpScoreEntry[] {
   const shown = (p: MpPlayer) => (reveal ? p.score : p.scoreAtRoundStart);
   const sorted = [...room.players.values()].sort(
-    (a, b) =>
-      shown(b) - shown(a) ||
-      a.totalAnswerMs - b.totalAnswerMs ||
-      a.joinedAt - b.joinedAt,
+    (a, b) => shown(b) - shown(a) || a.totalAnswerMs - b.totalAnswerMs || a.joinedAt - b.joinedAt,
   );
   const rows: MpScoreEntry[] = [];
   // Sorted on whatever score is being reported, so the order cannot jump a round early, then cut
@@ -1963,7 +2005,8 @@ function sweepEventRoom(room: MpRoom, now: number): void {
     }
   }
   if (dropped) broadcastRoomState(room);
-  const anyoneHere = room.hostId || [...room.players.values()].some((p) => p.disconnectedAt === null);
+  const anyoneHere =
+    room.hostId || [...room.players.values()].some((p) => p.disconnectedAt === null);
   if (anyoneHere) room.lastActiveAt = now;
   // A live round's timers keep it going only until they run out of players to serve.
   else if (now - room.lastActiveAt > EVENT_IDLE_ROOM_TTL_MS) destroyRoom(room);
@@ -2093,7 +2136,8 @@ registerMetricSources({
     return {
       rooms: rooms.size,
       connections: sockets.size,
-      eventsRunning: events.filter((r) => r.phase === 'playing' || r.phase === 'round-reveal').length,
+      eventsRunning: events.filter((r) => r.phase === 'playing' || r.phase === 'round-reveal')
+        .length,
       playersPerEvent: Object.fromEntries(events.map((r) => [r.code, r.players.size])),
     };
   },

@@ -25,6 +25,7 @@ export function MultiplayerRoomPage() {
   const hostName = typeof location.state?.hostName === 'string' ? location.state.hostName : '';
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState<string | null>(autoJoin ? hostName : null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [eventInfo, setEventInfo] = useState<EventJoinInfo | null>(null);
@@ -76,6 +77,14 @@ export function MultiplayerRoomPage() {
     leave,
     hostCommand,
   } = useMultiplayerGame(code, nickname, { password: submittedPassword });
+
+  // Back to the form with the reason. An account's own name is changed on the profile page instead.
+  useEffect(() => {
+    if ((errorCode === 'name_required' || errorCode === 'name_rejected') && !user) {
+      setNameError(error);
+      setNickname(null);
+    }
+  }, [errorCode, error, user]);
 
   // The typeahead has to search whatever the room races over, not always an artist.
   const sourceType = room?.sourceType;
@@ -143,13 +152,19 @@ export function MultiplayerRoomPage() {
               {!user && (
                 <input
                   autoFocus
+                  required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={24}
-                  placeholder="Your name (optional)"
+                  placeholder="Your name"
                   aria-label="Your name"
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none placeholder:text-slate-500 focus:border-chorusify-accent2"
                 />
+              )}
+              {nameError && (
+                <p role="alert" className="text-sm text-red-300">
+                  {nameError}
+                </p>
               )}
               {eventInfo?.needsPassword && (
                 <input
@@ -163,7 +178,11 @@ export function MultiplayerRoomPage() {
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none placeholder:text-slate-500 focus:border-chorusify-accent2"
                 />
               )}
-              <button type="submit" className="btn-primary w-full !rounded-xl">
+              <button
+                type="submit"
+                disabled={!user && !name.trim()}
+                className="btn-primary w-full !rounded-xl"
+              >
                 {eventInfo ? 'Join event →' : 'Join room →'}
               </button>
             </>
@@ -184,9 +203,13 @@ export function MultiplayerRoomPage() {
           }}
           className="glass flex w-full max-w-md flex-col items-center gap-4 rounded-2xl p-6 text-center"
         >
-          <h1 className="text-lg font-bold text-white">{eventInfo?.name ?? 'This event'} needs a password</h1>
+          <h1 className="text-lg font-bold text-white">
+            {eventInfo?.name ?? 'This event'} needs a password
+          </h1>
           {errorCode === 'wrong_password' && (
-            <p role="alert" className="text-sm text-red-300">That password is not right. Ask the host.</p>
+            <p role="alert" className="text-sm text-red-300">
+              That password is not right. Ask the host.
+            </p>
           )}
           <input
             autoFocus

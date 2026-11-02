@@ -131,7 +131,8 @@ export function attachWebSocketServer(server: Server): void {
             return;
           }
           count('wsFramesOut');
-          ws.send(data);
+          // Text even when handed a Buffer: a binary frame reaches a browser as a Blob it cannot parse.
+          ws.send(data, { binary: false });
         },
         close: (code, reason) => ws.close(code, reason),
       },

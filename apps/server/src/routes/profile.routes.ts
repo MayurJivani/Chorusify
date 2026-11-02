@@ -1,3 +1,4 @@
+import { isOffensiveName } from '../utils/nameFilter';
 import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, ne } from 'drizzle-orm';
@@ -28,6 +29,10 @@ profileRouter.patch(
   validate(updateDisplayNameSchema),
   asyncHandler(async (req, res) => {
     const { displayName } = req.body as z.infer<typeof updateDisplayNameSchema>;
+    if (isOffensiveName(displayName)) {
+      res.status(400).json({ error: 'That name is not allowed. Please choose another.' });
+      return;
+    }
     await db.update(users).set({ displayName }).where(eq(users.id, req.session.userId!));
     res.json({ ok: true, displayName });
   }),

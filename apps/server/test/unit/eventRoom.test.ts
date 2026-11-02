@@ -61,7 +61,8 @@ const conn = (id: string, userId: string | null, guestId: string | null = null) 
   return socket;
 };
 const msg = (id: string, m: Record<string, unknown>) => handleClientMessage(id, m);
-const join = (id: string, extra = {}) => msg(id, { type: 'join_room', code: 'EVENT1', ...extra });
+const join = (id: string, extra = {}) =>
+  msg(id, { type: 'join_room', code: 'EVENT1', nickname: `Player ${id}`, ...extra });
 const hostUp = async () => {
   const host = conn('host', 'owner');
   await msg('host', { type: 'host_event', eventId: 'e1', code: 'EVENT1' });
@@ -123,6 +124,25 @@ describe('event rooms', () => {
     await vi.advanceTimersByTimeAsync(0);
     const scores = a.last('round_end').scores;
     expect(scores.map((s: any) => s.playerId)).toEqual(['a']);
+  });
+
+  it('makes a guest give a name, and refuses an offensive one', async () => {
+    await hostUp();
+    const a = conn('a', null, 'ga');
+    await msg('a', { type: 'join_room', code: 'EVENT1' });
+    expect(a.last('error').code).toBe('name_required');
+    await msg('a', { type: 'join_room', code: 'EVENT1', nickname: 'f u c k' });
+    expect(a.last('error').code).toBe('name_rejected');
+    expect(a.of('room_state')).toHaveLength(0);
+    await msg('a', { type: 'join_room', code: 'EVENT1', nickname: 'Ishita' });
+    expect(a.last('room_state').room.playerCount).toBe(1);
+  });
+
+  it('will not start an event nobody has joined', async () => {
+    const host = await hostUp();
+    await start();
+    expect(host.last('error').message).toMatch(/Nobody has joined/);
+    expect(host.of('host_round')).toHaveLength(0);
   });
 
   it('seats the host when the event says the host plays', async () => {

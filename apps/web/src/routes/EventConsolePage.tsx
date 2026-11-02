@@ -41,8 +41,18 @@ export function EventConsolePage() {
 
 function Console({ event }: { event: HostedEvent }) {
   const game = useMultiplayerGame(event.code, '', { hostEventId: event.id });
-  const { room, hostRound, paused, audioStopped, roundEnd, gameOver, connectionStatus, hostCommand } = game;
+  const {
+    room,
+    hostRound,
+    paused,
+    audioStopped,
+    roundEnd,
+    gameOver,
+    connectionStatus,
+    hostCommand,
+  } = game;
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [audioFailed, setAudioFailed] = useState<number | null>(null);
 
   const phase = gameOver ? 'finished' : (room?.phase ?? 'lobby');
   const inRound = phase === 'playing' || phase === 'round-reveal';
@@ -91,7 +101,10 @@ function Console({ event }: { event: HostedEvent }) {
                     : 'Nobody scored.'}{' '}
                   The result is saved.
                 </p>
-                <Link to="/events" className="btn-secondary mt-4 inline-block !rounded-xl !py-2 !text-sm">
+                <Link
+                  to="/events"
+                  className="btn-secondary mt-4 inline-block !rounded-xl !py-2 !text-sm"
+                >
                   Back to events
                 </Link>
               </motion.div>
@@ -107,14 +120,18 @@ function Console({ event }: { event: HostedEvent }) {
                 </p>
                 <button
                   type="button"
-                  disabled={playerCount === 0 || phase === 'starting' || connectionStatus !== 'open'}
+                  disabled={
+                    playerCount === 0 || phase === 'starting' || connectionStatus !== 'open'
+                  }
                   onClick={() => {
                     ensureMediaUnlocked();
                     hostCommand('start_game');
                   }}
                   className="btn-primary mt-4 w-full !rounded-xl sm:w-auto"
                 >
-                  {playerCount === 0 ? 'Waiting for the first player' : `Start with ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
+                  {playerCount === 0
+                    ? 'Waiting for the first player'
+                    : `Start with ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
                 </button>
               </motion.div>
             ) : (
@@ -141,7 +158,13 @@ function Console({ event }: { event: HostedEvent }) {
                     playbackSeconds={hostRound.playbackSeconds}
                     paused={paused}
                     stopped={audioStopped}
+                    onFailed={() => setAudioFailed(hostRound.roundIndex)}
                   />
+                )}
+                {audioFailed === hostRound?.roundIndex && (
+                  <p role="alert" className="text-sm text-amber-100">
+                    This song would not load on this device. Skip it, or check your connection.
+                  </p>
                 )}
                 {/* A host who chose to play answers here, from the same screen as the controls. */}
                 {event.hostPlays && game.round?.options && !roundEnd && (
@@ -157,13 +180,19 @@ function Console({ event }: { event: HostedEvent }) {
                 )}
                 <AnsweredBar store={game.scoresStore} total={playerCount} />
                 <div className="flex flex-wrap gap-2">
-                  <ControlButton primary onClick={() => hostCommand(paused ? 'host_resume' : 'host_pause')}>
+                  <ControlButton
+                    primary
+                    onClick={() => hostCommand(paused ? 'host_resume' : 'host_pause')}
+                  >
                     {paused ? 'Resume' : 'Pause'}
                   </ControlButton>
                   <ControlButton onClick={() => hostCommand('host_skip')}>
                     {roundEnd ? 'Next round' : 'Skip song'}
                   </ControlButton>
-                  <ControlButton onClick={() => hostCommand('host_stop_audio')} disabled={audioStopped}>
+                  <ControlButton
+                    onClick={() => hostCommand('host_stop_audio')}
+                    disabled={audioStopped}
+                  >
                     {audioStopped ? 'Music stopped' : 'Stop music'}
                   </ControlButton>
                   {confirmEnd ? (
@@ -182,13 +211,15 @@ function Console({ event }: { event: HostedEvent }) {
           </AnimatePresence>
         </section>
 
-        <LiveScoreboard
-          store={game.scoresStore}
-          selfId={game.selfId}
-          limit={10}
-          title="Top 10"
-          showMedals={phase === 'finished'}
-        />
+        {phase !== 'lobby' && phase !== 'starting' && (
+          <LiveScoreboard
+            store={game.scoresStore}
+            selfId={game.selfId}
+            limit={10}
+            title="Top 10"
+            showMedals={phase === 'finished'}
+          />
+        )}
       </div>
 
       <aside className="flex flex-col gap-5">
@@ -199,22 +230,32 @@ function Console({ event }: { event: HostedEvent }) {
           <div className="glass rounded-2xl p-4">
             <h2 className="mb-2 text-sm font-semibold text-white">Just joined</h2>
             <ul className="flex flex-col gap-1">
-              {[...room.players].reverse().slice(0, 8).map((p) => (
-                <li key={p.playerId} className="flex items-center justify-between gap-2 text-sm text-slate-300">
-                  <span className="min-w-0 truncate">{p.displayName}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Remove ${p.displayName} from the event? They cannot rejoin.`)) {
-                        hostCommand('host_kick', { playerId: p.playerId });
-                      }
-                    }}
-                    className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+              {[...room.players]
+                .reverse()
+                .slice(0, 8)
+                .map((p) => (
+                  <li
+                    key={p.playerId}
+                    className="flex items-center justify-between gap-2 text-sm text-slate-300"
                   >
-                    Remove
-                  </button>
-                </li>
-              ))}
+                    <span className="min-w-0 truncate">{p.displayName}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Remove ${p.displayName} from the event? They cannot rejoin.`,
+                          )
+                        ) {
+                          hostCommand('host_kick', { playerId: p.playerId });
+                        }
+                      }}
+                      className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
             </ul>
           </div>
         )}
@@ -255,7 +296,13 @@ function NowPlaying({
   return (
     <div className="flex items-center gap-3.5">
       {round.albumArtUrl ? (
-        <img src={round.albumArtUrl} alt="" width={64} height={64} className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+        <img
+          src={round.albumArtUrl}
+          alt=""
+          width={64}
+          height={64}
+          className="h-16 w-16 shrink-0 rounded-xl object-cover"
+        />
       ) : (
         <span className="h-16 w-16 shrink-0 rounded-xl bg-white/10" />
       )}
@@ -267,14 +314,24 @@ function NowPlaying({
         <p className="truncate text-sm text-slate-400">{round.artist}</p>
       </div>
       <p className="shrink-0 text-right">
-        <span className="block text-2xl font-bold tabular-nums text-white">{paused ? '❚❚' : left}</span>
-        <span className="text-xs text-slate-400">{paused ? 'Paused' : revealing ? 'to next song' : 'to answer'}</span>
+        <span className="block text-2xl font-bold tabular-nums text-white">
+          {paused ? '❚❚' : left}
+        </span>
+        <span className="text-xs text-slate-400">
+          {paused ? 'Paused' : revealing ? 'to next song' : 'to answer'}
+        </span>
       </p>
     </div>
   );
 }
 
-function AnsweredBar({ store, total }: { store: ReturnType<typeof useMultiplayerGame>['scoresStore']; total: number }) {
+function AnsweredBar({
+  store,
+  total,
+}: {
+  store: ReturnType<typeof useMultiplayerGame>['scoresStore'];
+  total: number;
+}) {
   const answered = useScores(store, (s) => s.answeredCount ?? 0);
   const fraction = total ? Math.min(1, answered / total) : 0;
   return (
@@ -304,7 +361,11 @@ function ControlButton({
       type="button"
       {...props}
       className={`!rounded-xl !px-4 !py-2 !text-sm ${
-        primary ? 'btn-primary' : danger ? 'btn-secondary !border-red-400/50 !text-red-200' : 'btn-secondary'
+        primary
+          ? 'btn-primary'
+          : danger
+            ? 'btn-secondary !border-red-400/50 !text-red-200'
+            : 'btn-secondary'
       }`}
     />
   );

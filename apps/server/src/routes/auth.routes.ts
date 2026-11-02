@@ -13,6 +13,7 @@ import { generateCsrfToken } from '../middleware/csrf';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { createResetToken, resetPassword, ResetError } from '../services/passwordResetService';
 import { env } from '../env';
+import { isOffensiveName } from '../utils/nameFilter';
 import { effectiveRole, isAdminEmail } from '../auth/roles';
 import {
   passwordProblems,
@@ -52,6 +53,11 @@ authRouter.post('/register', authRateLimiter, validate(registerSchema), async (r
   const problems = passwordProblems(password, { email, displayName });
   if (problems.length > 0) {
     res.status(400).json({ error: problems[0], problems });
+    return;
+  }
+
+  if (isOffensiveName(displayName)) {
+    res.status(400).json({ error: 'That name is not allowed. Please choose another.' });
     return;
   }
 

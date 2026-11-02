@@ -93,7 +93,9 @@ async function worker() {
         ws.send(JSON.stringify({ type: 'join_room', code, nickname: c.nick, password }));
       });
       let joined = false;
-      ws.on('message', (data) => {
+      ws.on('message', (data, isBinary) => {
+        // A browser cannot read binary frames, even though this client could.
+        if (isBinary) bump('error:binaryFrame');
         const text = data.toString();
         const now = Date.now();
         bump('framesIn');
@@ -119,7 +121,8 @@ async function worker() {
             c.options = (m.options as { deezerTrackId: string }[]).map((o) => o.deezerTrackId);
             // From the moment the server began the round (music is scheduled 2.5s after), so
             // this is the whole fan-out: the last client's number includes everyone before it.
-            if (c.roundStart && now < m.startedAt) lat.roundStartDelivery!.push(now - (m.startedAt - 2500));
+            if (c.roundStart && now < m.startedAt)
+              lat.roundStartDelivery!.push(now - (m.startedAt - 2500));
             startInstants.add(m.startedAt);
             if (m.previewUrl) {
               previewsSeen.withAudio! += 1;
@@ -357,7 +360,9 @@ class Api {
       email: ADMIN.email,
       password: ADMIN.password,
       displayName: 'Load Host',
-    }).catch(() => this.call('POST', '/api/auth/login', { email: ADMIN.email, password: ADMIN.password }));
+    }).catch(() =>
+      this.call('POST', '/api/auth/login', { email: ADMIN.email, password: ADMIN.password }),
+    );
     this.csrf = auth.csrfToken;
   }
 }
@@ -370,7 +375,10 @@ class HostSocket {
   connect(api: Api, eventId: string, code: string) {
     return new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(`${api.origin.replace('http', 'ws')}/ws`, {
-        headers: { Cookie: [...api.cookies].map(([k, v]) => `${k}=${v}`).join('; '), Origin: api.origin },
+        headers: {
+          Cookie: [...api.cookies].map(([k, v]) => `${k}=${v}`).join('; '),
+          Origin: api.origin,
+        },
       });
       this.ws.once('error', reject);
       this.ws.once('open', () => {
@@ -379,7 +387,14 @@ class HostSocket {
       let up = false;
       this.ws.on('message', (data) => {
         const m = JSON.parse(data.toString()) as Record<string, any>;
-        this.frames.push({ type: m.type, code: m.code, previewUrl: m.previewUrl, playerCount: m.room?.playerCount, phase: m.room?.phase, title: m.title });
+        this.frames.push({
+          type: m.type,
+          code: m.code,
+          previewUrl: m.previewUrl,
+          playerCount: m.room?.playerCount,
+          phase: m.room?.phase,
+          title: m.title,
+        });
         if (this.frames.length > 2000) this.frames.splice(0, 1000);
         if (!up && m.type === 'room_state') {
           up = true;
@@ -430,8 +445,13 @@ async function main() {
   const dbHost = new URL(dbUrl).hostname;
   // The local .env points at production through a tunnel on 127.0.0.1, so localhost alone is not
   // enough: only a database explicitly named for this can be written to.
-  if (!['127.0.0.1', 'localhost'].includes(dbHost) || !/local|loadtest/.test(new URL(dbUrl).pathname)) {
-    throw new Error('Refusing: the load test writes to its database. Use a local one named *local* or *loadtest*.');
+  if (
+    !['127.0.0.1', 'localhost'].includes(dbHost) ||
+    !/local|loadtest/.test(new URL(dbUrl).pathname)
+  ) {
+    throw new Error(
+      'Refusing: the load test writes to its database. Use a local one named *local* or *loadtest*.',
+    );
   }
 
   const tmp = mkdtempSync(path.join(tmpdir(), 'chorus-loadtest-'));
@@ -457,7 +477,10 @@ async function main() {
     DEEZER_STUB_LATENCY_MS: '120',
   };
   await new Promise((r) =>
-    spawn(process.execPath, ['dist/db/migrate.js'], { cwd: SERVER_DIR, env, stdio: 'ignore' }).on('exit', r),
+    spawn(process.execPath, ['dist/db/migrate.js'], { cwd: SERVER_DIR, env, stdio: 'ignore' }).on(
+      'exit',
+      r,
+    ),
   );
   const server = spawn(
     process.execPath,
@@ -467,7 +490,10 @@ async function main() {
   let serverErr = '';
   server.stderr!.on('data', (d) => (serverErr = (serverErr + d).slice(-4000)));
   for (let i = 0; ; i++) {
-    const up = await fetch(`${origin}/api/health`).then((r) => r.ok, () => false);
+    const up = await fetch(`${origin}/api/health`).then(
+      (r) => r.ok,
+      () => false,
+    );
     if (up) break;
     if (i > 200) throw new Error(`server did not come up:\n${serverErr}`);
     await sleep(100);
@@ -478,7 +504,11 @@ async function main() {
   const api = new Api(origin);
   await api.login();
   const metrics = () => api.call('GET', '/api/admin/metrics');
-  const report: Record<string, unknown> = { players: PLAYERS, workers: WORKERS, startedAt: new Date().toISOString() };
+  const report: Record<string, unknown> = {
+    players: PLAYERS,
+    workers: WORKERS,
+    startedAt: new Date().toISOString(),
+  };
 
   /** The stub's ids ending 13 lose their preview, so one playlist position can be a dead song. */
   const playlistOf = (n: number, withDeadSong = false) =>
@@ -491,7 +521,12 @@ async function main() {
       durationSeconds: 30,
     }));
 
-  const makeEvent = async (name: string, audioMode: string, rounds: number, withDeadSong = false) => {
+  const makeEvent = async (
+    name: string,
+    audioMode: string,
+    rounds: number,
+    withDeadSong = false,
+  ) => {
     const { playlist } = await api.call('POST', '/api/events/playlists', {
       name,
       tracks: playlistOf(Math.max(rounds, 4), withDeadSong),
@@ -558,7 +593,18 @@ async function main() {
     host.close();
     workers.stop();
     await sleep(500);
-    return { event, fillSeconds, wallMs, cpuPct: Math.round(((cpu1.cpuMs - cpu0.cpuMs) / wallMs) * 100), rssMb: cpu1.rssMb, r, m, hostAudio, hostSeated, guessRounds };
+    return {
+      event,
+      fillSeconds,
+      wallMs,
+      cpuPct: Math.round(((cpu1.cpuMs - cpu0.cpuMs) / wallMs) * 100),
+      rssMb: cpu1.rssMb,
+      r,
+      m,
+      hostAudio,
+      hostSeated,
+      guessRounds,
+    };
   };
 
   try {
@@ -597,7 +643,9 @@ async function main() {
         players: g.r.open,
         guessesSent: g.r.guessRtt.n,
         guessResults: g.r.tally.guessResults,
-        errors: Object.fromEntries(Object.entries(g.r.tally).filter(([k]) => k.startsWith('error') || k.startsWith('close'))),
+        errors: Object.fromEntries(
+          Object.entries(g.r.tally).filter(([k]) => k.startsWith('error') || k.startsWith('close')),
+        ),
         guessRttClient: g.r.guessRtt,
         answerProcessingServer: g.m.answerProcessingMs,
         roundStartDelivery: g.r.roundStartDelivery,
@@ -650,7 +698,8 @@ async function main() {
       const rejoinMs = performance.now() - t0;
       await sleep(500);
       const afterRejoin = await workers.report();
-      const roundStartsResent = (afterRejoin.tally.roundStarts ?? 0) - (before.tally.roundStarts ?? 0);
+      const roundStartsResent =
+        (afterRejoin.tally.roundStarts ?? 0) - (before.tally.roundStarts ?? 0);
       const m0 = await metrics();
 
       // A tenth more arrive late, into a running game.
@@ -671,7 +720,8 @@ async function main() {
         // Every client in a round must be told the same start instant.
         distinctStartInstants: final.startInstants.length,
         distinctPreviewsInRound: final.previews.length,
-        deadSongSkippedAndHostTold: !!skippedDead || host.frames.some((f) => f.type === 'song_skipped'),
+        deadSongSkippedAndHostTold:
+          !!skippedDead || host.frames.some((f) => f.type === 'song_skipped'),
         rejoined: back.reduce((a, b) => a + b.rejoined, 0),
         rejoinWallMs: Math.round(rejoinMs),
         roundStartsResentOnRejoin: roundStartsResent,
@@ -679,7 +729,9 @@ async function main() {
         lateJoiners: late.open,
         lateJoinersGotCurrentRound: late.tally.roundStarts,
         roundStartDelivery: final.roundStartDelivery,
-        errors: Object.fromEntries(Object.entries(final.tally).filter(([k]) => k.startsWith('error'))),
+        errors: Object.fromEntries(
+          Object.entries(final.tally).filter(([k]) => k.startsWith('error')),
+        ),
       };
       console.log(report.D);
       host.close();
@@ -693,18 +745,24 @@ async function main() {
       const calls0 = stubCalls();
       // 500 hosts' worth of the same search, at once.
       const same = await Promise.all(
-        Array.from({ length: 500 }, () => api.call('GET', '/api/events/songs/search?q=daft%20punk')),
+        Array.from({ length: 500 }, () =>
+          api.call('GET', '/api/events/songs/search?q=daft%20punk'),
+        ),
       );
       const afterBurst = stubCalls() - calls0;
       await Promise.all(
-        Array.from({ length: 500 }, () => api.call('GET', '/api/events/songs/search?q=daft%20punk')),
+        Array.from({ length: 500 }, () =>
+          api.call('GET', '/api/events/songs/search?q=daft%20punk'),
+        ),
       );
       const afterCached = stubCalls() - calls0;
       // Many distinct searches: the budget must hold even when nothing can be shared.
       const distinct0 = stubCalls();
       const t0 = performance.now();
       await Promise.all(
-        Array.from({ length: 60 }, (_, i) => api.call('GET', `/api/events/songs/search?q=artist${i}`)),
+        Array.from({ length: 60 }, (_, i) =>
+          api.call('GET', `/api/events/songs/search?q=artist${i}`),
+        ),
       );
       const distinctSeconds = (performance.now() - t0) / 1000;
       const distinctCalls = stubCalls() - distinct0;
@@ -714,13 +772,17 @@ async function main() {
       const stale = await api.call('GET', '/api/events/songs/search?q=daft%20punk');
       const t1 = performance.now();
       const unseen = await Promise.all(
-        Array.from({ length: 12 }, (_, i) => api.call('GET', `/api/events/songs/search?q=outage${i}`)),
+        Array.from({ length: 12 }, (_, i) =>
+          api.call('GET', `/api/events/songs/search?q=outage${i}`),
+        ),
       );
       const outageMs = performance.now() - t1;
       const breakerMetrics = await metrics();
       const callsDuring0 = stubCalls();
       await Promise.all(
-        Array.from({ length: 40 }, (_, i) => api.call('GET', `/api/events/songs/search?q=held${i}`)),
+        Array.from({ length: 40 }, (_, i) =>
+          api.call('GET', `/api/events/songs/search?q=held${i}`),
+        ),
       );
       const callsWhileOpen = stubCalls() - callsDuring0;
 
@@ -732,7 +794,10 @@ async function main() {
       await workers.connect(origin, event.code, 50);
       await sleep(300);
       host.send({ type: 'start_game' });
-      const over = await host.next('game_over', 30_000).then(() => true, () => false);
+      const over = await host.next('game_over', 30_000).then(
+        () => true,
+        () => false,
+      );
       host.close();
       workers.stop();
       rmSync(failFile, { force: true });
@@ -772,7 +837,14 @@ async function main() {
       await workers.connect(origin, event.code, PLAYERS);
       await sleep(2000);
       host.send({ type: 'start_game' });
-      const series: { minute: number; rssMb: number; heapMb: number; lagP99: number; dbP95: number; cpuPct: number }[] = [];
+      const series: {
+        minute: number;
+        rssMb: number;
+        heapMb: number;
+        lagP99: number;
+        dbP95: number;
+        cpuPct: number;
+      }[] = [];
       const until = Date.now() + SOAK_MINUTES * 60_000;
       let lastCpu = usage(pid);
       let lastCpuAt = Date.now();
@@ -808,19 +880,24 @@ async function main() {
       }
       const end = await workers.report();
       const half = Math.floor(series.length / 2);
-      const heapAvg = (xs: typeof series) => xs.reduce((a, b) => a + b.heapMb, 0) / Math.max(1, xs.length);
+      const heapAvg = (xs: typeof series) =>
+        xs.reduce((a, b) => a + b.heapMb, 0) / Math.max(1, xs.length);
       report.F = {
         minutes: series.length,
         roundsPlayed: frame,
         games,
         connectionsAtEnd: end.open,
-        unexpectedCloses: Object.fromEntries(Object.entries(end.tally).filter(([k]) => k.startsWith('close'))),
+        unexpectedCloses: Object.fromEntries(
+          Object.entries(end.tally).filter(([k]) => k.startsWith('close')),
+        ),
         heapMbFirstHalfAvg: Math.round(heapAvg(series.slice(0, half))),
         heapMbSecondHalfAvg: Math.round(heapAvg(series.slice(half))),
         rssStartEnd: [series[0]?.rssMb, series.at(-1)?.rssMb],
         lagP99Max: Math.max(0, ...series.map((s) => s.lagP99)),
         dbP95Max: Math.max(0, ...series.map((s) => s.dbP95)),
-        cpuPctAvg: Math.round(series.reduce((a, b) => a + b.cpuPct, 0) / Math.max(1, series.length)),
+        cpuPctAvg: Math.round(
+          series.reduce((a, b) => a + b.cpuPct, 0) / Math.max(1, series.length),
+        ),
         series,
       };
       console.log({ ...(report.F as object), series: undefined });

@@ -11,6 +11,8 @@ interface MultiplayerScoreboardProps {
   hostId?: string | null;
   /** Shows whether each player has answered (and correctly) for the current round. */
   showRoundState?: boolean;
+  /** A Speed Round has no reveal stages, so a "1/6" beside a name would mean nothing. */
+  hideStage?: boolean;
   /**
    * Medals for the top three instead of plain rank numbers.
    *
@@ -122,6 +124,7 @@ const ScoreRow = memo(function ScoreRow({
   isYou,
   isHost,
   showRoundState,
+  hideStage,
   showMedals,
   maxGuesses,
 }: {
@@ -130,6 +133,7 @@ const ScoreRow = memo(function ScoreRow({
   isYou: boolean;
   isHost: boolean;
   showRoundState: boolean;
+  hideStage: boolean;
   showMedals: boolean;
   maxGuesses: number;
 }) {
@@ -180,9 +184,11 @@ const ScoreRow = memo(function ScoreRow({
             got it wrong before anybody knew.
           */}
           {!player.answered ? (
-            <span className="text-slate-500" title="Reveal stage">
-              {player.stageIndex + 1}/{maxGuesses}
-            </span>
+            !hideStage && (
+              <span className="text-slate-500" title="Reveal stage">
+                {player.stageIndex + 1}/{maxGuesses}
+              </span>
+            )
           ) : player.correctThisRound == null ? (
             <span className="text-chorusify-accent2" title="Locked in">
               🔒
@@ -204,6 +210,7 @@ export const MultiplayerScoreboard = memo(function MultiplayerScoreboard({
   selfId,
   hostId,
   showRoundState = false,
+  hideStage = false,
   showMedals = false,
   standing,
   limit,
@@ -218,9 +225,7 @@ export const MultiplayerScoreboard = memo(function MultiplayerScoreboard({
         {title}
       </h3>
       <ul className="flex flex-col gap-1 sm:gap-1.5">
-        {scores.length === 0 && (
-          <li className="text-sm text-slate-400">No players yet.</li>
-        )}
+        {scores.length === 0 && <li className="text-sm text-slate-400">No players yet.</li>}
         <AnimatePresence initial={false}>
           {rows.map((player, i) => (
             <ScoreRow
@@ -230,6 +235,7 @@ export const MultiplayerScoreboard = memo(function MultiplayerScoreboard({
               isYou={player.playerId === selfId}
               isHost={player.playerId === hostId}
               showRoundState={showRoundState}
+              hideStage={hideStage}
               showMedals={showMedals}
               maxGuesses={maxGuesses}
             />

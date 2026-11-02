@@ -116,7 +116,11 @@ function lastOf(socket: FakeSocket, type: string): SentMessage | undefined {
 }
 
 async function join(playerId: string, code: string, nickname?: string): Promise<void> {
-  await handleClientMessage(playerId, { type: 'join_room', code, nickname });
+  await handleClientMessage(playerId, {
+    type: 'join_room',
+    code,
+    nickname: nickname ?? `Player ${playerId}`,
+  });
 }
 
 function guess(playerId: string, trackId: string): void {

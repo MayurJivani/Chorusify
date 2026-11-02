@@ -336,7 +336,8 @@ setEventHooks({
   onStarted(eventId) {
     db.update(events)
       .set({ status: 'live', startedAt: new Date() })
-      .where(eq(events.id, eventId))
+      // Only from open: a game that ends at once must not have this land after its result.
+      .where(and(eq(events.id, eventId), eq(events.status, 'open')))
       .catch((err) => logger.error({ err, eventId }, 'Failed to mark event live'));
   },
   onFinished(eventId, playerCount, top: EventResultRow[]) {

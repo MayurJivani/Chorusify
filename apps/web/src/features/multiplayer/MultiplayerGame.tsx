@@ -124,12 +124,13 @@ export function MultiplayerGame({
     (lastGuess != null || room.players.find((p) => p.playerId === selfId)?.roundAnswered) ??
     false;
   const isEvent = !!room.event;
+  const [audioFailed, setAudioFailed] = useState<number | null>(null);
   const started = useReached(isEvent ? round.startedAt : 0);
   const isSpeed = round.gameMode === 'speed';
   const showPlayer = !room.hostOnlyAudio || isHost;
   const canGuess = !isHost || room.hostPlayable;
-  const stageMs = (round.snippetSchedule[0] ?? 0) * 1000;
-  const musicPlaying = started && !paused && !audioStopped && Date.now() < round.startedAt + stageMs;
+  const clipOver = useReached(round.startedAt + (round.snippetSchedule[0] ?? 0) * 1000);
+  const musicPlaying = started && !paused && !audioStopped && !clipOver;
 
   const clampedStage = Math.min(stageIndex, round.snippetSchedule.length - 1);
   const stageSeconds = round.snippetSchedule[clampedStage] ?? 1;
@@ -254,7 +255,14 @@ export function MultiplayerGame({
                 playbackSeconds={round.snippetSchedule[0] ?? 15}
                 paused={paused}
                 stopped={audioStopped}
+                onFailed={() => setAudioFailed(round.roundIndex)}
               />
+            )}
+            {audioFailed === round.roundIndex && (
+              <p role="alert" className="text-center text-sm text-amber-100">
+                The song would not load on this phone. You can still answer if you can hear it
+                nearby.
+              </p>
             )}
           </>
         ) : (
@@ -295,8 +303,7 @@ export function MultiplayerGame({
                   />
                 </div>
               ))}
-
-            </>
+          </>
         )}
 
         {!roundEnd && (
@@ -371,6 +378,7 @@ export function MultiplayerGame({
         selfId={selfId}
         hostId={room.hostId}
         showRoundState
+        hideStage={isSpeed}
         standing={standing}
         limit={10}
         title="Live standings"
