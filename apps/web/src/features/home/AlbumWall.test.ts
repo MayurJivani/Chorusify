@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { SamplerSong } from '../../api/songs';
-
-vi.mock('../../api/songs', () => ({ getSampler: vi.fn() }));
-const { buildColumns } = await import('./AlbumWall');
+import { buildColumns } from './AlbumWall';
 
 const song = (id: number, art: string): SamplerSong => ({
   id,

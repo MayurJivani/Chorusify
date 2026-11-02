@@ -415,11 +415,12 @@ body {
   );
 }
 .album-wall-caption {
-  /* Outside the wall so its fade doesn't touch it, and clear of the heading and cards. */
+  /* Outside the wall so its fade doesn't touch it, and in the empty middle of the footer. */
   position: fixed;
-  left: 16px;
-  bottom: 72px;
-  z-index: 30;
+  left: 50%;
+  bottom: 14px;
+  translate: -50% 0;
+  z-index: 60;
   display: none;
   max-width: 70vw;
   overflow: hidden;

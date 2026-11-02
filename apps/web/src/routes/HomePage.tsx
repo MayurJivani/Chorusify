@@ -1,4 +1,7 @@
 import { AlbumWall } from '../features/home/AlbumWall';
+import { LinerNotes } from '../features/home/LinerNotes';
+import { SnippetRidges } from '../features/home/SnippetRidges';
+import { getSampler, type SamplerSong } from '../api/songs';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -48,6 +51,13 @@ export function HomePage() {
   const { user, guestId } = useSession();
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [desiStreak, setDesiStreak] = useState(0);
+  const [songs, setSongs] = useState<SamplerSong[]>([]);
+
+  useEffect(() => {
+    getSampler()
+      .then((r) => setSongs(r.songs))
+      .catch(() => setSongs([]));
+  }, []);
 
   const userId = user?.id;
   useEffect(() => {
@@ -68,7 +78,7 @@ export function HomePage() {
     <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-3 px-3 pt-2 pb-4 sm:gap-8 sm:px-4 sm:pt-4 sm:pb-14">
       {/* Hero kept at its original scale and wording - it is the page's anchor, and shrinking
           it to buy vertical space made the whole page read as a settings screen. */}
-      <AlbumWall />
+      <AlbumWall songs={songs} />
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -201,6 +211,9 @@ export function HomePage() {
           ))}
         </div>
       </motion.section>
+
+      <LinerNotes songs={songs} />
+      <SnippetRidges />
     </div>
   );
 }
@@ -228,7 +241,12 @@ function DailyLink({
           {streak > 0 && ` · ${streak} day streak`}
         </span>
       </span>
-      <span className="btn-primary shrink-0 text-center !px-4 !py-1.5 !text-sm">Play</span>
+      <span className="btn-primary inline-flex shrink-0 items-center justify-center gap-1.5 !px-4 !py-1.5 !text-sm">
+        <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden="true">
+          <path d="M4 2.8v10.4a.8.8 0 0 0 1.2.7l8.6-5.2a.8.8 0 0 0 0-1.4L5.2 2.1A.8.8 0 0 0 4 2.8Z" />
+        </svg>
+        Play
+      </span>
     </Link>
   );
 }

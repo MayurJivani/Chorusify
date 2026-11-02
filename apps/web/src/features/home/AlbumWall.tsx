@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
-import { getSampler, type SamplerSong } from '../../api/songs';
+import type { SamplerSong } from '../../api/songs';
 
 const COLUMNS = 14;
 const TILES_PER_LOOP = 8;
@@ -23,18 +23,11 @@ export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
  * soft hole that follows the pointer so colour shows through; without a pointer the hole wanders.
  * Everything moves through CSS variables and playback rate, so React never re-renders on a frame.
  */
-export function AlbumWall() {
+export function AlbumWall({ songs }: { songs: SamplerSong[] }) {
   const reduced = useReducedMotion();
   const wallRef = useRef<HTMLDivElement | null>(null);
-  const [songs, setSongs] = useState<SamplerSong[]>([]);
   const [hovered, setHovered] = useState<SamplerSong | null>(null);
   const columns = useMemo(() => buildColumns(songs), [songs]);
-
-  useEffect(() => {
-    getSampler()
-      .then((r) => setSongs(r.songs))
-      .catch(() => setSongs([]));
-  }, []);
 
   const ready = columns.length > 0;
   useEffect(() => {
@@ -131,7 +124,8 @@ export function AlbumWall() {
       </div>
       {hovered && (
         <p className="album-wall-caption">
-          <strong>{hovered.title}</strong> {hovered.artist}
+          <span className="text-chorusify-accent">▶</span> <strong>{hovered.title}</strong> ·{' '}
+          {hovered.artist}
         </p>
       )}
     </>
