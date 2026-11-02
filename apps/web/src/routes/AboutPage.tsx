@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { getSampler, type SamplerSong } from '../api/songs';
+import { LinerNotes } from '../features/home/LinerNotes';
+import { SnippetRidges } from '../features/home/SnippetRidges';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 /** Every mode, in the same order the home page lists them. */
@@ -106,12 +110,22 @@ const team = [
 
 export function AboutPage() {
   usePageTitle('About');
+  const [songs, setSongs] = useState<SamplerSong[]>([]);
+  useEffect(() => {
+    getSampler()
+      .then((r) => setSongs(r.songs))
+      .catch(() => setSongs([]));
+  }, []);
+
   return (
-    <div className="mx-auto flex min-h-full max-w-2xl flex-col gap-4 sm:gap-6 px-4 py-4 sm:py-8">
+    <div className="mx-auto flex min-h-full max-w-4xl flex-col gap-4 sm:gap-6 px-4 py-4 sm:py-8">
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="mb-2">
         <h1 className="text-4xl font-extrabold gradient-text">About Chorusify</h1>
         <p className="mt-2 text-slate-400">Guess your favourite music.</p>
       </motion.div>
+
+      <LinerNotes songs={songs} />
+      <SnippetRidges />
 
       <div className="flex flex-col gap-4">
         {sections.map(({ icon, title, body, jsx }, i) => (

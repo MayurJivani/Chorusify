@@ -1,6 +1,4 @@
 import { AlbumWall } from '../features/home/AlbumWall';
-import { LinerNotes } from '../features/home/LinerNotes';
-import { SnippetRidges } from '../features/home/SnippetRidges';
 import { getSampler, type SamplerSong } from '../api/songs';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -75,7 +73,7 @@ export function HomePage() {
   // but the spare room sits underneath, so the hero rides nearer the top rather than floating in
   // the middle of the viewport.
   return (
-    <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-3 px-3 pt-2 pb-4 sm:gap-8 sm:px-4 sm:pt-4 sm:pb-14">
+    <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-3 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3">
       {/* Hero kept at its original scale and wording - it is the page's anchor, and shrinking
           it to buy vertical space made the whole page read as a settings screen. */}
       <AlbumWall songs={songs} />
@@ -83,17 +81,17 @@ export function HomePage() {
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="flex flex-col items-center gap-5 text-center"
+        className="flex flex-col items-center gap-2 text-center sm:gap-3"
       >
         <h1
           aria-label="Guess your favourite music!"
-          className="text-4xl font-black tracking-tight text-white sm:text-6xl"
+          className="text-4xl font-black tracking-tight text-white sm:text-6xl [@media(max-height:720px)]:text-3xl"
         >
           <RisingWord text="Guess" start={0} /> <RisingWord text="your" start={5} />{' '}
           <RisingWord text="favourite" start={9} className="text-purple-400" />{' '}
           <RisingWord text="music!" start={18} />
         </h1>
-        <p className="home-lede max-w-md text-sm leading-relaxed text-slate-100 sm:text-base">
+        <p className="home-lede [@media(max-height:720px)]:hidden max-w-md text-sm leading-relaxed text-slate-100 sm:text-base">
           Hear a growing snippet and name the song in as few listens as you can.
         </p>
       </motion.div>
@@ -135,10 +133,10 @@ export function HomePage() {
               Pick one →
             </span>
           </div>
-          <div className="hidden sm:block">
+          <div className="hidden sm:block [@media(max-height:720px)]:hidden">
             <ArtistModeDemo />
           </div>
-          <span className="text-xs text-slate-300 sm:text-[11px] sm:text-slate-400">
+          <span className="text-xs text-slate-300 sm:text-[11px] sm:text-slate-400 [@media(max-height:720px)]:hidden">
             Any artist → 10 of their songs
           </span>
         </Link>
@@ -156,10 +154,10 @@ export function HomePage() {
               Start a room →
             </span>
           </div>
-          <div className="hidden sm:block">
+          <div className="hidden sm:block [@media(max-height:720px)]:hidden">
             <MultiplayerDemo />
           </div>
-          <span className="text-xs text-slate-300 sm:text-[11px] sm:text-slate-400">
+          <span className="text-xs text-slate-300 sm:text-[11px] sm:text-slate-400 [@media(max-height:720px)]:hidden">
             Same song, everyone at once
           </span>
         </Link>
@@ -176,7 +174,7 @@ export function HomePage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.28 }}
-        className="flex w-full flex-col gap-4"
+        className="flex w-full flex-col gap-2 sm:gap-3"
       >
         <div className="flex items-center gap-3">
           <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/15" />
@@ -203,7 +201,7 @@ export function HomePage() {
                 <span className="block text-sm font-bold text-white sm:text-base">
                   {mode.title}
                 </span>
-                <span className="mt-0.5 hidden text-xs leading-snug text-slate-300 sm:block">
+                <span className="mt-0.5 hidden text-xs leading-snug text-slate-300 sm:block [@media(max-height:720px)]:hidden">
                   {mode.blurb}
                 </span>
               </span>
@@ -211,9 +209,6 @@ export function HomePage() {
           ))}
         </div>
       </motion.section>
-
-      <LinerNotes songs={songs} />
-      <SnippetRidges />
     </div>
   );
 }

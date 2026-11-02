@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion, useMotionValueEvent } from 'motion/react';
 import { useGameConfig } from '../../hooks/useGameConfig';
 import { useSectionProgress } from './useSectionProgress';
+import { drawRidges } from '../game/ridges';
 
 const LINES = [
   'A single note.',
@@ -11,18 +12,6 @@ const LINES = [
   'You should have it by now.',
   'Last listen. Name it.',
 ];
-
-/** Soft, repeatable bumps: the same line and moment always give the same shape. */
-function bump(x: number, line: number, time: number): number {
-  const wave = (f: number, p: number) => Math.sin(x * f + line * p + time);
-  return Math.abs(wave(19, 1.7) * 0.5 + wave(41, 2.9) * 0.3 + wave(83, 0.7) * 0.2);
-}
-
-/** A ridge's height at x (0 to 1): tall in the middle, flat at the edges, scaled by `energy`. */
-export function ridgeHeight(x: number, line: number, time: number, energy: number): number {
-  const centre = Math.exp(-(((x - 0.5) / 0.17) ** 2));
-  return centre * (0.12 + bump(x, line, time) ** 2) * energy;
-}
 
 /** The snippet ladder, drawn: each stage of the schedule adds ridges and lifts them. */
 export function SnippetRidges() {
@@ -40,8 +29,7 @@ export function SnippetRidges() {
 
   useEffect(() => {
     const element = canvas.current;
-    const context = element?.getContext('2d');
-    if (!element || !context) return;
+    if (!element) return;
     let frame = 0;
     let visible = true;
     const observer = new IntersectionObserver(([entry]) => {
@@ -50,42 +38,15 @@ export function SnippetRidges() {
     observer.observe(element);
 
     const draw = (now: number) => {
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      const width = element.clientWidth;
-      const height = element.clientHeight;
-      if (element.width !== Math.round(width * ratio)) element.width = Math.round(width * ratio);
-      if (element.height !== Math.round(height * ratio))
-        element.height = Math.round(height * ratio);
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      context.clearRect(0, 0, width, height);
-
       const p = progress.get();
-      const count = Math.round(8 + p * 28);
-      const time = reduced ? 0 : now / 1400;
-      const gap = (height * 0.72) / 36;
-      const lift = height * (0.1 + p * 0.42);
-      const steps = 110;
-      context.lineJoin = 'round';
-
-      // Back to front, each filled with the page colour so nearer ridges hide farther ones.
-      for (let line = 0; line < count; line += 1) {
-        const y = height * 0.97 - (count - 1 - line) * gap;
-        const nearest = line === count - 1;
-        context.beginPath();
-        context.moveTo(0, y);
-        for (let s = 0; s <= steps; s += 1) {
-          const x = s / steps;
-          context.lineTo(x * width, y - ridgeHeight(x, line * 1.3, time, lift));
-        }
-        context.lineTo(width, y + 2);
-        context.lineTo(0, y + 2);
-        context.closePath();
-        context.fillStyle = '#121214';
-        context.fill();
-        context.lineWidth = 1;
-        context.strokeStyle = nearest ? '#a78bfa' : 'rgba(255,255,255,0.72)';
-        context.stroke();
-      }
+      const height = element.clientHeight;
+      drawRidges(element, {
+        count: Math.round(8 + p * 28),
+        gap: (height * 0.72) / 36,
+        lift: height * (0.1 + p * 0.42),
+        time: reduced ? 0 : now / 1400,
+        ground: '#121214',
+      });
       if (!reduced) frame = requestAnimationFrame(tick);
     };
     const tick = (now: number) => {

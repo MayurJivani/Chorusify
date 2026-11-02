@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-vi.mock('../../hooks/useGameConfig', () => ({ useGameConfig: vi.fn() }));
-const { ridgeHeight } = await import('./SnippetRidges');
+import { describe, expect, it } from 'vitest';
+import { ridgeHeight } from './ridges';
 
 describe('ridgeHeight', () => {
   it('is flat at the edges and rises in the middle', () => {

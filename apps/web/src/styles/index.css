@@ -353,7 +353,7 @@ body {
   position: absolute;
   inset: 0 0 auto;
   z-index: -1;
-  height: 680px;
+  height: min(680px, 100%);
   overflow: hidden;
   pointer-events: auto;
   perspective: 1400px;
