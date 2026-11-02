@@ -18,8 +18,12 @@ export function SlotRevealCard({ slot, totalSlots, isLastSlot, onContinue }: Slo
       initial={{ opacity: 0, y: 20, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
-      className="glass flex w-full max-w-md flex-col items-center gap-5 rounded-2xl p-6 text-center"
+      className="glass relative isolate flex w-full max-w-md flex-col items-center gap-5 overflow-hidden rounded-2xl p-6 text-center"
     >
+      {/* The card takes on the colour of the record that just played. */}
+      {song.albumArtUrl && (
+        <img src={song.albumArtUrl} alt="" aria-hidden="true" className="reveal-glow" />
+      )}
       <h2
         className={`text-2xl font-extrabold ${slot.won ? 'gradient-text' : 'text-chorusify-danger'}`}
       >

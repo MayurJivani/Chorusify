@@ -349,72 +349,116 @@ body {
 
 /* The album wall on the home page. Fades out before the cards so they stay on plain ground. */
 .album-wall {
+  --tile: clamp(84px, 11vw, 150px);
   position: absolute;
   inset: 0 0 auto;
   z-index: -1;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(84px, 11vw, 150px), 1fr));
-  gap: 10px;
   height: 680px;
   overflow: hidden;
   pointer-events: auto;
-  mask: linear-gradient(#000 55%, transparent);
+  perspective: 1400px;
+  mask: linear-gradient(#000 60%, transparent);
 }
-.album-wall img {
+.album-wall-stage {
+  position: absolute;
+  inset: -6%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  animation: album-wall-in 2.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes album-wall-in {
+  from {
+    opacity: 0;
+    scale: 1.22;
+  }
+}
+.album-wall-column {
+  flex: none;
+  width: var(--tile);
+  animation: album-wall-drift linear infinite;
+  animation-name: album-wall-drift;
+  will-change: transform;
+}
+.album-wall-column-down {
+  animation-direction: reverse;
+}
+@keyframes album-wall-drift {
+  to {
+    transform: translateY(-50%);
+  }
+}
+/* Spacing lives on the tile, not the column, so half the column is exactly one loop. */
+.album-wall-column img {
+  display: block;
   width: 100%;
   aspect-ratio: 1;
+  margin-bottom: 10px;
   object-fit: cover;
   border-radius: 4px;
-}
-.album-wall > img {
-  position: relative;
-  filter: grayscale(1) brightness(0.3);
   transition:
-    filter 500ms ease,
     transform 260ms cubic-bezier(0.2, 0.9, 0.25, 1.15),
     box-shadow 260ms ease;
 }
-/* The same covers in colour, seen only through a soft circle around the pointer. */
-.album-wall-colour {
+/* Colour is the truth underneath. This is the dim layer, with a soft hole at the spotlight. */
+.album-wall-dim {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: inherit;
-  gap: inherit;
-  align-content: start;
   pointer-events: none;
-  opacity: 0;
-  filter: brightness(0.75);
-  transition: opacity 300ms ease;
-  mask: radial-gradient(circle 230px at var(--x, 50%) var(--y, 50%), #000 10%, transparent 100%);
+  backdrop-filter: grayscale(1) brightness(0.3);
+  mask: radial-gradient(
+    circle 250px at var(--x, 50%) var(--y, 40%),
+    transparent 22%,
+    rgba(0, 0, 0, 0.55) 60%,
+    #000 100%
+  );
 }
-.album-wall[data-pointer='on'] .album-wall-colour {
-  opacity: 1;
+.album-wall-caption {
+  /* Outside the wall so its fade doesn't touch it, and clear of the heading and cards. */
+  position: fixed;
+  left: 16px;
+  bottom: 72px;
+  z-index: 30;
+  display: none;
+  max-width: 70vw;
+  overflow: hidden;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: #1c1c20;
+  color: #cbd5e1;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
-.album-wall > .album-wall-lit {
-  z-index: 2;
-  filter: none;
+.album-wall-caption strong {
+  color: #fff;
 }
-/* Hover only where there is a pointer: on touch it would stick after a tap. */
 @media (hover: hover) {
-  .album-wall > img:hover {
-    z-index: 2;
-    filter: none;
-    transform: scale(1.12);
+  .album-wall-column:hover {
+    animation-play-state: paused;
+  }
+  .album-wall-column img:hover {
+    position: relative;
+    z-index: 1;
+    transform: scale(1.08);
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
-    transition-duration: 80ms, 260ms, 260ms;
+  }
+  .album-wall-caption {
+    display: block;
   }
 }
 @media (max-width: 639px) {
   .album-wall {
     height: 300px;
-    gap: 6px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .album-wall > img:hover {
-    transform: none;
+  .album-wall-stage,
+  .album-wall-column {
+    animation: none;
   }
 }
 

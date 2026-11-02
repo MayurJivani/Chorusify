@@ -75,8 +75,13 @@ export function HomePage() {
         transition={{ duration: 0.45, ease: 'easeOut' }}
         className="flex flex-col items-center gap-5 text-center"
       >
-        <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl">
-          Guess your <span className="text-purple-400">favourite</span> music!
+        <h1
+          aria-label="Guess your favourite music!"
+          className="text-4xl font-black tracking-tight text-white sm:text-6xl"
+        >
+          <RisingWord text="Guess" start={0} /> <RisingWord text="your" start={5} />{' '}
+          <RisingWord text="favourite" start={9} className="text-purple-400" />{' '}
+          <RisingWord text="music!" start={18} />
         </h1>
         <p className="home-lede max-w-md text-sm leading-relaxed text-slate-100 sm:text-base">
           Hear a growing snippet and name the song in as few listens as you can.
@@ -185,7 +190,9 @@ export function HomePage() {
                 {mode.icon}
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-bold text-white sm:text-base">{mode.title}</span>
+                <span className="block text-sm font-bold text-white sm:text-base">
+                  {mode.title}
+                </span>
                 <span className="mt-0.5 hidden text-xs leading-snug text-slate-300 sm:block">
                   {mode.blurb}
                 </span>
@@ -223,5 +230,32 @@ function DailyLink({
       </span>
       <span className="btn-primary shrink-0 text-center !px-4 !py-1.5 !text-sm">Play</span>
     </Link>
+  );
+}
+
+/** Letters rise into place one after another. Words stay whole so the heading wraps normally. */
+function RisingWord({
+  text,
+  start,
+  className = '',
+}: {
+  text: string;
+  start: number;
+  className?: string;
+}) {
+  return (
+    <span aria-hidden="true" className={`inline-block whitespace-nowrap ${className}`}>
+      {[...text].map((letter, i) => (
+        <motion.span
+          key={i}
+          className="inline-block"
+          initial={{ opacity: 0, y: '60%', rotate: 6 }}
+          animate={{ opacity: 1, y: 0, rotate: 0 }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.2 + (start + i) * 0.022 }}
+        >
+          {letter}
+        </motion.span>
+      ))}
+    </span>
   );
 }
