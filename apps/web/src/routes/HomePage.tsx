@@ -1,4 +1,3 @@
-import { Disc } from '../features/game/Disc';
 import { AlbumWall } from '../features/home/AlbumWall';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -106,18 +105,12 @@ export function HomePage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="relative z-0 mt-10 grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
+        className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
       >
         <Link
           to="/artist"
-          className="glass group relative flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:border-chorusify-accent/40 sm:p-4"
+          className="glass group flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:border-chorusify-accent/40 sm:p-4"
         >
-          <span
-            aria-hidden="true"
-            className="absolute -top-12 right-8 -z-10 transition-transform duration-300 group-hover:-translate-y-4 group-hover:rotate-45"
-          >
-            <Disc kind="vinyl" size={104} />
-          </span>
           <div className="flex items-center gap-2">
             <span aria-hidden="true" className="text-base">
               🎤
@@ -133,14 +126,8 @@ export function HomePage() {
 
         <Link
           to="/multiplayer"
-          className="glass group relative flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:border-chorusify-accent2/40 sm:p-4"
+          className="glass group flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:border-chorusify-accent2/40 sm:p-4"
         >
-          <span
-            aria-hidden="true"
-            className="absolute -top-12 right-8 -z-10 transition-transform duration-300 group-hover:-translate-y-4 group-hover:rotate-45"
-          >
-            <Disc kind="cd" size={104} />
-          </span>
           <div className="flex items-center gap-2">
             <span aria-hidden="true" className="text-base">
               ⚡
