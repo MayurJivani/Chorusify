@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { drawRidges } from './ridges';
+import { drawRidges, snippetPlayback } from './ridges';
 import { useGameConfig } from '../../hooks/useGameConfig';
 
 interface SnippetProgressBarProps {
@@ -16,23 +16,30 @@ export function SnippetProgressBar({ stageIndex }: SnippetProgressBarProps) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const reduced = useReducedMotion();
   const shown = useRef(0);
+  const swell = useRef(0);
+  const phase = useRef(0.6);
 
-  // The ridges drift gently all the time, and stand taller the more of the song is unlocked.
+  // Still at rest, flowing only while the song plays, and taller the more of it is unlocked.
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
     const target = totalStages > 1 ? clampedIndex / (totalStages - 1) : 0;
     let frame = 0;
+    let last = performance.now();
     const draw = (now: number) => {
+      const playing = snippetPlayback.playing && !reduced;
+      if (playing) phase.current += (now - last) / 420;
+      last = now;
       shown.current += (target - shown.current) * (reduced ? 1 : 0.08);
+      swell.current += ((playing ? 1 : 0) - swell.current) * 0.1;
       drawRidges(element, {
         count: 7,
         gap: 3,
-        lift: element.clientHeight * (0.18 + shown.current * 0.62),
-        time: reduced ? 0.6 : now / 1600,
+        lift: element.clientHeight * (0.18 + shown.current * 0.62 + swell.current * 0.22),
+        time: phase.current,
         ground: '#1c1c20',
       });
-      if (!reduced) frame = requestAnimationFrame(draw);
+      frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);

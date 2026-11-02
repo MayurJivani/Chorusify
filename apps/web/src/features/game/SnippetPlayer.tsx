@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Cassette } from './Cassette';
 import { Disc } from './Disc';
 import { Tonearm } from './Tonearm';
+import { snippetPlayback } from './ridges';
 
 let mediaUnlocked = false;
 
@@ -102,6 +103,13 @@ export function SnippetPlayer({
     }
     return 0.5;
   });
+
+  useEffect(() => {
+    snippetPlayback.playing = isPlaying;
+    return () => {
+      snippetPlayback.playing = false;
+    };
+  }, [isPlaying]);
 
   // Sync volume to audio element and persist to localStorage
   useEffect(() => {
@@ -356,14 +364,13 @@ export function SnippetPlayer({
             return (
               <div
                 key={i}
-                className={`w-0.5 origin-bottom rounded-full transition-colors duration-300 motion-reduce:animate-none ${
-                  isPlaying ? 'bg-chorusify-accent2 animate-pulse' : 'bg-slate-600 animate-listen'
+                className={`w-0.5 rounded-full transition-all duration-300 ${
+                  isPlaying ? 'bg-chorusify-accent2 animate-pulse' : 'bg-slate-700'
                 }`}
                 style={{
-                  height: isPlaying ? `${height}%` : `${35 + (height - 40) / 2}%`,
-                  animationDelay: `${i * (isPlaying ? 60 : 110)}ms`,
-                  // Slow when idle: a resting wave, clearly not the song playing.
-                  animationDuration: isPlaying ? `${450 + (i % 3) * 150}ms` : '2.2s',
+                  height: isPlaying ? `${height}%` : '20%',
+                  animationDelay: `${i * 60}ms`,
+                  animationDuration: `${450 + (i % 3) * 150}ms`,
                 }}
               />
             );

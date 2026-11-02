@@ -1,3 +1,6 @@
+/** True while a snippet is really playing. Set by SnippetPlayer, read each frame by the ridges. */
+export const snippetPlayback = { playing: false };
+
 /** Soft, repeatable bumps: the same line and moment always give the same shape. */
 function bump(x: number, line: number, time: number): number {
   const wave = (f: number, p: number) => Math.sin(x * f + line * p + time);
