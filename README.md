@@ -42,6 +42,8 @@
 
 _Karaoke covers, live cuts, and remixes don't make the bank. Originals only!!_
 
+**Events.** Approved hosts run a live game from their own playlist, for up to 1,000 players by QR code. Music on every phone or through the venue speakers. See [how it works](docs/ARCHITECTURE-EVENTS.md) and the [load test](docs/LOAD-TEST.md).
+
 ---
 
 ## Fandoms

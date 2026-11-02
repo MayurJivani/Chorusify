@@ -117,6 +117,7 @@ describe('event rooms', () => {
     expect(host.last('room_state').room.playerCount).toBe(1);
     expect(host.of('round_start')).toHaveLength(0);
     expect(host.last('host_round').title).toBe('Song 0');
+    expect(host.last('room_state').room.phase).toBe('playing');
     expect(a.of('round_start')).toHaveLength(1);
 
     await vi.advanceTimersByTimeAsync(LEAD);

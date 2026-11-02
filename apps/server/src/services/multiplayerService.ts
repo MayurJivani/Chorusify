@@ -1394,6 +1394,8 @@ function startRound(room: MpRoom, roundIndex: number): void {
 
   schedulePhaseEnd(room, lead + roundDuration);
   sendHostRound(room);
+  // A player reads the phase from round_start. The host's console reads it from the room.
+  if (room.event && roundIndex === 0) broadcastRoomState(room);
 }
 
 function sendRoundStart(room: MpRoom, player: MpPlayer): void {
