@@ -7,6 +7,8 @@ const START = 8;
 const END = 23;
 // Past this the needle is over the record, so letting go drops it.
 const DROP = 6;
+// Where the hub sits in the drawing. The arm turns on this point, so the hub itself never moves.
+const HUB_Y = 14 / 240;
 
 interface TonearmProps {
   playing: boolean;
@@ -24,41 +26,41 @@ export function Tonearm({ playing, progress, disabled, onToggle }: TonearmProps)
   const angleAt = (e: PointerEvent) => {
     const box = pivot.current?.getBoundingClientRect();
     if (!box) return REST;
+    const hubY = box.top + box.height * HUB_Y;
     const degrees =
-      (Math.atan2(box.left + box.width / 2 - e.clientX, e.clientY - box.top) * 180) / Math.PI;
+      (Math.atan2(box.left + box.width / 2 - e.clientX, e.clientY - hubY) * 180) / Math.PI;
     return Math.min(END, Math.max(0, degrees));
   };
 
   return (
-    <motion.div
+    <div
       ref={pivot}
       aria-hidden="true"
-      className="absolute z-10 origin-top touch-none"
+      className="absolute z-10 touch-none"
       style={{ right: '-16%', top: '-6%', width: '14%', height: '78%' }}
-      animate={{ rotate: dragAngle ?? (playing ? START + (END - START) * progress : REST) }}
-      transition={
-        dragAngle !== null ? { duration: 0 } : { type: 'spring', stiffness: 170, damping: 22 }
-      }
-      onPointerDown={(e) => {
-        if (disabled) return;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        setDragAngle(angleAt(e));
-      }}
-      onPointerMove={(e) => dragAngle !== null && setDragAngle(angleAt(e))}
-      onPointerUp={(e) => {
-        if (dragAngle === null) return;
-        const dropped = angleAt(e) > DROP;
-        setDragAngle(null);
-        if (dropped !== playing) onToggle();
-      }}
-      onPointerCancel={() => setDragAngle(null)}
     >
-      <svg
+      <motion.svg
         viewBox="0 0 40 240"
         className="h-full w-full cursor-grab overflow-visible active:cursor-grabbing"
+        style={{ originX: 0.5, originY: HUB_Y }}
+        animate={{ rotate: dragAngle ?? (playing ? START + (END - START) * progress : REST) }}
+        transition={
+          dragAngle !== null ? { duration: 0 } : { type: 'spring', stiffness: 170, damping: 22 }
+        }
+        onPointerDown={(e) => {
+          if (disabled) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setDragAngle(angleAt(e));
+        }}
+        onPointerMove={(e) => dragAngle !== null && setDragAngle(angleAt(e))}
+        onPointerUp={(e) => {
+          if (dragAngle === null) return;
+          const dropped = angleAt(e) > DROP;
+          setDragAngle(null);
+          if (dropped !== playing) onToggle();
+        }}
+        onPointerCancel={() => setDragAngle(null)}
       >
-        <circle cx="20" cy="14" r="13" fill="#26262b" stroke="#6b6b73" />
-        <circle cx="20" cy="14" r="5" fill="#a1a1aa" />
         <path
           d="M20 14 L20 186 L12 214"
           fill="none"
@@ -75,7 +77,9 @@ export function Tonearm({ playing, progress, disabled, onToggle }: TonearmProps)
           transform="rotate(14 10 222)"
           fill="#8b5cf6"
         />
-      </svg>
-    </motion.div>
+        <circle cx="20" cy="14" r="13" fill="#26262b" stroke="#6b6b73" />
+        <circle cx="20" cy="14" r="5" fill="#a1a1aa" />
+      </motion.svg>
+    </div>
   );
 }

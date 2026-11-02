@@ -17,25 +17,24 @@ export function SnippetProgressBar({ stageIndex }: SnippetProgressBarProps) {
   const reduced = useReducedMotion();
   const shown = useRef(0);
 
-  // The more you have unlocked, the taller the ridges. Eased once per stage, then it stops:
-  // this shows how much is unlocked, not what is playing.
+  // The ridges drift gently all the time, and stand taller the more of the song is unlocked.
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
     const target = totalStages > 1 ? clampedIndex / (totalStages - 1) : 0;
     let frame = 0;
-    const draw = () => {
-      shown.current += (target - shown.current) * (reduced ? 1 : 0.12);
+    const draw = (now: number) => {
+      shown.current += (target - shown.current) * (reduced ? 1 : 0.08);
       drawRidges(element, {
         count: 7,
         gap: 3,
         lift: element.clientHeight * (0.18 + shown.current * 0.62),
-        time: 0.6,
+        time: reduced ? 0.6 : now / 1600,
         ground: '#1c1c20',
       });
-      if (Math.abs(target - shown.current) > 0.002) frame = requestAnimationFrame(draw);
+      if (!reduced) frame = requestAnimationFrame(draw);
     };
-    draw();
+    frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [clampedIndex, totalStages, reduced]);
 
