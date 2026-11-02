@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { lazy, type ComponentType } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
 import { SessionProvider } from './hooks/useSession';
@@ -9,38 +9,64 @@ import { ToastProvider } from './hooks/useToast';
 import { KonamiVinylPlayer } from './features/easter-eggs/KonamiVinylPlayer';
 import { SecretDJMode } from './features/easter-eggs/SecretDJMode';
 
+/**
+ * A tab left open across a deploy asks for chunk names that no longer exist. One reload picks up the
+ * new build; the flag stops a genuinely broken build reloading forever.
+ */
+function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  return lazy(async () => {
+    try {
+      const module = await load();
+      sessionStorage.removeItem('chunk-reload');
+      return { default: module[name] };
+    } catch (err) {
+      if (sessionStorage.getItem('chunk-reload')) throw err;
+      sessionStorage.setItem('chunk-reload', '1');
+      window.location.reload();
+      return new Promise<never>(() => undefined);
+    }
+  });
+}
+
 // Every route but the home page loads on demand: someone scanning a QR code at an event should
 // not download the admin console to answer a music question.
-const PlayPage = lazy(() => import('./routes/PlayPage').then((m) => ({ default: m.PlayPage })));
-const StatsPage = lazy(() => import('./routes/StatsPage').then((m) => ({ default: m.StatsPage })));
-const LeaderboardPage = lazy(() => import('./routes/LeaderboardPage').then((m) => ({ default: m.LeaderboardPage })));
-const LoginPage = lazy(() => import('./routes/LoginPage').then((m) => ({ default: m.LoginPage })));
-const RegisterPage = lazy(() => import('./routes/RegisterPage').then((m) => ({ default: m.RegisterPage })));
-const AboutPage = lazy(() => import('./routes/AboutPage').then((m) => ({ default: m.AboutPage })));
-const PrivacyPage = lazy(() => import('./routes/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
-const TermsPage = lazy(() => import('./routes/TermsPage').then((m) => ({ default: m.TermsPage })));
-const CookiePolicyPage = lazy(() => import('./routes/CookiePolicyPage').then((m) => ({ default: m.CookiePolicyPage })));
-const ArtistSearchPage = lazy(() => import('./routes/ArtistSearchPage').then((m) => ({ default: m.ArtistSearchPage })));
-const ArtistPlayPage = lazy(() => import('./routes/ArtistPlayPage').then((m) => ({ default: m.ArtistPlayPage })));
-const CategoryPickerPage = lazy(() => import('./routes/CategoryPickerPage').then((m) => ({ default: m.CategoryPickerPage })));
-const SoundtrackPickerPage = lazy(() => import('./routes/SoundtrackPickerPage').then((m) => ({ default: m.SoundtrackPickerPage })));
-const CategoryPlayPage = lazy(() => import('./routes/CategoryPlayPage').then((m) => ({ default: m.CategoryPlayPage })));
-const SurvivalPage = lazy(() => import('./routes/SurvivalPage').then((m) => ({ default: m.SurvivalPage })));
-const EraPlayPage = lazy(() => import('./routes/EraPlayPage').then((m) => ({ default: m.EraPlayPage })));
-const DuelsPage = lazy(() => import('./routes/DuelsPage').then((m) => ({ default: m.DuelsPage })));
-const AdminPage = lazy(() => import('./routes/AdminPage').then((m) => ({ default: m.AdminPage })));
-const NotFoundPage = lazy(() => import('./routes/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
-const MultiplayerHomePage = lazy(() => import('./routes/MultiplayerHomePage').then((m) => ({ default: m.MultiplayerHomePage })));
-const MultiplayerRoomPage = lazy(() => import('./routes/MultiplayerRoomPage').then((m) => ({ default: m.MultiplayerRoomPage })));
-const FriendsPage = lazy(() => import('./routes/FriendsPage').then((m) => ({ default: m.FriendsPage })));
-const ForgotPasswordPage = lazy(() => import('./routes/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
-const ProfilePage = lazy(() => import('./routes/ProfilePage').then((m) => ({ default: m.ProfilePage })));
-const FandomsPage = lazy(() => import('./routes/FandomsPage').then((m) => ({ default: m.FandomsPage })));
-const FandomDetailPage = lazy(() => import('./routes/FandomDetailPage').then((m) => ({ default: m.FandomDetailPage })));
-const EventsPage = lazy(() => import('./routes/EventsPage').then((m) => ({ default: m.EventsPage })));
-const EventConsolePage = lazy(() =>
-  import('./routes/EventConsolePage').then((m) => ({ default: m.EventConsolePage })),
+const PlayPage = page(() => import('./routes/PlayPage'), 'PlayPage');
+const StatsPage = page(() => import('./routes/StatsPage'), 'StatsPage');
+const LeaderboardPage = page(() => import('./routes/LeaderboardPage'), 'LeaderboardPage');
+const LoginPage = page(() => import('./routes/LoginPage'), 'LoginPage');
+const RegisterPage = page(() => import('./routes/RegisterPage'), 'RegisterPage');
+const AboutPage = page(() => import('./routes/AboutPage'), 'AboutPage');
+const PrivacyPage = page(() => import('./routes/PrivacyPage'), 'PrivacyPage');
+const TermsPage = page(() => import('./routes/TermsPage'), 'TermsPage');
+const CookiePolicyPage = page(() => import('./routes/CookiePolicyPage'), 'CookiePolicyPage');
+const ArtistSearchPage = page(() => import('./routes/ArtistSearchPage'), 'ArtistSearchPage');
+const ArtistPlayPage = page(() => import('./routes/ArtistPlayPage'), 'ArtistPlayPage');
+const CategoryPickerPage = page(() => import('./routes/CategoryPickerPage'), 'CategoryPickerPage');
+const SoundtrackPickerPage = page(
+  () => import('./routes/SoundtrackPickerPage'),
+  'SoundtrackPickerPage',
 );
+const CategoryPlayPage = page(() => import('./routes/CategoryPlayPage'), 'CategoryPlayPage');
+const SurvivalPage = page(() => import('./routes/SurvivalPage'), 'SurvivalPage');
+const EraPlayPage = page(() => import('./routes/EraPlayPage'), 'EraPlayPage');
+const DuelsPage = page(() => import('./routes/DuelsPage'), 'DuelsPage');
+const AdminPage = page(() => import('./routes/AdminPage'), 'AdminPage');
+const NotFoundPage = page(() => import('./routes/NotFoundPage'), 'NotFoundPage');
+const MultiplayerHomePage = page(
+  () => import('./routes/MultiplayerHomePage'),
+  'MultiplayerHomePage',
+);
+const MultiplayerRoomPage = page(
+  () => import('./routes/MultiplayerRoomPage'),
+  'MultiplayerRoomPage',
+);
+const FriendsPage = page(() => import('./routes/FriendsPage'), 'FriendsPage');
+const ForgotPasswordPage = page(() => import('./routes/ForgotPasswordPage'), 'ForgotPasswordPage');
+const ProfilePage = page(() => import('./routes/ProfilePage'), 'ProfilePage');
+const FandomsPage = page(() => import('./routes/FandomsPage'), 'FandomsPage');
+const FandomDetailPage = page(() => import('./routes/FandomDetailPage'), 'FandomDetailPage');
+const EventsPage = page(() => import('./routes/EventsPage'), 'EventsPage');
+const EventConsolePage = page(() => import('./routes/EventConsolePage'), 'EventConsolePage');
 
 const router = createBrowserRouter([
   {
