@@ -8,9 +8,7 @@ import { useSession } from '../hooks/useSession';
 import { getMyStats } from '../api/stats';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { ArtistModeDemo, MultiplayerDemo } from '../features/home/ModeDemos';
-import { QuickRound, useSampler } from '../features/home/QuickRound';
 import type { StatsResponse } from '../types/api';
-
 
 /**
  * The remaining modes.
@@ -50,16 +48,19 @@ export function HomePage() {
   const countdown = useCountdownToNextPuzzle();
   const { user, guestId } = useSession();
   const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [desiStreak, setDesiStreak] = useState(0);
 
   const userId = user?.id;
   useEffect(() => {
     getMyStats()
       .then(setStats)
       .catch(() => setStats(null));
+    getMyStats('desi')
+      .then((desi) => setDesiStreak(desi.currentStreak))
+      .catch(() => setDesiStreak(0));
   }, [userId, guestId]);
 
   const streak = stats?.currentStreak ?? 0;
-  const songs = useSampler();
 
   // Padding is deliberately top-light: the block still centres while it is short enough to fit,
   // but the spare room sits underneath, so the hero rides nearer the top rather than floating in
@@ -68,42 +69,55 @@ export function HomePage() {
     <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-4 px-4 pt-2 pb-8 sm:gap-8 sm:pt-4 sm:pb-14">
       {/* Hero kept at its original scale and wording - it is the page's anchor, and shrinking
           it to buy vertical space made the whole page read as a settings screen. */}
-      <AlbumWall songs={songs} />
+      <AlbumWall />
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
         className="flex flex-col items-center gap-5 text-center"
       >
-        <div className="relative flex h-24 w-44 items-center justify-center" aria-hidden="true">
-          <span className="absolute left-0 top-0 -rotate-6">
-            <Disc kind="cd" size={92} />
-          </span>
-          <span className="absolute right-0 top-0">
-            <Disc size={92} spinning />
-          </span>
-        </div>
         <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl">
           Guess your <span className="text-purple-400">favourite</span> music!
         </h1>
-        <p className="max-w-md text-base leading-relaxed text-slate-400">
+        <p className="home-lede max-w-md text-base leading-relaxed text-slate-100">
           Hear a growing snippet and name the song in as few listens as you can.
         </p>
       </motion.div>
 
-      {songs.length > 0 && <QuickRound songs={songs} />}
+      {/* The two dailies come first: they are what brings people back tomorrow. */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        aria-label="Today's puzzles"
+        className="flex w-full flex-col gap-2"
+      >
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+          <DailyLink to="/play" title="Daily" line="5 English songs" streak={streak} />
+          <DailyLink to="/desi" title="Desi Daily" line="5 Indian songs" streak={desiStreak} />
+        </div>
+        <p className="home-lede text-center text-xs text-slate-200">
+          Same songs for everyone. New ones in <span className="font-mono">{countdown}</span>
+        </p>
+      </motion.section>
 
-      {/* The two headline modes, each showing what happens rather than describing it */}
+      {/* The two deepest modes, each showing what happens rather than describing it */}
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
+        className="relative z-0 mt-10 grid w-full grid-cols-1 gap-3 sm:grid-cols-2"
       >
         <Link
           to="/artist"
-          className="glass group flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-chorusify-accent/40 sm:p-4"
+          className="glass group relative flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:border-chorusify-accent/40 sm:p-4"
         >
+          <span
+            aria-hidden="true"
+            className="absolute -top-12 right-8 -z-10 transition-transform duration-300 group-hover:-translate-y-4 group-hover:rotate-45"
+          >
+            <Disc kind="vinyl" size={104} />
+          </span>
           <div className="flex items-center gap-2">
             <span aria-hidden="true" className="text-base">
               🎤
@@ -119,8 +133,14 @@ export function HomePage() {
 
         <Link
           to="/multiplayer"
-          className="glass group flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-chorusify-accent2/40 sm:p-4"
+          className="glass group relative flex flex-col gap-2.5 rounded-2xl border border-white/10 p-3.5 transition-all duration-300 hover:border-chorusify-accent2/40 sm:p-4"
         >
+          <span
+            aria-hidden="true"
+            className="absolute -top-12 right-8 -z-10 transition-transform duration-300 group-hover:-translate-y-4 group-hover:rotate-45"
+          >
+            <Disc kind="cd" size={104} />
+          </span>
           <div className="flex items-center gap-2">
             <span aria-hidden="true" className="text-base">
               ⚡
@@ -150,31 +170,28 @@ export function HomePage() {
       >
         <div className="flex items-center gap-3">
           <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/15" />
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-purple-400">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-purple-300 [text-shadow:0_1px_6px_#000]">
             More ways to play
           </h2>
           <span className="h-px flex-1 bg-gradient-to-l from-transparent to-white/15" />
         </div>
 
-        {/* Two-up on phones rather than the original single column: same card, but four of
-            them stacked full-width added ~330px of scrolling to a page whose whole point is
-            that the modes are reachable without any. */}
-        <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {SECONDARY_MODES.map((mode) => (
             <Link
               key={mode.to}
               to={mode.to}
-              className="glass group flex flex-col gap-3 rounded-2xl border border-white/10 p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-white/25 sm:p-5"
+              className="glass group flex items-center gap-3 rounded-2xl border border-white/10 p-3 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-white/30"
             >
               <span
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-xl"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-lg"
                 aria-hidden="true"
               >
                 {mode.icon}
               </span>
-              <span>
+              <span className="min-w-0">
                 <span className="block font-bold text-white">{mode.title}</span>
-                <span className="mt-1 block text-sm leading-relaxed text-slate-400">
+                <span className="mt-0.5 block text-xs leading-snug text-slate-300">
                   {mode.blurb}
                 </span>
               </span>
@@ -182,62 +199,34 @@ export function HomePage() {
           ))}
         </div>
       </motion.section>
-
-      {/*
-        The daily, demoted from the page's main button to a single strip.
-        It still needs to be reachable and still needs to show the streak - that is what brings
-        people back tomorrow - but as the loudest thing on the page it was absorbing nearly every
-        first click, so nobody discovered the modes above.
-      */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.36 }}
-        className="w-full"
-      >
-        <Link
-          to="/play"
-          className="glass flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 transition-all duration-200 hover:border-white/25"
-        >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="text-base" aria-hidden="true">
-              📅
-            </span>
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-white">
-                Today&apos;s daily challenge
-              </span>
-              <span className="block text-[11px] text-slate-400">
-                {streak > 0 ? (
-                  <>
-                    <span aria-hidden="true">🔥</span>{' '}
-                    <span className="font-semibold text-slate-300">{streak}</span> day streak · next
-                    in <span className="font-mono">{countdown}</span>
-                  </>
-                ) : (
-                  <>
-                    One puzzle, everyone gets the same · next in{' '}
-                    <span className="font-mono">{countdown}</span>
-                  </>
-                )}
-              </span>
-            </div>
-          </div>
-          <span className="shrink-0 text-sm font-semibold text-slate-300">Play →</span>
-        </Link>
-        <Link
-          to="/desi"
-          className="glass mt-2 flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 transition-all duration-200 hover:border-white/25"
-        >
-          <div className="min-w-0">
-            <span className="block text-sm font-semibold text-white">Desi Daily</span>
-            <span className="block text-[11px] text-slate-400">
-              Bollywood, Hindi classics, indie and Punjabi. Its own five songs and streak.
-            </span>
-          </div>
-          <span className="shrink-0 text-sm font-semibold text-slate-300">Play →</span>
-        </Link>
-      </motion.div>
     </div>
+  );
+}
+
+function DailyLink({
+  to,
+  title,
+  line,
+  streak,
+}: {
+  to: string;
+  title: string;
+  line: string;
+  streak: number;
+}) {
+  return (
+    <Link
+      to={to}
+      className="glass flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-5 py-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
+    >
+      <span className="min-w-0">
+        <span className="block text-xl font-black text-white">{title}</span>
+        <span className="block text-sm text-slate-300">
+          {line}
+          {streak > 0 && ` · ${streak} day streak`}
+        </span>
+      </span>
+      <span className="btn-primary shrink-0 !px-4 !py-1.5 !text-sm">Play</span>
+    </Link>
   );
 }

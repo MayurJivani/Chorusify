@@ -17,7 +17,3 @@ export interface SamplerSong extends SongSearchResult {
 export function getSampler(): Promise<{ songs: SamplerSong[]; total: number }> {
   return apiRequest('/songs/sampler');
 }
-
-export function getSongPreview(id: number): Promise<{ previewUrl: string }> {
-  return apiRequest(`/songs/${id}/preview`);
-}

@@ -6,7 +6,7 @@ Generated from the database by `npm run song-bank report`, 2026-11-02.
 - **Artists represented:** 751
 - **Missing metadata:** album 0, year 2, artwork 0, ISRC 0
 - **Duplicates:** 0 by title and artist, 0 by ISRC
-- **Last live preview check:** not run
+- **Last live preview check:** 2026-11-02, 0 unplayable, 0 problems in total
 - **Most represented:** Pritam (50), Sachin-Jigar (26), Sonu Nigam (22), Udit Narayan (22), Lata Mangeshkar (21), A.R. Rahman (21), Vishal-Shekhar (20), Shashwat Sachdev (20), Badshah (19), Harris Jayaraj (17)
 
 Genre, language and region come from the scene an artist is seeded under in `seeds.json`; Deezer does not publish language. Everything else comes from Deezer. Karaoke, tribute, remix, live and acoustic versions are filtered out, in line with the game rule of originals only.

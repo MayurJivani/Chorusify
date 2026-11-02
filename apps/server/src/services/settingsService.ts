@@ -149,6 +149,15 @@ export const SETTING_DEFS = {
     control: { kind: 'boolean' },
   } satisfies SettingDef<boolean>,
 
+  homeWallSongIds: {
+    group: 'daily',
+    label: 'Home page albums',
+    help: 'The songs whose covers fill the home page wall, in order. Empty shows a random selection. Edited on the Home albums tab.',
+    schema: z.array(positiveInt(1, 2147483647)).max(60),
+    default: [] as number[],
+    control: { kind: 'numberList', minLength: 0, maxLength: 60, min: 1, max: 2147483647 },
+  } satisfies SettingDef<number[]>,
+
   artistPoolRetentionDays: {
     group: 'housekeeping',
     label: 'Artist cache retention',

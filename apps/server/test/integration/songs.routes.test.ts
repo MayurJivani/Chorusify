@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { db } from '../../src/db/client';
+import { resetSetting, updateSettings } from '../../src/services/settingsService';
 import { dailyPuzzles, gameResults, songs } from '../../src/db/schema';
 
 const app = createApp();
@@ -107,5 +108,28 @@ describe('GET /api/songs/search — daily answers stay searchable', () => {
     const res = await request(app).get('/api/songs/search').query({ q: 'Never' });
 
     expect(res.body.results).toHaveLength(0);
+  });
+});
+
+describe('GET /api/songs/sampler', () => {
+  it('returns the admin picks in their chosen order', async () => {
+    const rows = await db
+      .insert(songs)
+      .values(
+        ['a', 'b', 'c'].map((n) => ({
+          title: `Wall ${n}`,
+          artist: 'Someone',
+          deezerTrackId: `wall-${n}`,
+          previewUrl: 'https://example.test/p.mp3',
+          albumArtUrl: `https://example.test/${n}.jpg`,
+          durationSeconds: 200,
+        })),
+      )
+      .returning();
+    const picks = [rows[2]!.id, rows[0]!.id];
+    await updateSettings([{ key: 'homeWallSongIds', value: picks }], null);
+    const res = await request(app).get('/api/songs/sampler');
+    await resetSetting('homeWallSongIds');
+    expect(res.body.songs.map((s: { id: number }) => s.id)).toEqual(picks);
   });
 });

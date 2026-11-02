@@ -87,7 +87,8 @@ export function SettingsPanel() {
       )}
 
       {GROUP_ORDER.map((group) => {
-        const items = settings.filter((s) => s.group === group);
+        // The home albums have their own tab: a list of raw song ids means nothing here.
+        const items = settings.filter((s) => s.group === group && s.key !== 'homeWallSongIds');
         if (items.length === 0) return null;
         return (
           <section key={group} className="flex flex-col gap-3">

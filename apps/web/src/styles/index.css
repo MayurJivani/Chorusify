@@ -347,17 +347,6 @@ body {
   flex-shrink: 0;
 }
 
-/* The solo player's record uses the same surface, on its existing turntable markup. */
-.disc-vinyl-face {
-  background:
-    radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.75) 54.5%, transparent 55.5%),
-    radial-gradient(circle, transparent 66%, rgba(0, 0, 0, 0.75) 66.5%, transparent 67.5%),
-    repeating-radial-gradient(circle, #101012 0 1px, #1a1a1d 1px 2px, #0c0c0e 2px 3px);
-}
-.disc-label-blank {
-  background: radial-gradient(circle at 35% 30%, #a78bfa, #6d3fe0 65%, #4c1d95);
-}
-
 /* The album wall on the home page. Fades out before the cards so they stay on plain ground. */
 .album-wall {
   position: absolute;
@@ -368,40 +357,78 @@ body {
   gap: 10px;
   height: 680px;
   overflow: hidden;
+  pointer-events: auto;
   mask: linear-gradient(#000 55%, transparent);
 }
 .album-wall img {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 6px;
-  filter: grayscale(1) brightness(0.32);
+  border-radius: 4px;
+}
+.album-wall > img {
+  position: relative;
+  filter: grayscale(1) brightness(0.3);
   transition:
     filter 500ms ease,
-    transform 300ms ease;
+    transform 260ms cubic-bezier(0.2, 0.9, 0.25, 1.15),
+    box-shadow 260ms ease;
 }
-/* Hovering shows the cover in full colour, and so does the one lit by itself. */
-.album-wall img:hover,
-.album-wall-lit {
+/* The same covers in colour, seen only through a soft circle around the pointer. */
+.album-wall-colour {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: inherit;
+  gap: inherit;
+  align-content: start;
+  pointer-events: none;
+  opacity: 0;
+  filter: brightness(0.75);
+  transition: opacity 300ms ease;
+  mask: radial-gradient(circle 230px at var(--x, 50%) var(--y, 50%), #000 10%, transparent 100%);
+}
+.album-wall[data-pointer='on'] .album-wall-colour {
+  opacity: 1;
+}
+.album-wall > img:hover,
+.album-wall > .album-wall-lit {
+  z-index: 2;
   filter: none;
 }
-.album-wall img:hover {
-  transform: scale(1.06);
-  transition-duration: 80ms;
+.album-wall > img:hover {
+  transform: scale(1.12);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+  transition-duration: 80ms, 260ms, 260ms;
 }
-/* The wall sits behind the page, so empty parts of the page let the pointer through to it. */
+@media (prefers-reduced-motion: reduce) {
+  .album-wall > img:hover {
+    transform: none;
+  }
+}
+
+/* The wall sits behind the page, so empty parts of the page let the pointer through to it.
+   Everything that is a component stays solid and high contrast above it. */
 .home-over {
   pointer-events: none;
 }
 .home-over a,
 .home-over button,
 .home-over input,
-.home-over section,
-.home-over audio {
+.home-over section {
   pointer-events: auto;
 }
-.home-over h1 {
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+.home-over h1,
+.home-lede {
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 2px 24px rgba(0, 0, 0, 0.9);
+}
+.home-over .glass {
+  background-color: #1c1c20;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
 }
 .reveal-glow {
   position: absolute;

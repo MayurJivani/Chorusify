@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Cassette } from './Cassette';
+import { Disc } from './Disc';
 import { Tonearm } from './Tonearm';
 
 let mediaUnlocked = false;
@@ -310,37 +311,17 @@ export function SnippetPlayer({
               }}
             />
           )}
-          <div
+          {/* Stepped down on small screens: at 192px the record plus the transport, pips, input
+              and guess list overflowed a 375x812 viewport and cut off the Skip button. */}
+          <button
+            type="button"
             onClick={handlePlayPause}
-            className={
-              'relative cursor-pointer select-none ' +
-              // Stepped down on small screens: at 192px the record plus the transport, pips,
-              // input and guess list overflowed a 375x812 viewport and cut off the Skip button.
-              'w-32 h-32 sm:w-48 sm:h-48 lg:w-56 lg:h-56 rounded-full ' +
-              'shadow-[0_20px_50px_rgba(0,0,0,0.6)] border-4 border-neutral-900 ' +
-              'transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] ' +
-              'disc-vinyl-face ' +
-              (isPlaying ? 'animate-[spin_12s_linear_infinite] ' : '') +
-              (disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : '')
-            }
-            aria-label={isPlaying ? 'Playing snippet' : 'Play snippet'}
+            disabled={disabled}
+            aria-label={isPlaying ? 'Stop the snippet' : 'Play the snippet'}
+            className="block h-32 w-32 rounded-full transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56"
           >
-            {/* Inner label with artist picture */}
-            <div className="absolute inset-[30%] rounded-full border-[3px] border-neutral-950 bg-neutral-900 shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)] flex items-center justify-center overflow-hidden">
-              {artistPictureUrl ? (
-                <img
-                  src={artistPictureUrl}
-                  alt=""
-                  className="absolute inset-0 h-full w-full rounded-full object-cover"
-                />
-              ) : (
-                <span className="disc-label-blank absolute inset-0" aria-hidden />
-              )}
-              {/* Center spindle hole */}
-              <div className="absolute w-2 h-2 rounded-full bg-neutral-950 border border-neutral-800 z-20 shadow-md" />
-              <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none" />
-            </div>
-          </div>
+            <Disc size="100%" spinning={isPlaying} art={artistPictureUrl} />
+          </button>
         </div>
       )}
 

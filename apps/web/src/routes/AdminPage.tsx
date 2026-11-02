@@ -7,6 +7,7 @@ import { SchedulePanel } from '../features/admin/SchedulePanel';
 import { UsersPanel } from '../features/admin/UsersPanel';
 import { MultiplayerPanel } from '../features/admin/MultiplayerPanel';
 import { SongsPanel } from '../features/admin/SongsPanel';
+import { HomeAlbumsPanel } from '../features/admin/HomeAlbumsPanel';
 import { CardsPanel } from '../features/admin/CardsPanel';
 import { PoolsPanel } from '../features/admin/PoolsPanel';
 import { ActivityPanel } from '../features/admin/ActivityPanel';
@@ -15,6 +16,7 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
 
 type Tab =
+  | 'home'
   | 'overview'
   | 'activity'
   | 'settings'
@@ -35,6 +37,7 @@ const TABS: [Tab, string][] = [
   ['hosts', 'Event hosts'],
   ['multiplayer', 'Multiplayer'],
   ['songs', 'Song bank'],
+  ['home', 'Home albums'],
   ['pools', 'Categories'],
   ['cards', 'Cards'],
 ];
@@ -113,6 +116,7 @@ export function AdminPage() {
       {tab === 'hosts' && <EventHostsPanel />}
       {tab === 'multiplayer' && <MultiplayerPanel />}
       {tab === 'songs' && <SongsPanel />}
+      {tab === 'home' && <HomeAlbumsPanel />}
       {tab === 'activity' && <ActivityPanel />}
       {tab === 'pools' && <PoolsPanel />}
       {tab === 'cards' && <CardsPanel />}
