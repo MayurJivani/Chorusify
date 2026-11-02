@@ -548,32 +548,6 @@ main:has(.album-wall) {
     --size: clamp(130px, 25vh, 190px);
   }
 }
-.record-sleeve {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  margin-right: 30%;
-}
-.record-sleeve-disc {
-  position: absolute;
-  inset: 3%;
-  transform: translateX(36%);
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35));
-  transition: transform 500ms cubic-bezier(0.2, 0.9, 0.25, 1.1);
-}
-.record-sleeve-cover {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: 3px;
-  background: linear-gradient(135deg, #3b2a6b, #17151f);
-  box-shadow: 6px 10px 26px rgba(0, 0, 0, 0.7);
-}
-.record-sleeve-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
 .jewel {
   position: relative;
   width: 100%;
@@ -665,23 +639,14 @@ main:has(.album-wall) {
   .tape-label {
     font-size: 8px;
   }
-  .record-sleeve {
-    width: 74%;
-  }
 }
 @media (hover: hover) {
-  .about-object:hover .record-sleeve-disc {
-    transform: translateX(56%) rotate(50deg);
-  }
   .about-object:hover .jewel-lid {
     transform: rotateY(-62deg);
   }
   .about-object:hover .tape-reel {
     animation-play-state: running;
   }
-}
-.about-object-open .record-sleeve-disc {
-  transform: translateX(56%) rotate(50deg);
 }
 .about-object-open .jewel-lid {
   transform: rotateY(-62deg);
@@ -715,7 +680,6 @@ main:has(.album-wall) {
   rotate: 360deg;
 }
 @media (prefers-reduced-motion: reduce) {
-  .record-sleeve-disc,
   .jewel-lid,
   .about-wordmark-disc {
     transition: none;
@@ -723,4 +687,31 @@ main:has(.album-wall) {
   .tape-reel {
     animation: none;
   }
+}
+
+.lyric-strip .lyric-line {
+  font-size: clamp(1.05rem, 2.1vw, 1.9rem);
+}
+.lyric-line-plain .lyric-word {
+  color: #fff;
+  background: none;
+}
+/* A white pressing, the same colour as the letters, so it reads as the o of the name. */
+.about-wordmark-disc .disc-vinyl .disc-body {
+  background:
+    radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.22) 54.5%, transparent 55.5%),
+    radial-gradient(circle, transparent 66%, rgba(0, 0, 0, 0.22) 66.5%, transparent 67.5%),
+    repeating-radial-gradient(circle, #e5e5e5 0 1px, #d2d2d2 1px 2px, #ececec 2px 3px);
+  box-shadow: none;
+}
+.about-wordmark-disc .disc-label {
+  background: #121214;
+  box-shadow: none;
+}
+.about-wordmark-disc .disc-hole {
+  background: #e5e5e5;
+  box-shadow: none;
+}
+.about-wordmark-disc .disc {
+  box-shadow: none;
 }

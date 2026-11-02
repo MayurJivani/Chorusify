@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { getSampler } from '../api/songs';
+import { LyricStrip } from '../features/about/LyricStrip';
 import { Disc } from '../features/game/Disc';
 import { usePageTitle } from '../hooks/usePageTitle';
 
@@ -91,24 +92,8 @@ export function AboutPage() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-6xl flex-col justify-between gap-4 overflow-hidden px-4 pt-4 sm:pt-8 lg:px-8">
-      <div className="grid gap-4 sm:grid-cols-3 sm:gap-8">
-        <Piece
-          title="Name it fast"
-          object={
-            <div className="record-sleeve">
-              <span className="record-sleeve-disc">
-                <Disc size="100%" art={covers[0]} />
-              </span>
-              <div className="record-sleeve-cover">
-                {covers[0] && <img src={covers[0]} alt="" loading="lazy" />}
-              </div>
-            </div>
-          }
-        >
-          Hear a snippet, then name the song in as few seconds as you can. Hear more is free, except
-          on the dailies, where it uses a try.
-        </Piece>
-
+      <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr] sm:gap-6">
+        <LyricStrip cover={covers[0]} />
         <Piece title="Nine ways to play" object={<JewelCase cover={covers[1]} />}>
           {MODES.map(([to, name], i) => (
             <span key={to}>
