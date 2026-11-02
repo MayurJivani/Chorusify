@@ -366,12 +366,12 @@ body {
   justify-content: center;
   gap: 10px;
   transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
-  animation: album-wall-in 2.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: album-wall-in 1.6s ease-out both;
 }
 @keyframes album-wall-in {
   from {
     opacity: 0;
-    scale: 1.22;
+    scale: 1.06;
   }
 }
 .album-wall-column {
@@ -397,9 +397,14 @@ body {
   margin-bottom: 10px;
   object-fit: cover;
   border-radius: 4px;
+  opacity: 0;
   transition:
-    transform 260ms cubic-bezier(0.2, 0.9, 0.25, 1.15),
-    box-shadow 260ms ease;
+    opacity 700ms ease,
+    transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 420ms ease;
+}
+.album-wall-column img.album-wall-loaded {
+  opacity: 1;
 }
 /* Colour is the truth underneath. This is the dim layer, with a soft hole at the spotlight. */
 .album-wall-dim {
@@ -438,9 +443,6 @@ body {
   color: #fff;
 }
 @media (hover: hover) {
-  .album-wall-column:hover {
-    animation-play-state: paused;
-  }
   .album-wall-column img:hover {
     position: relative;
     z-index: 1;
@@ -537,16 +539,45 @@ main:has(.album-wall) {
 }
 
 /* The About page: real objects from a music shelf. */
-.about-object {
-  --size: clamp(92px, 24vw, 104px);
-  flex: none;
-  width: var(--size);
+.about-sleeve {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
   cursor: pointer;
 }
-@media (min-width: 640px) {
-  .about-object {
-    --size: clamp(130px, 25vh, 190px);
+.about-sleeve-disc {
+  position: absolute;
+  inset: 3%;
+  transform: translateX(26%);
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35));
+  transition: transform 700ms cubic-bezier(0.2, 0.9, 0.25, 1.05);
+}
+.about-sleeve-cover {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #26262b;
+  box-shadow: 8px 14px 36px rgba(0, 0, 0, 0.75);
+}
+.about-sleeve-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.about-sleeve-out .about-sleeve-disc {
+  transform: translateX(40%) rotate(70deg);
+}
+@media (hover: hover) {
+  .about-sleeve:hover .about-sleeve-disc {
+    transform: translateX(40%) rotate(70deg);
   }
+  .jewel:hover .jewel-lid {
+    transform: rotateY(-62deg);
+  }
+}
+.jewel-open .jewel-lid {
+  transform: rotateY(-62deg);
 }
 .jewel {
   position: relative;
@@ -592,126 +623,135 @@ main:has(.album-wall) {
     transparent calc(var(--shine, 30%) + 22%)
   );
 }
-.tape {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6%;
-  width: 150%;
-  aspect-ratio: 1.58;
-  padding: 7%;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #2f2f36, #1a1a1f);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    6px 10px 26px rgba(0, 0, 0, 0.7);
-}
-.tape-label {
-  overflow: hidden;
-  padding: 2% 5%;
-  border-radius: 2px;
-  background: #8b5cf6;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.tape-window {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: space-around;
-  min-height: 0;
-  border-radius: 3px;
-  background: #0a0a0c;
-}
-.tape-reel {
-  height: 72%;
-  aspect-ratio: 1;
-  border: 3px dashed #d4d4d8;
-  border-radius: 50%;
-  animation: disc-turn 2.4s linear infinite paused;
-}
-@media (max-width: 639px) {
-  .tape {
-    width: 100%;
-  }
-  .tape-label {
-    font-size: 8px;
-  }
-}
-@media (hover: hover) {
-  .about-object:hover .jewel-lid {
-    transform: rotateY(-62deg);
-  }
-  .about-object:hover .tape-reel {
-    animation-play-state: running;
-  }
-}
-.about-object-open .jewel-lid {
-  transform: rotateY(-62deg);
-}
-.about-object-open .tape-reel {
-  animation-play-state: running;
-}
-/* Sized by height as well as width, so the whole name always shows without scrolling. */
-.about-wordmark {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  padding-bottom: 0.1em;
-  font-size: min(19vw, 30vh);
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: -0.05em;
-  color: #e5e5e5;
-  white-space: nowrap;
-}
-/* Sits on the baseline at the letters' height, so it reads as the o of the word. */
-.about-wordmark-disc {
-  display: block;
-  flex: none;
-  width: 0.56em;
-  height: 0.56em;
-  margin: 0 0.03em -0.012em 0.035em;
-  transition: rotate 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.about-wordmark:hover .about-wordmark-disc {
-  rotate: 360deg;
+.cassette-spool {
+  animation: disc-turn 2.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .jewel-lid,
-  .about-wordmark-disc {
+  .about-sleeve-disc,
+  .jewel-lid {
     transition: none;
   }
-  .tape-reel {
+  .cassette-spool {
     animation: none;
   }
 }
 
-.lyric-strip .lyric-line {
-  font-size: clamp(1.05rem, 2.1vw, 1.9rem);
-}
-.lyric-line-plain .lyric-word {
+/* The About page, sung. The current line is lit word by word, finished lines blur into the past. */
+.lyric-line {
+  padding: 0.18em 0;
+  font-size: clamp(1.7rem, 4vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  transform-origin: left center;
+  opacity: 0.3;
   color: #fff;
-  background: none;
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease,
+    filter 300ms ease;
 }
-/* A white pressing, the same colour as the letters, so it reads as the o of the name. */
-.about-wordmark-disc .disc-vinyl .disc-body {
-  background:
-    radial-gradient(circle, transparent 54%, rgba(0, 0, 0, 0.22) 54.5%, transparent 55.5%),
-    radial-gradient(circle, transparent 66%, rgba(0, 0, 0, 0.22) 66.5%, transparent 67.5%),
-    repeating-radial-gradient(circle, #e5e5e5 0 1px, #d2d2d2 1px 2px, #ececec 2px 3px);
-  box-shadow: none;
+.lyric-line-past {
+  opacity: 0.25;
+  transform: scale(0.97);
+  filter: blur(2px);
 }
-.about-wordmark-disc .disc-label {
-  background: #121214;
-  box-shadow: none;
+.lyric-line-active {
+  opacity: 1;
 }
-.about-wordmark-disc .disc-hole {
-  background: #e5e5e5;
-  box-shadow: none;
+.lyric-line-active .lyric-word {
+  --p: -12%;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    #fff var(--p),
+    rgba(255, 255, 255, 0.35) calc(var(--p) + 12%)
+  );
+  background-clip: text;
 }
-.about-wordmark-disc .disc {
-  box-shadow: none;
+
+/* The About page: real objects from a music shelf. */
+.about-sleeve {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  cursor: pointer;
+}
+.about-sleeve-disc {
+  position: absolute;
+  inset: 3%;
+  transform: translateX(26%);
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35));
+  transition: transform 700ms cubic-bezier(0.2, 0.9, 0.25, 1.05);
+}
+.about-sleeve-cover {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #26262b;
+  box-shadow: 8px 14px 36px rgba(0, 0, 0, 0.75);
+}
+.about-sleeve-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.about-sleeve-out .about-sleeve-disc {
+  transform: translateX(40%) rotate(70deg);
+}
+@media (hover: hover) {
+  .about-sleeve:hover .about-sleeve-disc {
+    transform: translateX(40%) rotate(70deg);
+  }
+  .jewel:hover .jewel-lid {
+    transform: rotateY(-62deg);
+  }
+}
+.jewel-open .jewel-lid {
+  transform: rotateY(-62deg);
+}
+.jewel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  perspective: 700px;
+  border-radius: 4px;
+  background: #0c0c0f;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    6px 10px 26px rgba(0, 0, 0, 0.7);
+}
+.jewel-tray {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+/* Hinged on the left like the real thing, with a clear spine down that edge. */
+.jewel-lid {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  border-left: 7px solid rgba(255, 255, 255, 0.16);
+  background: #26262b;
+  transform-origin: left center;
+  transition: transform 550ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.jewel-lid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.jewel-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent calc(var(--shine, 30%) - 26%),
+    rgba(255, 255, 255, 0.42) var(--shine, 30%),
+    rgba(190, 215, 255, 0.12) calc(var(--shine, 30%) + 7%),
+    transparent calc(var(--shine, 30%) + 22%)
+  );
 }

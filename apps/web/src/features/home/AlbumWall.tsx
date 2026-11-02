@@ -34,7 +34,11 @@ export function AlbumWall({ songs }: { songs: SamplerSong[] }) {
     const wall = wallRef.current;
     if (!wall || !ready || reduced) return;
     const scroller = wall.closest('main');
-    const drift = wall.getAnimations({ subtree: true });
+    // Only the column drift: hover transitions and the intro must keep their own timing.
+    const drift = wall
+      .getAnimations({ subtree: true })
+      .filter((a) => a instanceof CSSAnimation && a.animationName === 'album-wall-drift');
+    let applied = 1;
     let pointer: { x: number; y: number } | null = null;
     let spotX = wall.clientWidth / 2;
     let spotY = wall.clientHeight / 3;
@@ -75,10 +79,14 @@ export function AlbumWall({ songs }: { songs: SamplerSong[] }) {
 
       // Scrolling the page pushes the columns along, then they settle back to their own drift.
       const scrollTop = scroller?.scrollTop ?? 0;
-      const push = Math.min(14, Math.abs(scrollTop - lastScroll));
+      const push = Math.min(6, Math.abs(scrollTop - lastScroll));
       lastScroll = scrollTop;
       speed += (1 + push - speed) * 0.08;
-      for (const animation of drift) animation.playbackRate = speed;
+      // updatePlaybackRate keeps each column where it is, and only when the speed really changed.
+      if (Math.abs(speed - applied) > 0.04) {
+        applied = speed;
+        for (const animation of drift) animation.updatePlaybackRate(speed);
+      }
     };
     frame = requestAnimationFrame(tick);
 
@@ -113,6 +121,7 @@ export function AlbumWall({ songs }: { songs: SamplerSong[] }) {
                   decoding="async"
                   width={250}
                   height={250}
+                  onLoad={(e) => e.currentTarget.classList.add('album-wall-loaded')}
                   onPointerEnter={(e) => e.pointerType === 'mouse' && setHovered(song)}
                   onPointerLeave={() => setHovered(null)}
                 />
