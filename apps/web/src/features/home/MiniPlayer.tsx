@@ -9,6 +9,24 @@ export function MiniPlayer({ song, onClose }: { song: SamplerSong; onClose: () =
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // Shared with the game's own player, so one setting covers both.
+  const [volume, setVolume] = useState(() => {
+    try {
+      const saved = parseFloat(localStorage.getItem('snippet-volume') ?? '');
+      return Number.isFinite(saved) ? saved : 0.5;
+    } catch {
+      return 0.5;
+    }
+  });
+
+  useEffect(() => {
+    if (audio.current) audio.current.volume = volume;
+    try {
+      localStorage.setItem('snippet-volume', String(volume));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [volume]);
 
   useEffect(() => {
     let live = true;
@@ -19,12 +37,7 @@ export function MiniPlayer({ song, onClose }: { song: SamplerSong; onClose: () =
       .then(({ previewUrl }) => {
         if (!live || !element) return;
         element.src = previewUrl;
-        try {
-          const saved = localStorage.getItem('snippet-volume');
-          if (saved != null) element.volume = parseFloat(saved);
-        } catch {
-          /* storage unavailable */
-        }
+        element.volume = volume;
         return element.play();
       })
       .catch(() => live && setError('This preview is unavailable right now.'));
@@ -32,6 +45,8 @@ export function MiniPlayer({ song, onClose }: { song: SamplerSong; onClose: () =
       live = false;
       element?.pause();
     };
+    // Volume is applied by its own effect; restarting the song on a volume change would be wrong.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [song.id]);
 
   const toggle = () => {
@@ -81,6 +96,26 @@ export function MiniPlayer({ song, onClose }: { song: SamplerSong; onClose: () =
             style={{ transform: `scaleX(${progress})` }}
           />
         </div>
+        <label className="mt-2 flex items-center gap-2">
+          <svg
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="h-3.5 w-3.5 flex-none text-slate-400"
+            aria-hidden="true"
+          >
+            <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06Z" />
+          </svg>
+          <span className="sr-only">Volume</span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-white [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+          />
+        </label>
       </div>
       <button
         type="button"
