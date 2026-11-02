@@ -133,3 +133,10 @@ describe('GET /api/songs/sampler', () => {
     expect(res.body.songs.map((s: { id: number }) => s.id)).toEqual(picks);
   });
 });
+
+describe('GET /api/songs/:id/preview', () => {
+  it('404s for a song that does not exist, and rejects a non-numeric id', async () => {
+    expect((await request(app).get('/api/songs/999999/preview')).status).toBe(404);
+    expect((await request(app).get('/api/songs/abc/preview')).status).toBe(400);
+  });
+});

@@ -3,18 +3,27 @@ import { useReducedMotion } from 'motion/react';
 import type { SamplerSong } from '../../api/songs';
 
 const COLUMNS = 14;
-const TILES_PER_LOOP = 8;
+// A column holds at least this many, more when there are enough covers to fill them.
+const MIN_TILES_PER_LOOP = 8;
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+  }
+  return copy;
+}
 
 /** Column `c` starts at a different place in the list, so neighbours never line up. */
 export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
   // Two songs from one album share a cover, and a wall showing it twice looks like a bug.
   const covers = [...new Map(songs.map((s) => [s.albumArtUrl, s])).values()];
   if (covers.length === 0) return [];
+  // Long enough that every cover gets a slot of its own before anything repeats.
+  const perLoop = Math.max(MIN_TILES_PER_LOOP, Math.ceil(covers.length / COLUMNS));
   return Array.from({ length: COLUMNS }, (_, c) =>
-    Array.from(
-      { length: TILES_PER_LOOP },
-      (_, t) => covers[(c * TILES_PER_LOOP + c * 3 + t) % covers.length]!,
-    ),
+    Array.from({ length: perLoop }, (_, t) => covers[(c * perLoop + t) % covers.length]!),
   );
 }
 
@@ -23,11 +32,19 @@ export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
  * soft hole that follows the pointer so colour shows through; without a pointer the hole wanders.
  * Everything moves through CSS variables and playback rate, so React never re-renders on a frame.
  */
-export function AlbumWall({ songs }: { songs: SamplerSong[] }) {
+export function AlbumWall({
+  songs,
+  onPlay,
+}: {
+  songs: SamplerSong[];
+  /** A cover was clicked: play that song. */
+  onPlay: (song: SamplerSong) => void;
+}) {
   const reduced = useReducedMotion();
   const wallRef = useRef<HTMLDivElement | null>(null);
   const [hovered, setHovered] = useState<SamplerSong | null>(null);
-  const columns = useMemo(() => buildColumns(songs), [songs]);
+  // A fresh order each visit, so the covers are never in the same places twice.
+  const columns = useMemo(() => buildColumns(shuffle(songs)), [songs]);
 
   const ready = columns.length > 0;
   useEffect(() => {
@@ -117,11 +134,12 @@ export function AlbumWall({ songs }: { songs: SamplerSong[] }) {
                   key={t}
                   src={song.albumArtUrl ?? undefined}
                   alt=""
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
                   width={250}
                   height={250}
                   onLoad={(e) => e.currentTarget.classList.add('album-wall-loaded')}
+                  onClick={() => onPlay(song)}
                   onPointerEnter={(e) => e.pointerType === 'mouse' && setHovered(song)}
                   onPointerLeave={() => setHovered(null)}
                 />

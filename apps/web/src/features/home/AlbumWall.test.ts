@@ -22,4 +22,11 @@ describe('buildColumns', () => {
     const columns = buildColumns([song(1, 'x'), song(2, 'x')]);
     expect(new Set(columns.flat().map((s) => s.albumArtUrl)).size).toBe(1);
   });
+  it('shows every cover before repeating once there are enough to fill the wall', () => {
+    const songs = Array.from({ length: 200 }, (_, i) => song(i, `art-${i}`));
+    const shown = buildColumns(songs)
+      .flat()
+      .map((s) => s.id);
+    expect(new Set(shown).size).toBe(200);
+  });
 });

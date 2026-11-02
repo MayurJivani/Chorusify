@@ -443,6 +443,9 @@ body {
   color: #fff;
 }
 @media (hover: hover) {
+  .album-wall-column img {
+    cursor: pointer;
+  }
   .album-wall-column img:hover {
     position: relative;
     z-index: 1;
@@ -472,6 +475,7 @@ body {
 }
 .home-over a,
 .home-over button,
+.home-over .mini-player,
 .home-over input,
 .home-over section {
   pointer-events: auto;

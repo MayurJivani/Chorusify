@@ -5,6 +5,8 @@ import { db } from '../db/client';
 import { dailyPuzzles, songs } from '../db/schema';
 import { foldForSearch } from '../utils/songAliases';
 import { getSettings } from '../services/settingsService';
+import { getFreshPreviewUrl } from '../services/deezerService';
+import { HttpError } from '../middleware/errorHandler';
 import { validate } from '../middleware/validate';
 import { searchRateLimiter } from '../middleware/rateLimiters';
 import { asyncHandler } from '../middleware/asyncHandler';
@@ -110,5 +112,26 @@ songsRouter.get(
       .from(songs)
       .where(and(eq(songs.active, true), isNotNull(songs.scene)));
     res.json({ songs: rows, total: total?.count ?? 0 });
+  }),
+);
+
+const previewSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/** A fresh preview link for one song, for the home wall's player. Signed links expire in minutes. */
+songsRouter.get(
+  '/:id/preview',
+  searchRateLimiter,
+  validate(previewSchema, 'params'),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof previewSchema>;
+    const [song] = await db
+      .select({ deezerTrackId: songs.deezerTrackId })
+      .from(songs)
+      .where(eq(songs.id, id))
+      .limit(1);
+    if (!song) throw new HttpError(404, 'No such song');
+    const fresh = await getFreshPreviewUrl(song.deezerTrackId);
+    if (!fresh) throw new HttpError(503, 'That preview is unavailable right now');
+    res.json({ previewUrl: fresh.previewUrl });
   }),
 );

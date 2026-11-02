@@ -1,8 +1,9 @@
 import { AlbumWall } from '../features/home/AlbumWall';
+import { MiniPlayer } from '../features/home/MiniPlayer';
 import { getSampler, type SamplerSong } from '../api/songs';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useCountdownToNextPuzzle } from '../hooks/useCountdown';
 import { useSession } from '../hooks/useSession';
 import { getMyStats } from '../api/stats';
@@ -50,6 +51,7 @@ export function HomePage() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [desiStreak, setDesiStreak] = useState(0);
   const [songs, setSongs] = useState<SamplerSong[]>([]);
+  const [nowPlaying, setNowPlaying] = useState<SamplerSong | null>(null);
 
   useEffect(() => {
     getSampler()
@@ -76,7 +78,12 @@ export function HomePage() {
     <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-3 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3">
       {/* Hero kept at its original scale and wording - it is the page's anchor, and shrinking
           it to buy vertical space made the whole page read as a settings screen. */}
-      <AlbumWall songs={songs} />
+      <AlbumWall songs={songs} onPlay={setNowPlaying} />
+      <AnimatePresence>
+        {nowPlaying && (
+          <MiniPlayer key={nowPlaying.id} song={nowPlaying} onClose={() => setNowPlaying(null)} />
+        )}
+      </AnimatePresence>
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}

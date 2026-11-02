@@ -10,7 +10,7 @@ interface Album {
   albumArtUrl: string | null;
 }
 
-const MAX_ALBUMS = 60;
+const MAX_ALBUMS = 200;
 const KEY = 'homeWallSongIds';
 
 /** Choose the covers on the home page wall. Nothing chosen means a random selection. */
@@ -58,7 +58,7 @@ export function HomeAlbumsPanel() {
       <p className="text-sm text-slate-300">
         {albums.length === 0
           ? 'Showing a random selection. Pick a cover to take over the wall.'
-          : `${albums.length} of ${MAX_ALBUMS} chosen. The wall repeats them to fill the space.`}
+          : `${albums.length} of ${MAX_ALBUMS} chosen. The wall shows each once before any repeat, as long as there are 112 or more.`}
       </p>
       {error && <p className="text-sm text-chorusify-danger">{error}</p>}
 
