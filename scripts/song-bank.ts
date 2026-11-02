@@ -4,6 +4,7 @@
  *   build     seeds.json + Deezer -> songs.json (resumable; responses cached in .cache/)
  *   validate  checks songs.json, then asks Deezer that every track still has a playable preview
  *   import    upserts songs.json into DATABASE_URL. Never deletes, keeps existing ids
+ *   sql       the import as SQL on stdout, for a database only reachable from its own container
  *   report    reads the actual database and writes docs/SONG-BANK.md
  *
  * Only build and validate call Deezer. Preview links are signed and expire in minutes, so the
@@ -374,6 +375,41 @@ async function importBank(): Promise<void> {
   await sqlClient.end();
 }
 
+/**
+ * The same upsert as `import`, as one SQL script on stdout. The production image carries no
+ * scripts, so this is piped into psql inside the database container. Safe to re-run.
+ */
+function exportSql(): void {
+  const rows = loadSongs().map((s) => ({
+    ...s,
+    previewUrl: `https://api.deezer.com/track/${s.deezerTrackId}`,
+  }));
+  const tag = '$song_bank$';
+  const json = JSON.stringify(rows);
+  if (json.includes(tag)) throw new Error('Manifest contains the SQL quote tag');
+  console.log(`BEGIN;
+INSERT INTO songs (deezer_track_id, title, artist, featured_artists, album, release_year, genre, scene,
+  language, region, daily_edition, album_art_url, duration_seconds, difficulty, rank, isrc, aliases,
+  preview_url, manual_override, active)
+SELECT r."deezerTrackId", r.title, r.artist, r."featuredArtists", r.album, r."releaseYear", r.genre, r.scene,
+  r.language, r.region, r."dailyEdition", r."albumArtUrl", r."durationSeconds", r.difficulty, r.rank, r.isrc,
+  r.aliases, r."previewUrl", true, true
+FROM jsonb_to_recordset(${tag}${json}${tag}::jsonb) AS r("deezerTrackId" text, title text, artist text,
+  "featuredArtists" jsonb, album text, "releaseYear" int, genre text, scene text, language text, region text,
+  "dailyEdition" text, "albumArtUrl" text, "durationSeconds" int, difficulty int, rank int, isrc text,
+  aliases jsonb, "previewUrl" text)
+ON CONFLICT (deezer_track_id) DO UPDATE SET title = excluded.title, artist = excluded.artist,
+  featured_artists = excluded.featured_artists, album = excluded.album, release_year = excluded.release_year,
+  genre = excluded.genre, scene = excluded.scene, language = excluded.language, region = excluded.region,
+  daily_edition = excluded.daily_edition, album_art_url = excluded.album_art_url,
+  duration_seconds = excluded.duration_seconds, difficulty = excluded.difficulty, rank = excluded.rank,
+  isrc = excluded.isrc, aliases = excluded.aliases, manual_override = true, active = true;
+UPDATE songs SET active = false, daily_edition = NULL, scene = NULL WHERE scene IS NOT NULL
+  AND deezer_track_id NOT IN (SELECT r->>'deezerTrackId' FROM jsonb_array_elements(${tag}${json}${tag}::jsonb) r);
+SELECT daily_edition, count(*) FROM songs WHERE active GROUP BY 1 ORDER BY 1;
+COMMIT;`);
+}
+
 async function report(): Promise<void> {
   const { sqlClient: q } = await import('../apps/server/src/db/client');
   const table = async (title: string, column: string): Promise<string> => {
@@ -440,6 +476,7 @@ const commands: Record<string, () => Promise<void>> = {
   build,
   validate,
   import: importBank,
+  sql: async () => exportSql(),
   report,
 };
 const command = commands[process.argv[2] ?? ''];
