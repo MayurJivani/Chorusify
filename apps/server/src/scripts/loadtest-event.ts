@@ -43,7 +43,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // --- Worker: holds a share of the sockets and does what the coordinator says ------------------
 
 type Cmd =
-  | { cmd: 'connect'; origin: string; code: string; from: number; count: number; password?: string }
+  | {
+      cmd: 'connect';
+      origin: string;
+      code: string;
+      from: number;
+      count: number;
+      password?: string;
+      /** Answer every round unprompted, as a live audience does, rather than when told to. */
+      autoGuess?: boolean;
+    }
   | { cmd: 'guess'; pick: 'first'; spreadMs: number }
   | { cmd: 'reset' }
   | { cmd: 'report' }
@@ -67,6 +76,9 @@ async function worker() {
   let origin = '';
   let code = '';
   let password: string | undefined;
+  let autoGuess = false;
+  /** When each round_start reached this process, by round: the spread is how together a round starts. */
+  const arrivals: Record<number, number[]> = {};
   const lat: Record<string, number[]> = {
     guessRtt: [],
     joinRtt: [],
@@ -124,6 +136,17 @@ async function worker() {
             if (c.roundStart && now < m.startedAt)
               lat.roundStartDelivery!.push(now - (m.startedAt - 2500));
             startInstants.add(m.startedAt);
+            (arrivals[m.roundIndex] ??= []).push(now);
+            if (autoGuess && c.options.length) {
+              const pick = c.options[Math.floor(Math.random() * c.options.length)]!;
+              // The server's own clock for the start, so this works against a remote one too.
+              const wait = Math.max(0, m.startedAt - m.serverNow) + 1000 + Math.random() * 7000;
+              setTimeout(() => {
+                if (c.ws.readyState !== WebSocket.OPEN) return;
+                c.guessedAt = performance.now();
+                c.ws.send(JSON.stringify({ type: 'guess', trackId: pick }));
+              }, wait);
+            }
             if (m.previewUrl) {
               previewsSeen.withAudio! += 1;
               previews.add(m.previewUrl);
@@ -155,6 +178,7 @@ async function worker() {
         origin = msg.origin;
         code = msg.code;
         password = msg.password;
+        autoGuess = !!msg.autoGuess;
         const ids = Array.from({ length: msg.count }, (_, i) => msg.from + i);
         // Paced: a stampede of phones arrives over seconds, not in one tick.
         for (let i = 0; i < ids.length; i += 25) {
@@ -169,7 +193,7 @@ async function worker() {
               const c: WorkerClient = {
                 ws: null as unknown as WebSocket,
                 guest: { cookie },
-                nick: `P${id}`,
+                nick: autoGuess ? `Tester ${id}` : `P${id}`,
                 options: [],
                 guessedAt: 0,
                 gameOver: false,
@@ -233,6 +257,7 @@ async function worker() {
           previews: [...previews],
           previewsSeen,
           audioFrames,
+          arrivals,
           open: clients.filter((c) => c.ws.readyState === WebSocket.OPEN).length,
         });
         break;
@@ -277,7 +302,13 @@ class Workers {
       }),
     );
   }
-  async connect(origin: string, code: string, players: number, password?: string) {
+  async connect(
+    origin: string,
+    code: string,
+    players: number,
+    password?: string,
+    autoGuess = false,
+  ) {
     const each = Math.ceil(players / WORKERS);
     await Promise.all(
       this.procs.map((p, i) => {
@@ -289,6 +320,7 @@ class Workers {
           from: i * each,
           count: Math.min(each, players - i * each),
           password,
+          autoGuess,
         });
         return w;
       }),
@@ -312,6 +344,18 @@ class Workers {
       withoutAudio: rs.reduce((a, r) => a + r.previewsSeen.withoutAudio, 0),
       audioFrames: rs.reduce((a, r) => a + r.audioFrames, 0),
       open: rs.reduce((a, r) => a + r.open, 0),
+      /** Last client minus first, per round, across every worker on this machine. */
+      roundStartSpreadMs: (() => {
+        const byRound: Record<string, number[]> = {};
+        for (const r of rs) {
+          for (const [k, v] of Object.entries(r.arrivals as Record<string, number[]>)) {
+            (byRound[k] ??= []).push(...v);
+          }
+        }
+        return Object.fromEntries(
+          Object.entries(byRound).map(([k, v]) => [k, Math.max(...v) - Math.min(...v)]),
+        );
+      })(),
     };
   }
   stop() {
@@ -439,6 +483,52 @@ async function main() {
   const SCENARIOS = flag('scenarios', 'A,B,C,D,E,F').split(',');
   const SOAK_MINUTES = Number(flag('soak-minutes', '20'));
   const JSON_OUT = flag('json', '');
+
+  // Live mode: join an event someone is hosting on a real deployment and play it like an audience.
+  // The host runs the event from their own console; this only joins, answers and measures.
+  const live = flag('join', '');
+  if (live) {
+    const origin = flag('origin', '');
+    if (!/^https?:\/\//.test(origin)) throw new Error('--join needs --origin https://...');
+    const workers = new Workers();
+    await workers.start();
+    const t0 = performance.now();
+    await workers.connect(
+      origin,
+      live.toUpperCase(),
+      PLAYERS,
+      flag('password', '') || undefined,
+      true,
+    );
+    console.log(`joined in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+    const summary = async () => {
+      const r = await workers.report();
+      return {
+        open: r.open,
+        joinRtt: r.joinRtt,
+        roundStarts: r.tally.roundStarts ?? 0,
+        guessesAnswered: r.tally.guessResults ?? 0,
+        guessRtt: r.guessRtt,
+        roundStartSpreadMs: r.roundStartSpreadMs,
+        gameOvers: r.tally.gameOvers ?? 0,
+        problems: Object.fromEntries(
+          Object.entries(r.tally).filter(([k]) => k.startsWith('error') || k.startsWith('close')),
+        ),
+      };
+    };
+    for (;;) {
+      await sleep(15_000);
+      const s = await summary();
+      console.log(JSON.stringify(s));
+      if (JSON_OUT) writeFileSync(JSON_OUT, JSON.stringify(s, null, 2));
+      if (s.gameOvers >= s.open && s.open > 0) break;
+      if (s.open === 0) break;
+    }
+    workers.stop();
+    console.log('done');
+    setTimeout(() => process.exit(0), 500);
+    return;
+  }
 
   const dbUrl = process.env.LOADTEST_DATABASE_URL;
   if (!dbUrl) throw new Error('LOADTEST_DATABASE_URL is required');

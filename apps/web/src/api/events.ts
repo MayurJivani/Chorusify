@@ -50,5 +50,18 @@ export const getEventJoinInfo = (code: string) =>
 
 export const listPublicEvents = () =>
   apiRequest<{
-    events: { code: string; name: string; description: string; needsPassword: boolean; status: string }[];
+    events: {
+      code: string;
+      name: string;
+      description: string;
+      needsPassword: boolean;
+      status: string;
+    }[];
   }>('/events/public');
+
+export const importSpotify = (url: string) =>
+  apiRequest<{
+    name: string;
+    matched: SongHit[];
+    missing: { title: string; artist: string }[];
+  }>('/events/import/spotify', { method: 'POST', body: { url } });
