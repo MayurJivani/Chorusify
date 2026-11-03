@@ -28,8 +28,8 @@ export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
 }
 
 /**
- * Real covers behind the hero, in columns drifting opposite ways. A dim layer covers them, with a
- * soft hole that follows the pointer so colour shows through; without a pointer the hole wanders.
+ * Real covers behind the hero, in columns drifting opposite ways, greyed until hovered, under a
+ * soft light that follows the pointer (and wanders without one).
  * Everything moves through CSS variables and playback rate, so React never re-renders on a frame.
  */
 export function AlbumWall({
@@ -59,8 +59,6 @@ export function AlbumWall({
     let pointer: { x: number; y: number } | null = null;
     let spotX = wall.clientWidth / 2;
     let spotY = wall.clientHeight / 3;
-    let tiltX = 0;
-    let tiltY = 0;
     let speed = 1;
     let lastScroll = scroller?.scrollTop ?? 0;
     let visible = true;
@@ -85,14 +83,15 @@ export function AlbumWall({
       const targetX = pointer?.x ?? width * (0.5 + 0.34 * Math.sin(now / 3100));
       const targetY = pointer?.y ?? height * (0.42 + 0.26 * Math.cos(now / 3700));
       const ease = pointer ? 0.14 : 0.04;
-      spotX += (targetX - spotX) * ease;
-      spotY += (targetY - spotY) * ease;
-      tiltX += ((pointer ? targetX / width - 0.5 : 0) - tiltX) * 0.05;
-      tiltY += ((pointer ? targetY / height - 0.5 : 0) - tiltY) * 0.05;
-      wall.style.setProperty('--x', `${spotX}px`);
-      wall.style.setProperty('--y', `${spotY}px`);
-      wall.style.setProperty('--tilt-x', `${(-tiltY * 2.4).toFixed(3)}deg`);
-      wall.style.setProperty('--tilt-y', `${(tiltX * 2.4).toFixed(3)}deg`);
+      const nextX = spotX + (targetX - spotX) * ease;
+      const nextY = spotY + (targetY - spotY) * ease;
+      // Repaint the glow only when it visibly moves; the covers themselves never repaint.
+      if (Math.abs(nextX - spotX) + Math.abs(nextY - spotY) > 0.5) {
+        wall.style.setProperty('--x', `${nextX}px`);
+        wall.style.setProperty('--y', `${nextY}px`);
+      }
+      spotX = nextX;
+      spotY = nextY;
 
       // Scrolling the page pushes the columns along, then they settle back to their own drift.
       const scrollTop = scroller?.scrollTop ?? 0;
@@ -146,7 +145,7 @@ export function AlbumWall({
               ))}
             </div>
           ))}
-          <div className="album-wall-dim" />
+          <div className="album-wall-glow" />
         </div>
       </div>
       {hovered && (
