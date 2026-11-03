@@ -351,6 +351,9 @@ body {
 .album-wall-column {
   flex: none;
   width: var(--tile);
+  /* Greyed as one image. A filter per cover let colour bleed at each cover's top and bottom
+     edges as the column moved by fractions of a pixel. */
+  filter: grayscale(1) brightness(0.34);
   animation: album-wall-drift linear infinite;
   animation-name: album-wall-drift;
   will-change: transform;
@@ -373,8 +376,6 @@ body {
   border-radius: 4px;
   /* Always relative: switching position on hover would redraw the whole moving column. */
   position: relative;
-  /* Static, so it is drawn once with the column rather than recomputed every frame. */
-  filter: grayscale(1) brightness(0.34);
   opacity: 0;
   transition:
     opacity 700ms ease,
@@ -423,7 +424,14 @@ body {
   .album-wall-column img {
     cursor: pointer;
   }
-  .album-wall-column img:hover {
+  /* Under the pointer the column greys cover by cover instead, so one cover can light up. */
+  .album-wall-column:hover {
+    filter: none;
+  }
+  .album-wall-column:hover img {
+    filter: grayscale(1) brightness(0.34);
+  }
+  .album-wall-column:hover img:hover {
     z-index: 1;
     filter: none;
     transform: scale(1.08);
@@ -433,6 +441,48 @@ body {
     display: block;
   }
 }
+/* The song in the mini player keeps its colour on the wall, with a slow ring of light. */
+.album-wall-column-live {
+  filter: none;
+}
+.album-wall-column-live img {
+  filter: grayscale(1) brightness(0.34);
+}
+.album-wall-column-live img.album-wall-playing {
+  z-index: 1;
+  filter: none;
+  animation: wall-playing 1.6s ease-in-out infinite;
+}
+@keyframes wall-playing {
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(167, 139, 250, 0.9),
+      0 0 28px rgba(139, 92, 246, 0.6);
+  }
+}
+
+/* Hover the headline's purple word and its letters hop, one after another. */
+.home-over .hop-word {
+  pointer-events: auto;
+}
+.hop-word:hover > span {
+  animation: letter-hop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) calc(var(--i) * 40ms);
+}
+@keyframes letter-hop {
+  40% {
+    translate: 0 -0.18em;
+  }
+}
+
+/* The Play buttons carry a tiny record that starts turning when you reach for the card. */
+.daily-play-disc {
+  display: inline-flex;
+}
+.group:hover .daily-play-disc .disc-body,
+.group:focus-visible .daily-play-disc .disc-body {
+  animation: disc-turn 0.9s linear infinite;
+}
+
 @media (max-width: 639px) {
   .album-wall {
     height: 300px;
@@ -440,8 +490,11 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .album-wall-stage,
-  .album-wall-column {
-    animation: none;
+  .album-wall-column,
+  .album-wall-playing,
+  .hop-word > span,
+  .daily-play-disc .disc-body {
+    animation: none !important;
   }
 }
 

@@ -1,7 +1,8 @@
+import { Disc } from '../features/game/Disc';
 import { AlbumWall } from '../features/home/AlbumWall';
 import { MiniPlayer } from '../features/home/MiniPlayer';
 import { getSampler, type SamplerSong } from '../api/songs';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCountdownToNextPuzzle } from '../hooks/useCountdown';
@@ -78,7 +79,7 @@ export function HomePage() {
     <div className="home-over mx-auto flex min-h-full max-w-4xl flex-col justify-center gap-3 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3">
       {/* Hero kept at its original scale and wording - it is the page's anchor, and shrinking
           it to buy vertical space made the whole page read as a settings screen. */}
-      <AlbumWall songs={songs} onPlay={setNowPlaying} />
+      <AlbumWall songs={songs} onPlay={setNowPlaying} playingId={nowPlaying?.id} />
       <AnimatePresence>
         {nowPlaying && (
           <MiniPlayer key={nowPlaying.id} song={nowPlaying} onClose={() => setNowPlaying(null)} />
@@ -95,7 +96,7 @@ export function HomePage() {
           className="text-4xl font-black tracking-tight text-white sm:text-6xl [@media(max-height:720px)]:text-3xl"
         >
           <RisingWord text="Guess" start={0} /> <RisingWord text="your" start={5} />{' '}
-          <RisingWord text="favourite" start={9} className="text-purple-400" />{' '}
+          <RisingWord text="favourite" start={9} className="hop-word text-purple-400" />{' '}
           <RisingWord text="music!" start={18} />
         </h1>
         <p className="home-lede [@media(max-height:720px)]:hidden max-w-md text-sm leading-relaxed text-slate-100 sm:text-base">
@@ -234,7 +235,7 @@ function DailyLink({
   return (
     <Link
       to={to}
-      className="glass flex flex-col gap-3 rounded-2xl border border-white/10 p-3 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
+      className="group glass flex flex-col gap-3 rounded-2xl border border-white/10 p-3 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
     >
       <span className="min-w-0">
         <span className="block text-xl font-black text-white">{title}</span>
@@ -244,9 +245,9 @@ function DailyLink({
         </span>
       </span>
       <span className="btn-primary inline-flex shrink-0 items-center justify-center gap-1.5 !px-4 !py-1.5 !text-sm">
-        <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden="true">
-          <path d="M4 2.8v10.4a.8.8 0 0 0 1.2.7l8.6-5.2a.8.8 0 0 0 0-1.4L5.2 2.1A.8.8 0 0 0 4 2.8Z" />
-        </svg>
+        <span className="daily-play-disc">
+          <Disc size={16} />
+        </span>
         Play
       </span>
     </Link>
@@ -269,6 +270,7 @@ function RisingWord({
         <motion.span
           key={i}
           className="inline-block"
+          style={{ '--i': i } as CSSProperties}
           initial={{ opacity: 0, y: '60%', rotate: 6 }}
           animate={{ opacity: 1, y: 0, rotate: 0 }}
           transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.2 + (start + i) * 0.022 }}

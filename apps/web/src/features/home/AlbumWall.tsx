@@ -35,10 +35,13 @@ export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
 export function AlbumWall({
   songs,
   onPlay,
+  playingId,
 }: {
   songs: SamplerSong[];
   /** A cover was clicked: play that song. */
   onPlay: (song: SamplerSong) => void;
+  /** The song in the mini player, whose covers stay in colour. */
+  playingId?: number;
 }) {
   const reduced = useReducedMotion();
   const wallRef = useRef<HTMLDivElement | null>(null);
@@ -121,9 +124,9 @@ export function AlbumWall({
           {columns.map((tiles, c) => (
             <div
               key={c}
-              className={`album-wall-column ${c % 2 ? 'album-wall-column-down' : ''}`}
+              className={`album-wall-column ${c % 2 ? 'album-wall-column-down' : ''} ${tiles.some((t) => t.id === playingId) ? 'album-wall-column-live' : ''}`}
               style={{
-                animationDuration: `${70 + (c % 5) * 16}s`,
+                animationDuration: `${60 + (c % 5) * 14}s`,
                 animationDelay: `${-13 * c}s`,
               }}
             >
@@ -137,6 +140,7 @@ export function AlbumWall({
                   decoding="async"
                   width={250}
                   height={250}
+                  className={song.id === playingId ? 'album-wall-playing' : undefined}
                   onLoad={(e) => e.currentTarget.classList.add('album-wall-loaded')}
                   onClick={() => onPlay(song)}
                   onPointerEnter={(e) => e.pointerType === 'mouse' && setHovered(song)}
