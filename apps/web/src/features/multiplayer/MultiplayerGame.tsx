@@ -88,7 +88,7 @@ function EventQuestion({ listening, active }: { listening: string; active: boole
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       className="flex flex-col items-center gap-2 py-3 text-center"
     >
-      <Disc size={120} spinning={active} />
+      <Disc size={120} spinning={active} arm className="mr-8" />
       <p className="text-sm font-medium text-slate-200">{listening}</p>
     </motion.div>
   );

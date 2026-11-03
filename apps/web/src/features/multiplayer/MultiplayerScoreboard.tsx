@@ -3,6 +3,7 @@ import { animate, AnimatePresence, motion, useReducedMotion } from 'motion/react
 import type { MultiplayerScoreEntry } from '../../types/api';
 import { useGameConfig } from '../../hooks/useGameConfig';
 import type { MultiplayerStanding } from './useMultiplayerGame';
+import { avatarById } from './avatars';
 import { useScores, type ScoresStore } from './scoresStore';
 
 interface MultiplayerScoreboardProps {
@@ -66,8 +67,33 @@ export function avatarHue(name: string): number {
   return (h >>> 0) % 360;
 }
 
-export function Avatar({ name, size = 28 }: { name: string; size?: number }) {
-  const hue = avatarHue(name);
+export function Avatar({
+  name,
+  avatar,
+  size = 28,
+}: {
+  name: string;
+  avatar?: string | null;
+  size?: number;
+}) {
+  const picked = avatarById(avatar);
+  const hue = picked?.hue ?? avatarHue(name);
+  if (picked) {
+    return (
+      <span
+        aria-hidden="true"
+        style={{
+          width: size,
+          height: size,
+          fontSize: size * 0.56,
+          background: `radial-gradient(circle at 35% 30%, hsl(${hue} 70% 42%), hsl(${hue} 60% 20%))`,
+        }}
+        className="flex shrink-0 items-center justify-center rounded-full shadow-inner shadow-black/40 ring-1 ring-white/15"
+      >
+        {picked.glyph}
+      </span>
+    );
+  }
   return (
     <span
       aria-hidden="true"
@@ -161,7 +187,7 @@ const ScoreRow = memo(function ScoreRow({
           {place}
         </span>
       )}
-      <Avatar name={player.displayName} />
+      <Avatar name={player.displayName} avatar={player.avatar} />
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-100">
         {player.displayName}
         {isYou && (

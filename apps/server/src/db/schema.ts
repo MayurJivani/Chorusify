@@ -54,7 +54,8 @@ export const dailyPuzzles = pgTable(
       .references(() => songs.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('daily_puzzles_edition_date_position_idx').on(
+  (table) => [
+    uniqueIndex('daily_puzzles_edition_date_position_idx').on(
       table.edition,
       table.puzzleDate,
       table.position,
@@ -115,6 +116,8 @@ export interface EventResultRow {
   rank: number;
   displayName: string;
   score: number;
+  /** Which game of the event, once a host plays more than one playlist in it. */
+  game?: number;
 }
 
 /**

@@ -230,6 +230,7 @@ export interface MultiplayerPlayer {
   /** This player's own reveal stage for the current round (0 = only the first slice heard). */
   stageIndex: number;
   joinedAt: number;
+  avatar?: string | null;
 }
 
 export interface MultiplayerScoreEntry {
@@ -244,6 +245,7 @@ export interface MultiplayerScoreEntry {
   stageIndex: number;
   /** Shared by players level on points and time. Absent only from a lobby snapshot. */
   rank?: number;
+  avatar?: string | null;
 }
 
 export type MultiplayerGuessMode = 'search' | 'choice';
@@ -269,6 +271,7 @@ export interface MultiplayerRoomSnapshot {
   playerCount?: number;
   event?: { id: string; name: string; description: string; audioMode: EventAudioMode } | null;
   paused?: boolean;
+  locked?: boolean;
 }
 
 export type EventAudioMode = 'everyone_plays' | 'host_only';
@@ -314,6 +317,8 @@ export interface HostedEvent extends Omit<EventInput, 'password'> {
   code: string;
   status: 'open' | 'live' | 'ended';
   hasPassword: boolean;
+  /** Only in the host's own view: opens the TV screen. */
+  screenKey: string;
   trackCount: number;
   playerCount: number;
   results: { rank: number; displayName: string; score: number }[] | null;

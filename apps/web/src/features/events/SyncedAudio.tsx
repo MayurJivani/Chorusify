@@ -12,6 +12,8 @@ interface SyncedAudioProps {
   stopped?: boolean;
   /** Reported once if the audio cannot be loaded, so the screen can say so. */
   onFailed?: () => void;
+  /** 0 to 1. */
+  volume?: number;
 }
 
 /**
@@ -28,6 +30,7 @@ export const SyncedAudio = memo(function SyncedAudio({
   paused = false,
   stopped = false,
   onFailed,
+  volume = 1,
 }: SyncedAudioProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [blocked, setBlocked] = useState(false);
@@ -67,6 +70,10 @@ export const SyncedAudio = memo(function SyncedAudio({
   }, [playAt, playbackSeconds, paused, stopped, previewUrl]);
 
   useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume]);
+
+  useEffect(() => {
     const audio = audioRef.current;
     return () => {
       audio?.pause();
@@ -75,19 +82,17 @@ export const SyncedAudio = memo(function SyncedAudio({
 
   return (
     <>
-      <audio
-        ref={audioRef}
-        src={previewUrl}
-        preload="auto"
-        onError={() => failed.current?.()}
-      />
+      <audio ref={audioRef} src={previewUrl} preload="auto" onError={() => failed.current?.()} />
       {blocked && (
         <button
           type="button"
           className="btn-primary w-full !rounded-xl"
           onClick={() => {
             // Inside a real tap, which is what the browser was waiting for.
-            audioRef.current?.play().then(() => setBlocked(false), () => undefined);
+            audioRef.current?.play().then(
+              () => setBlocked(false),
+              () => undefined,
+            );
           }}
         >
           Tap to turn the sound on

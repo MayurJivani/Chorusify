@@ -1,4 +1,4 @@
-import { lazy, type ComponentType } from 'react';
+import { lazy, Suspense, type ComponentType } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { MotionConfig } from 'motion/react';
 import { SessionProvider } from './hooks/useSession';
@@ -67,8 +67,18 @@ const FandomsPage = page(() => import('./routes/FandomsPage'), 'FandomsPage');
 const FandomDetailPage = page(() => import('./routes/FandomDetailPage'), 'FandomDetailPage');
 const EventsPage = page(() => import('./routes/EventsPage'), 'EventsPage');
 const EventConsolePage = page(() => import('./routes/EventConsolePage'), 'EventConsolePage');
+const ScreenPage = page(() => import('./routes/ScreenPage'), 'ScreenPage');
 
 const router = createBrowserRouter([
+  // The TV screen fills the display on its own, without the site's nav and footer.
+  {
+    path: '/screen/:code',
+    element: (
+      <Suspense fallback={null}>
+        <ScreenPage />
+      </Suspense>
+    ),
+  },
   {
     element: <RootLayout />,
     children: [

@@ -63,6 +63,8 @@ export interface MultiplayerRoundEnd {
     previewUrl?: string | null;
   } | null;
   scores: MultiplayerScoreEntry[];
+  /** How many picked each option, by track id. Events only. */
+  answers?: Record<string, number>;
 }
 
 /** One song the room played, for the set list on the results screen. */
@@ -92,6 +94,16 @@ export interface HostRound {
   title: string | null;
   artist: string | null;
   albumArtUrl: string | null;
+  /** The round's options, in their plain order, so the console can show the answer split. */
+  options?: ArtistRoundOption[];
+}
+
+export interface HostPlayer {
+  playerId: string;
+  displayName: string;
+  avatar: string | null;
+  score: number;
+  connected: boolean;
 }
 
 interface ServerMessage {
@@ -111,6 +123,8 @@ interface UseMultiplayerGameResult {
   /** Changes many times a second in a big room, so it is subscribed to, not passed as state. */
   scoresStore: ScoresStore;
   hostRound: HostRound | null;
+  /** The host's player search results. */
+  hostPlayers: HostPlayer[] | null;
   paused: boolean;
   audioStopped: boolean;
   skippedSong: string | null;
@@ -156,7 +170,7 @@ function snapshotScores(room: MultiplayerRoomSnapshot): MultiplayerScoreEntry[] 
 export function useMultiplayerGame(
   code: string,
   nickname?: string | null,
-  options: { password?: string; hostEventId?: string } = {},
+  options: { password?: string; hostEventId?: string; watchKey?: string; avatar?: string } = {},
 ): UseMultiplayerGameResult {
   const [connectionStatus, setConnectionStatus] =
     useState<MultiplayerConnectionStatus>('connecting');
@@ -174,6 +188,7 @@ export function useMultiplayerGame(
   const [closedReason, setClosedReason] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [clock] = useState(createClockSync);
+  const [hostPlayers, setHostPlayers] = useState<HostPlayer[] | null>(null);
   const [lastGuess, setLastGuess] = useState<MultiplayerGuessResult | null>(null);
   const [standing, setStanding] = useState<MultiplayerStanding | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -188,178 +203,194 @@ export function useMultiplayerGame(
   const attemptsRef = useRef(0);
   const finalCloseRef = useRef(false);
 
-  const handleServerMessage = useCallback((raw: ServerMessage) => {
-    if (raw.selfId) setSelfId(raw.selfId);
+  const handleServerMessage = useCallback(
+    (raw: ServerMessage) => {
+      if (raw.selfId) setSelfId(raw.selfId);
 
-    switch (raw.type) {
-      case 'room_state': {
-        const snapshot = raw.room as MultiplayerRoomSnapshot;
-        setRoom(snapshot);
-        setErrorCode(null);
-        setPaused(snapshot.paused ?? false);
-        // Membership changes arrive mid-round in an event, and must not wipe the running round.
-        if (!snapshot.event || snapshot.phase === 'lobby') {
-          scoresStore.set({ rows: snapshotScores(snapshot) });
-          setGameOver(null);
-          setRoundEnd(null);
+      switch (raw.type) {
+        case 'room_state': {
+          const snapshot = raw.room as MultiplayerRoomSnapshot;
+          setRoom(snapshot);
+          setErrorCode(null);
+          setPaused(snapshot.paused ?? false);
+          // Membership changes arrive mid-round in an event, and must not wipe the running round.
+          if (!snapshot.event || snapshot.phase === 'lobby') {
+            scoresStore.set({ rows: snapshotScores(snapshot) });
+            setGameOver(null);
+            setRoundEnd(null);
+          }
+          // A room back in the lobby has no round by definition. Without this the last round of
+          // the previous game survives, and the host switching to a new artist drops everyone
+          // back into the finished game's screen instead of the lobby — `round` is checked
+          // before `room.phase` when deciding what to render.
+          if (snapshot.phase === 'lobby') {
+            setRound(null);
+            setStageIndex(0);
+            setLastGuess(null);
+            setStanding(null);
+          }
+          break;
         }
-        // A room back in the lobby has no round by definition. Without this the last round of
-        // the previous game survives, and the host switching to a new artist drops everyone
-        // back into the finished game's screen instead of the lobby — `round` is checked
-        // before `room.phase` when deciding what to render.
-        if (snapshot.phase === 'lobby') {
-          setRound(null);
+        case 'round_start': {
+          setAudioStopped(false);
+          setPaused(false);
+          setRound({
+            roundIndex: raw.roundIndex as number,
+            totalRounds: raw.totalRounds as number,
+            startedAt: clock.toLocal(raw.startedAt as number),
+            roundDurationMs: raw.roundDurationMs as number,
+            snippetSchedule: raw.snippetSchedule as readonly number[],
+            previewUrl: raw.previewUrl as string,
+            albumArtUrl: raw.albumArtUrl as string | null,
+            pictureUrl: raw.pictureUrl as string | null,
+            revealDurationMs: raw.revealDurationMs as number,
+            guessMode: raw.guessMode as MultiplayerGuessMode | undefined,
+            gameMode: raw.gameMode as MultiplayerGameMode | undefined,
+            options: raw.options as ArtistRoundOption[] | undefined,
+          });
           setStageIndex(0);
+          setRoundEnd(null);
           setLastGuess(null);
-          setStanding(null);
+          setGameOver(null);
+          /*
+           * Clear the per-round flags rather than waiting for the `scores` frame that follows.
+           * `answered` gates the guess UI, so carrying the previous round's value even for the
+           * moment between the two messages shows a locked board at the start of every round —
+           * and if the scores frame is ever dropped or reordered, it never unlocks at all.
+           * Totals are left alone; only the server changes those.
+           */
+          scoresStore.set({
+            rows: scoresStore
+              .get()
+              .rows.map((s) => ({ ...s, answered: false, correctThisRound: null, stageIndex: 0 })),
+          });
+          break;
         }
-        break;
-      }
-      case 'round_start': {
-        setAudioStopped(false);
-        setPaused(false);
-        setRound({
-          roundIndex: raw.roundIndex as number,
-          totalRounds: raw.totalRounds as number,
-          startedAt: clock.toLocal(raw.startedAt as number),
-          roundDurationMs: raw.roundDurationMs as number,
-          snippetSchedule: raw.snippetSchedule as readonly number[],
-          previewUrl: raw.previewUrl as string,
-          albumArtUrl: raw.albumArtUrl as string | null,
-          pictureUrl: raw.pictureUrl as string | null,
-          revealDurationMs: raw.revealDurationMs as number,
-          guessMode: raw.guessMode as MultiplayerGuessMode | undefined,
-          gameMode: raw.gameMode as MultiplayerGameMode | undefined,
-          options: raw.options as ArtistRoundOption[] | undefined,
-        });
-        setStageIndex(0);
-        setRoundEnd(null);
-        setLastGuess(null);
-        setGameOver(null);
-        /*
-         * Clear the per-round flags rather than waiting for the `scores` frame that follows.
-         * `answered` gates the guess UI, so carrying the previous round's value even for the
-         * moment between the two messages shows a locked board at the start of every round —
-         * and if the scores frame is ever dropped or reordered, it never unlocks at all.
-         * Totals are left alone; only the server changes those.
-         */
-        scoresStore.set({
-          rows: scoresStore
-            .get()
-            .rows.map((s) => ({ ...s, answered: false, correctThisRound: null, stageIndex: 0 })),
-        });
-        break;
-      }
-      case 'stage':
-        setStageIndex(raw.stageIndex as number);
-        break;
-      case 'guess_result':
-        setLastGuess({
-          stageIndex: raw.stageIndex as number,
-          guessedTrackId: raw.guessedTrackId as string | undefined,
-          yourRank: raw.yourRank as number | undefined,
-          totalPlayers: raw.totalPlayers as number | undefined,
-        });
-        break;
-      case 'standing':
-        setStanding({
-          rank: raw.rank as number,
-          score: raw.score as number,
-          totalPlayers: raw.totalPlayers as number,
-        });
-        break;
-      case 'scores':
-        scoresStore.set({
-          rows: raw.scores as MultiplayerScoreEntry[],
-          answeredCount: (raw.answeredCount as number | undefined) ?? null,
-          totalPlayers: (raw.totalPlayers as number | undefined) ?? null,
-        });
-        break;
-      case 'pong': {
-        if (typeof raw.t === 'number' && typeof raw.serverNow === 'number') {
-          clock.addSample(raw.t, Date.now(), raw.serverNow);
+        case 'stage':
+          setStageIndex(raw.stageIndex as number);
+          break;
+        case 'guess_result':
+          setLastGuess({
+            stageIndex: raw.stageIndex as number,
+            guessedTrackId: raw.guessedTrackId as string | undefined,
+            yourRank: raw.yourRank as number | undefined,
+            totalPlayers: raw.totalPlayers as number | undefined,
+          });
+          break;
+        case 'standing':
+          setStanding({
+            rank: raw.rank as number,
+            score: raw.score as number,
+            totalPlayers: raw.totalPlayers as number,
+          });
+          break;
+        case 'scores':
+          scoresStore.set({
+            rows: raw.scores as MultiplayerScoreEntry[],
+            answeredCount: (raw.answeredCount as number | undefined) ?? null,
+            totalPlayers: (raw.totalPlayers as number | undefined) ?? null,
+          });
+          break;
+        case 'pong': {
+          if (typeof raw.t === 'number' && typeof raw.serverNow === 'number') {
+            clock.addSample(raw.t, Date.now(), raw.serverNow);
+          }
+          break;
         }
-        break;
+        case 'host_round':
+          setAudioStopped(false);
+          setPaused(false);
+          setHostRound({
+            roundIndex: raw.roundIndex as number,
+            totalRounds: raw.totalRounds as number,
+            playAt: clock.toLocal(raw.playAt as number),
+            roundEndsAt: clock.toLocal(raw.roundEndsAt as number),
+            playbackSeconds: raw.playbackSeconds as number,
+            previewUrl: raw.previewUrl as string | null,
+            title: raw.title as string | null,
+            artist: raw.artist as string | null,
+            albumArtUrl: raw.albumArtUrl as string | null,
+            options: raw.options as ArtistRoundOption[] | undefined,
+          });
+          break;
+        case 'paused':
+          setPaused(true);
+          break;
+        case 'resumed': {
+          setPaused(false);
+          const startedAt = clock.toLocal(raw.startedAt as number);
+          const phaseEndsAt = clock.toLocal(raw.phaseEndsAt as number);
+          setRound((r) => (r ? { ...r, startedAt } : r));
+          setRoundEnd((r) => (r ? { ...r, revealEndsAt: phaseEndsAt } : r));
+          break;
+        }
+        case 'round_extended': {
+          const endsAt = clock.toLocal(raw.roundEndsAt as number);
+          setRound((r) => (r ? { ...r, roundDurationMs: endsAt - r.startedAt } : r));
+          setHostRound((h) => (h ? { ...h, roundEndsAt: endsAt } : h));
+          break;
+        }
+        case 'host_players':
+          setHostPlayers(raw.players as HostPlayer[]);
+          break;
+        case 'stop_audio':
+          setAudioStopped(true);
+          break;
+        case 'song_skipped':
+          setSkippedSong(raw.title as string);
+          break;
+        case 'reveal_audio':
+          setRoundEnd((r) =>
+            r?.correct
+              ? { ...r, correct: { ...r.correct, previewUrl: raw.previewUrl as string } }
+              : r,
+          );
+          break;
+        case 'room_closed':
+        case 'kicked':
+          finalCloseRef.current = true;
+          setClosedReason((raw.reason ?? raw.message) as string);
+          break;
+        case 'round_end':
+          setRoundEnd({
+            correct: raw.correct as MultiplayerRoundEnd['correct'],
+            scores: raw.scores as MultiplayerScoreEntry[],
+            answers: raw.answers as Record<string, number> | undefined,
+            revealEndsAt:
+              raw.revealEndsAt != null ? clock.toLocal(raw.revealEndsAt as number) : undefined,
+          });
+          scoresStore.set({ rows: raw.scores as MultiplayerScoreEntry[] });
+          break;
+        case 'game_over':
+          setGameOver({
+            scores: raw.scores as MultiplayerScoreEntry[],
+            winner: raw.winner as MultiplayerGameOver['winner'],
+            songs: (raw.songs as MultiplayerPlayedSong[] | undefined) ?? [],
+          });
+          scoresStore.set({ rows: raw.scores as MultiplayerScoreEntry[] });
+          /*
+           * The finished round has to go with it.
+           *
+           * The room page renders the results screen when `gameOver` is set and the game screen
+           * when `round` is set, in that order. Leaving the last round behind meant the moment
+           * results stopped being shown — starting another game, a re-render — the page fell
+           * through to the stale round, remounted the game, and the reveal effect autoplayed the
+           * song that had just been missed. Nothing on the results screen reads either of these;
+           * it has its own scores and set list.
+           */
+          setRound(null);
+          setRoundEnd(null);
+          break;
+        case 'error':
+          setError(raw.message as string);
+          setErrorCode((raw.code as string | undefined) ?? null);
+          break;
+        default:
+          break;
       }
-      case 'host_round':
-        setAudioStopped(false);
-        setPaused(false);
-        setHostRound({
-          roundIndex: raw.roundIndex as number,
-          totalRounds: raw.totalRounds as number,
-          playAt: clock.toLocal(raw.playAt as number),
-          roundEndsAt: clock.toLocal(raw.roundEndsAt as number),
-          playbackSeconds: raw.playbackSeconds as number,
-          previewUrl: raw.previewUrl as string | null,
-          title: raw.title as string | null,
-          artist: raw.artist as string | null,
-          albumArtUrl: raw.albumArtUrl as string | null,
-        });
-        break;
-      case 'paused':
-        setPaused(true);
-        break;
-      case 'resumed': {
-        setPaused(false);
-        const startedAt = clock.toLocal(raw.startedAt as number);
-        const phaseEndsAt = clock.toLocal(raw.phaseEndsAt as number);
-        setRound((r) => (r ? { ...r, startedAt } : r));
-        setRoundEnd((r) => (r ? { ...r, revealEndsAt: phaseEndsAt } : r));
-        break;
-      }
-      case 'stop_audio':
-        setAudioStopped(true);
-        break;
-      case 'song_skipped':
-        setSkippedSong(raw.title as string);
-        break;
-      case 'reveal_audio':
-        setRoundEnd((r) =>
-          r?.correct ? { ...r, correct: { ...r.correct, previewUrl: raw.previewUrl as string } } : r,
-        );
-        break;
-      case 'room_closed':
-      case 'kicked':
-        finalCloseRef.current = true;
-        setClosedReason((raw.reason ?? raw.message) as string);
-        break;
-      case 'round_end':
-        setRoundEnd({
-          correct: raw.correct as MultiplayerRoundEnd['correct'],
-          scores: raw.scores as MultiplayerScoreEntry[],
-          revealEndsAt:
-            raw.revealEndsAt != null ? clock.toLocal(raw.revealEndsAt as number) : undefined,
-        });
-        scoresStore.set({ rows: raw.scores as MultiplayerScoreEntry[] });
-        break;
-      case 'game_over':
-        setGameOver({
-          scores: raw.scores as MultiplayerScoreEntry[],
-          winner: raw.winner as MultiplayerGameOver['winner'],
-          songs: (raw.songs as MultiplayerPlayedSong[] | undefined) ?? [],
-        });
-        scoresStore.set({ rows: raw.scores as MultiplayerScoreEntry[] });
-        /*
-         * The finished round has to go with it.
-         *
-         * The room page renders the results screen when `gameOver` is set and the game screen
-         * when `round` is set, in that order. Leaving the last round behind meant the moment
-         * results stopped being shown — starting another game, a re-render — the page fell
-         * through to the stale round, remounted the game, and the reveal effect autoplayed the
-         * song that had just been missed. Nothing on the results screen reads either of these;
-         * it has its own scores and set list.
-         */
-        setRound(null);
-        setRoundEnd(null);
-        break;
-      case 'error':
-        setError(raw.message as string);
-        setErrorCode((raw.code as string | undefined) ?? null);
-        break;
-      default:
-        break;
-    }
-  }, [clock, scoresStore]);
+    },
+    [clock, scoresStore],
+  );
 
   const connect = useCallback(() => {
     setConnectionStatus('connecting');
@@ -373,13 +404,18 @@ export function useMultiplayerGame(
       setError(null);
       setErrorCode(null);
       attemptsRef.current = 0;
-      const { hostEventId, password } = optionsRef.current;
-      if (hostEventId) {
-        ws.send(JSON.stringify({ type: 'host_event', eventId: hostEventId, code: codeRef.current }));
+      const { hostEventId, password, watchKey } = optionsRef.current;
+      if (watchKey) {
+        ws.send(JSON.stringify({ type: 'watch_room', code: codeRef.current, key: watchKey }));
+      } else if (hostEventId) {
+        ws.send(
+          JSON.stringify({ type: 'host_event', eventId: hostEventId, code: codeRef.current }),
+        );
       } else {
         const join: Record<string, unknown> = { type: 'join_room', code: codeRef.current };
         if (nicknameRef.current) join.nickname = nicknameRef.current;
         if (password) join.password = password;
+        if (optionsRef.current.avatar) join.avatar = optionsRef.current.avatar;
         ws.send(JSON.stringify(join));
       }
       // A few samples spread out, so one slow moment does not decide this device's clock offset.
@@ -426,10 +462,10 @@ export function useMultiplayerGame(
     if (nickname === null) return;
     if (connectionStatus !== 'closed') return;
     if (finalCloseRef.current) return;
-    const isEvent = !!room?.event || !!options.hostEventId;
+    const isEvent = !!room?.event || !!options.hostEventId || !!options.watchKey;
     if (room && room.phase !== 'lobby' && !isEvent) return;
     if (isEvent && room?.phase === 'finished') return;
-    if (errorCode === 'password_required' || errorCode === 'wrong_password') return;
+    if (['password_required', 'wrong_password', 'screen_refused'].includes(errorCode ?? '')) return;
     const attempt = attemptsRef.current;
     attemptsRef.current = attempt + 1;
     const ceiling = isEvent ? Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt) : 0;
@@ -438,7 +474,7 @@ export function useMultiplayerGame(
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
-  }, [connectionStatus, room, connect, nickname, errorCode, options.hostEventId]);
+  }, [connectionStatus, room, connect, nickname, errorCode, options.hostEventId, options.watchKey]);
 
   const send = useCallback((payload: Record<string, unknown>) => {
     const ws = wsRef.current;
@@ -476,6 +512,7 @@ export function useMultiplayerGame(
     gameOver,
     scoresStore,
     hostRound,
+    hostPlayers,
     paused,
     audioStopped,
     skippedSong,

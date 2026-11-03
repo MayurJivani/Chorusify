@@ -14,6 +14,8 @@ interface MultiplayerResultsProps {
   selfId: string | null;
   label: string;
   canPlayAgain: boolean;
+  /** A hosted event: the host picks what comes next, so players are not offered a picker. */
+  isEvent?: boolean;
   onPlayAgain: () => void;
   /** Host-only: races something else without breaking up the room. */
   onChangeSource: (source: { artistId: number } | { categoryId: string }) => void;
@@ -25,6 +27,7 @@ export function MultiplayerResults({
   selfId,
   label,
   canPlayAgain,
+  isEvent = false,
   onPlayAgain,
   onChangeSource,
   onLeave,
@@ -218,7 +221,7 @@ export function MultiplayerResults({
           only the host being able to see the options meant everyone else was arguing about a
           list they could not read. Non-hosts browse it; only the host's picks do anything.
         */}
-        {(picking || !canPlayAgain) && (
+        {(picking || !canPlayAgain) && !isEvent && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}

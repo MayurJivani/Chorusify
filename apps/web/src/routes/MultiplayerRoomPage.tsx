@@ -10,6 +10,13 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { useSession } from '../hooks/useSession';
 import { ensureMediaUnlocked } from '../features/game/SnippetPlayer';
 import { VinylSpinner } from '../features/easter-eggs/VinylSpinner';
+import { AvatarPicker } from '../features/multiplayer/AvatarPicker';
+import {
+  hasSavedAvatar,
+  saveAvatar,
+  savedAvatar,
+  type AvatarId,
+} from '../features/multiplayer/avatars';
 import { getEventJoinInfo } from '../api/events';
 import type { EventJoinInfo } from '../types/api';
 
@@ -26,6 +33,7 @@ export function MultiplayerRoomPage() {
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState<string | null>(autoJoin ? hostName : null);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [avatar, setAvatar] = useState<AvatarId>(savedAvatar);
   const [password, setPassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [eventInfo, setEventInfo] = useState<EventJoinInfo | null>(null);
@@ -46,7 +54,11 @@ export function MultiplayerRoomPage() {
    * while `user` is still null would show the form to someone who is in fact logged in.
    */
   const skipNamePrompt =
-    !sessionLoading && user !== null && nickname === null && !eventInfo?.needsPassword;
+    !sessionLoading &&
+    user !== null &&
+    nickname === null &&
+    !eventInfo?.needsPassword &&
+    hasSavedAvatar();
   useEffect(() => {
     if (!skipNamePrompt) return;
     ensureMediaUnlocked();
@@ -76,7 +88,10 @@ export function MultiplayerRoomPage() {
     changeSource,
     leave,
     hostCommand,
-  } = useMultiplayerGame(code, nickname, { password: submittedPassword });
+  } = useMultiplayerGame(code, nickname, {
+    password: submittedPassword,
+    avatar,
+  });
 
   // Back to the form with the reason. An account's own name is changed on the profile page instead.
   useEffect(() => {
@@ -121,6 +136,7 @@ export function MultiplayerRoomPage() {
             event.preventDefault();
             ensureMediaUnlocked();
             setSubmittedPassword(password);
+            saveAvatar(avatar);
             setNickname(user ? '' : name.trim());
           }}
           className="glass flex w-full max-w-md flex-col items-center gap-4 rounded-2xl p-6 text-center"
@@ -161,6 +177,13 @@ export function MultiplayerRoomPage() {
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white outline-none placeholder:text-slate-500 focus:border-chorusify-accent2"
                 />
               )}
+              <AvatarPicker
+                value={avatar}
+                onChange={(id) => {
+                  setAvatar(id);
+                  saveAvatar(id);
+                }}
+              />
               {nameError && (
                 <p role="alert" className="text-sm text-red-300">
                   {nameError}
@@ -271,6 +294,7 @@ export function MultiplayerRoomPage() {
         selfId={selfId}
         label={room.label}
         canPlayAgain={selfId === room.hostId && !room.event}
+        isEvent={!!room.event}
         onPlayAgain={startGame}
         onChangeSource={changeSource}
         onLeave={handleLeave}

@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { getHostedEvent } from '../api/events';
+import { getHostedEvent, listPlaylists } from '../api/events';
 import { MultipleChoiceGuess } from '../features/artist/MultipleChoiceGuess';
 import { SharePanel } from '../features/events/SharePanel';
 import { SyncedAudio } from '../features/events/SyncedAudio';
 import { Disc } from '../features/game/Disc';
-import { LiveScoreboard } from '../features/multiplayer/MultiplayerScoreboard';
+import { Avatar, LiveScoreboard } from '../features/multiplayer/MultiplayerScoreboard';
 import { useScores } from '../features/multiplayer/scoresStore';
 import { useCountdownTo } from '../features/multiplayer/useCountdownTo';
 import { useMultiplayerGame, type HostRound } from '../features/multiplayer/useMultiplayerGame';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { ensureMediaUnlocked } from '../features/game/SnippetPlayer';
-import type { HostedEvent } from '../types/api';
+import type { HostedEvent, Playlist } from '../types/api';
 
 export function EventConsolePage() {
   usePageTitle('Event console');
@@ -54,6 +54,19 @@ function Console({ event }: { event: HostedEvent }) {
   } = game;
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [audioFailed, setAudioFailed] = useState<number | null>(null);
+  // Off when a TV screen is the speaker, so the room does not hear the song twice.
+  const [musicHere, setMusicHere] = useState(true);
+  const [volume, setVolume] = useState(1);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [nextPlaylistId, setNextPlaylistId] = useState('');
+  const screenUrl = `${window.location.origin}/screen/${event.code}?key=${event.screenKey}`;
+
+  useEffect(() => {
+    listPlaylists().then(
+      (r) => setPlaylists(r.playlists.filter((p) => p.tracks.length >= 4)),
+      () => undefined,
+    );
+  }, []);
 
   const phase = gameOver ? 'finished' : (room?.phase ?? 'lobby');
   const inRound = phase === 'playing' || phase === 'round-reveal';
@@ -102,12 +115,38 @@ function Console({ event }: { event: HostedEvent }) {
                     : 'Nobody scored.'}{' '}
                   The result is saved.
                 </p>
-                <Link
-                  to="/events"
-                  className="btn-secondary mt-4 inline-block !rounded-xl !py-2 !text-sm"
-                >
-                  Back to events
-                </Link>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <label className="sr-only" htmlFor="next-playlist">
+                    Next playlist
+                  </label>
+                  <select
+                    id="next-playlist"
+                    value={nextPlaylistId}
+                    onChange={(e) => setNextPlaylistId(e.target.value)}
+                    className="event-input w-auto min-w-0 flex-1"
+                  >
+                    <option value="">Play another playlist…</option>
+                    {playlists.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.tracks.length} songs)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!nextPlaylistId}
+                    onClick={() => {
+                      hostCommand('host_next_playlist', { playlistId: nextPlaylistId });
+                      setNextPlaylistId('');
+                    }}
+                    className="btn-primary !rounded-xl !py-2 !text-sm"
+                  >
+                    Load it, keep everyone
+                  </button>
+                  <Link to="/events" className="btn-ghost !rounded-xl !py-2 !text-sm">
+                    Back to events
+                  </Link>
+                </div>
               </motion.div>
             ) : !inRound ? (
               <motion.div key="lobby" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -152,13 +191,25 @@ function Console({ event }: { event: HostedEvent }) {
                     paused={paused}
                   />
                 )}
-                {hostRound?.previewUrl && hostOnly && (
+                {hostOnly && (
+                  <label className="flex items-center gap-2 text-sm text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={musicHere}
+                      onChange={(e) => setMusicHere(e.target.checked)}
+                      className="h-4 w-4 accent-white"
+                    />
+                    Play the music on this device (turn off if the TV screen is the speaker)
+                  </label>
+                )}
+                {hostRound?.previewUrl && hostOnly && musicHere && (
                   <SyncedAudio
                     previewUrl={hostRound.previewUrl}
                     playAt={hostRound.playAt}
                     playbackSeconds={hostRound.playbackSeconds}
                     paused={paused}
                     stopped={audioStopped}
+                    volume={volume}
                     onFailed={() => setAudioFailed(hostRound.roundIndex)}
                   />
                 )}
@@ -179,6 +230,27 @@ function Console({ event }: { event: HostedEvent }) {
                     twoColumn
                   />
                 )}
+                {hostOnly && musicHere && (
+                  <label className="flex items-center gap-3 text-sm text-slate-300">
+                    Volume
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={volume}
+                      onChange={(e) => setVolume(Number(e.target.value))}
+                      className="w-40 accent-white"
+                    />
+                  </label>
+                )}
+                {roundEnd?.answers && hostRound?.options && (
+                  <AnswerSplit
+                    options={hostRound.options}
+                    answers={roundEnd.answers}
+                    correctTitle={roundEnd.correct?.title ?? ''}
+                  />
+                )}
                 <AnsweredBar store={game.scoresStore} total={playerCount} />
                 <div className="flex flex-wrap gap-2">
                   <ControlButton
@@ -187,6 +259,16 @@ function Console({ event }: { event: HostedEvent }) {
                   >
                     {paused ? 'Resume' : 'Pause'}
                   </ControlButton>
+                  {!roundEnd && (
+                    <>
+                      <ControlButton onClick={() => hostCommand('host_extend', { seconds: 10 })}>
+                        +10 seconds
+                      </ControlButton>
+                      <ControlButton onClick={() => hostCommand('host_reveal')}>
+                        Reveal now
+                      </ControlButton>
+                    </>
+                  )}
                   <ControlButton onClick={() => hostCommand('host_skip')}>
                     {roundEnd ? 'Next round' : 'Skip song'}
                   </ControlButton>
@@ -227,39 +309,39 @@ function Console({ event }: { event: HostedEvent }) {
         <div className="glass rounded-2xl p-4">
           <SharePanel code={event.code} eventName={event.name} needsPassword={event.hasPassword} />
         </div>
-        {room && room.players.length > 0 && phase !== 'finished' && (
-          <div className="glass rounded-2xl p-4">
-            <h2 className="mb-2 text-sm font-semibold text-white">Just joined</h2>
-            <ul className="flex flex-col gap-1">
-              {[...room.players]
-                .reverse()
-                .slice(0, 8)
-                .map((p) => (
-                  <li
-                    key={p.playerId}
-                    className="flex items-center justify-between gap-2 text-sm text-slate-300"
-                  >
-                    <span className="min-w-0 truncate">{p.displayName}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Remove ${p.displayName} from the event? They cannot rejoin.`,
-                          )
-                        ) {
-                          hostCommand('host_kick', { playerId: p.playerId });
-                        }
-                      }}
-                      className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-            </ul>
+        <div className="glass rounded-2xl p-4">
+          <h2 className="text-sm font-semibold text-white">TV or projector</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Open this on the big screen: the QR to join, the question, the countdown and the top 10,
+            with the music. Keep the link to yourself, it works without logging in.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <a
+              href={screenUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-primary flex-1 !rounded-xl !px-3 !py-2 text-center !text-sm"
+            >
+              Open screen
+            </a>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard?.writeText(screenUrl).catch(() => undefined)}
+              className="btn-secondary flex-1 !rounded-xl !px-3 !py-2 !text-sm"
+            >
+              Copy link
+            </button>
           </div>
-        )}
+        </div>
+        <PlayersPanel
+          locked={!!room?.locked}
+          onLock={(locked) => hostCommand('host_lock', { locked })}
+          onSearch={(q) => hostCommand('host_players', { q })}
+          results={game.hostPlayers}
+          newest={room ? [...room.players].reverse().slice(0, 8) : []}
+          onKick={(playerId) => hostCommand('host_kick', { playerId })}
+          total={playerCount}
+        />
       </aside>
     </div>
   );
@@ -296,7 +378,13 @@ function NowPlaying({
   const left = useCountdownTo(revealing ? revealEndsAt : round.roundEndsAt);
   return (
     <div className="flex items-center gap-3.5">
-      <Disc size={72} art={round.albumArtUrl} spinning={!revealing && !paused} />
+      <Disc
+        size={72}
+        art={round.albumArtUrl}
+        spinning={!revealing && !paused}
+        arm
+        className="mr-5"
+      />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-slate-400">
           Song {round.roundIndex + 1} of {round.totalRounds}
@@ -359,5 +447,137 @@ function ControlButton({
             : 'btn-secondary'
       }`}
     />
+  );
+}
+
+/** Who chose what, at the reveal. The right answer's bar is the green one. */
+function AnswerSplit({
+  options,
+  answers,
+  correctTitle,
+}: {
+  options: { deezerTrackId: string; title: string }[];
+  answers: Record<string, number>;
+  correctTitle: string;
+}) {
+  const total = Object.values(answers).reduce((a, b) => a + b, 0);
+  return (
+    <ul className="flex flex-col gap-1.5" aria-label="How the room answered">
+      {options.map((o, i) => {
+        const n = answers[o.deezerTrackId] ?? 0;
+        const right = o.title === correctTitle;
+        return (
+          <li key={o.deezerTrackId} className="text-sm">
+            <div className="flex justify-between gap-2 text-slate-300">
+              <span className="truncate">
+                <span className="font-semibold text-slate-400">{'ABCD'[i]}</span> {o.title}
+              </span>
+              <span className="tabular-nums">{total ? Math.round((n / total) * 100) : 0}%</span>
+            </div>
+            <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <motion.div
+                className={`h-full origin-left rounded-full ${right ? 'bg-emerald-400' : 'bg-white/35'}`}
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: total ? n / total : 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Lock entry, find anyone in a room of hundreds, and remove them. */
+function PlayersPanel({
+  locked,
+  onLock,
+  onSearch,
+  results,
+  newest,
+  onKick,
+  total,
+}: {
+  locked: boolean;
+  onLock: (locked: boolean) => void;
+  onSearch: (q: string) => void;
+  results:
+    | {
+        playerId: string;
+        displayName: string;
+        avatar: string | null;
+        score: number;
+        connected: boolean;
+      }[]
+    | null;
+  newest: { playerId: string; displayName: string; avatar?: string | null }[];
+  onKick: (playerId: string) => void;
+  total: number;
+}) {
+  const [q, setQ] = useState('');
+  // A ref, so the console re-rendering every second does not keep restarting the debounce.
+  const search = useRef(onSearch);
+  search.current = onSearch;
+  useEffect(() => {
+    if (!q.trim()) return;
+    const t = setTimeout(() => search.current(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  const rows = q.trim() && results ? results : newest;
+  return (
+    <div className="glass rounded-2xl p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-white">
+          Players <span className="font-normal tabular-nums text-slate-400">{total}</span>
+        </h2>
+        <label className="flex items-center gap-2 text-xs text-slate-300">
+          <input
+            type="checkbox"
+            checked={locked}
+            onChange={(e) => onLock(e.target.checked)}
+            className="h-4 w-4 accent-white"
+          />
+          Close entry
+        </label>
+      </div>
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Find a player"
+        aria-label="Find a player"
+        className="event-input mt-3"
+      />
+      <ul className="mt-2 flex max-h-72 flex-col gap-1 overflow-y-auto">
+        {rows.map((p) => (
+          <li key={p.playerId} className="flex items-center gap-2 text-sm text-slate-300">
+            <Avatar name={p.displayName} avatar={p.avatar} size={22} />
+            <span className="min-w-0 flex-1 truncate">{p.displayName}</span>
+            {'score' in p && (
+              <span className="tabular-nums text-xs text-slate-400">
+                {(p as { score: number }).score}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Remove ${p.displayName} from the event? They cannot rejoin.`)) {
+                  onKick(p.playerId);
+                  if (q.trim()) onSearch(q);
+                }
+              }}
+              className="shrink-0 rounded px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+        {rows.length === 0 && (
+          <li className="text-xs text-slate-400">
+            {q.trim() ? 'Nobody by that name.' : 'Nobody yet.'}
+          </li>
+        )}
+      </ul>
+    </div>
   );
 }

@@ -44,6 +44,26 @@ export const EVENT_MAX_PLAYERS = 1000;
  * sockets. Smaller rooms keep the instant update, where it is cheap and people notice.
  */
 const COALESCE_ABOVE_PLAYERS = 32;
+/** Avatar ids a player may pick. Anything else is dropped, so a name stays the only free text. */
+export const AVATARS = [
+  'guitar',
+  'mic',
+  'headphones',
+  'drum',
+  'piano',
+  'sax',
+  'trumpet',
+  'violin',
+  'vinyl',
+  'cassette',
+  'radio',
+  'notes',
+  'maracas',
+  'banjo',
+  'accordion',
+  'speaker',
+] as const;
+const avatarChoice = new Map<string, string>();
 const COALESCE_INTERVAL_MS = 250;
 /** Names carried by a large room's snapshot: the newest joiners, for the lobby to show. */
 const LARGE_ROOM_SNAPSHOT_PLAYERS = 24;
@@ -115,6 +135,8 @@ export interface MpPlayerState {
   stageIndex: number;
   joinedAt: number;
   connected?: boolean;
+  /** One of AVATARS, or null for the initial on a colour. */
+  avatar?: string | null;
 }
 
 interface MpPlayer extends MpPlayerState {
@@ -179,20 +201,28 @@ export interface MpEvent {
   audioMode: 'everyone_plays' | 'host_only';
   hostPlays: boolean;
   playbackSeconds: number;
+  /** Rounds per game as the host set them; a short playlist plays fewer. */
+  rounds: number;
 }
 
 export interface EventHooks {
   /** Finds a stored event whose room is not in memory (first join, or after a restart). */
+  /** `ownerUserId` set: that owner is returning to an ended event, to play it again. */
   load(
     code: string,
+    ownerUserId?: string,
   ): Promise<{ event: MpEvent; tracks: ArtistTrack[]; config: EventRoomConfig } | 'ended' | null>;
   canHost(userId: string): Promise<boolean>;
   checkPassword(event: MpEvent, password: string): boolean;
+  /** The key in the host's TV screen link. Only the host's console is given it. */
+  checkScreenKey(event: MpEvent, key: string): boolean;
+  /** Another of the owner's playlists, copied into the event for its next game. */
+  usePlaylist(event: MpEvent, playlistId: string): Promise<ArtistTrack[] | null>;
   onStarted(eventId: string): void;
   onFinished(
     eventId: string,
     playerCount: number,
-    top: { rank: number; displayName: string; score: number }[],
+    top: { rank: number; displayName: string; score: number; game?: number }[],
   ): void;
 }
 
@@ -216,11 +246,19 @@ interface MpRoom {
   /** Event seats by identity, so a reconnect finds its score and a second tab replaces the first. */
   seats: Map<string, MpPlayer>;
   kicked: Set<string>;
+  /** TV and projector screens: they see and hear the game, and hold no seat. */
+  viewers: Set<string>;
+  /** Games this event room has played, so results from a second playlist do not replace the first. */
+  gamesPlayed: number;
   /** When the current phase's timer fires, and what is left of it while paused. */
   phaseEndsAt: number;
   paused: { at: number; remainingMs: number } | null;
   /** Answer ranks frozen at round start; a thousand guesses would otherwise each sort the room. */
   roundRanks: Map<string, number>;
+  /** How many picked each option this round, shown at the reveal. */
+  roundAnswers: Map<string, number>;
+  /** The host has stopped new people joining. Seats already taken still work. */
+  locked: boolean;
   scoresTimer: ReturnType<typeof setTimeout> | null;
   stateTimer: ReturnType<typeof setTimeout> | null;
   lastActiveAt: number;
@@ -277,6 +315,7 @@ export interface MpScoreEntry {
   stageIndex: number;
   /** Shared by players level on points and answer time. */
   rank: number;
+  avatar: string | null;
 }
 
 export interface MpRoomSnapshot {
@@ -306,14 +345,19 @@ export interface MpRoomSnapshot {
     audioMode: MpEvent['audioMode'];
   } | null;
   paused: boolean;
+  locked: boolean;
 }
 
 const emptyRoomExtras = () => ({
   seats: new Map<string, MpPlayer>(),
   kicked: new Set<string>(),
+  viewers: new Set<string>(),
+  gamesPlayed: 0,
   phaseEndsAt: 0,
   paused: null,
   roundRanks: new Map<string, number>(),
+  roundAnswers: new Map<string, number>(),
+  locked: false,
   scoresTimer: null,
   stateTimer: null,
   lastActiveAt: Date.now(),
@@ -493,12 +537,12 @@ async function createEventRoom(
 
 /** One lookup however many phones scan the code in the same moment. */
 const roomLoads = new Map<string, Promise<MpRoom | 'ended' | null>>();
-function loadEventRoom(code: string): Promise<MpRoom | 'ended' | null> {
+function loadEventRoom(code: string, ownerUserId?: string): Promise<MpRoom | 'ended' | null> {
   if (!eventHooks) return Promise.resolve(null);
-  const pending = roomLoads.get(code);
+  const pending = ownerUserId ? undefined : roomLoads.get(code);
   if (pending) return pending;
   const load: Promise<MpRoom | 'ended' | null> = eventHooks
-    .load(code)
+    .load(code, ownerUserId)
     .then<MpRoom | 'ended' | null>((found) =>
       found && found !== 'ended'
         ? createEventRoom(code, found.event, found.tracks, found.config)
@@ -522,6 +566,7 @@ export function registerConnection(input: {
 export function unregisterConnection(playerId: string): void {
   dropFromRoom(playerId);
   passwordAttempts.delete(playerId);
+  avatarChoice.delete(playerId);
   // A queued player whose socket died must come out of the line, or the next person to pick
   // that artist gets matched into a room nobody is going to join.
   duelQueue.dropPlayer(playerId);
@@ -573,6 +618,12 @@ export async function handleClientMessage(playerId: string, message: unknown): P
       const nickname =
         typeof payload.nickname === 'string' ? payload.nickname.trim().slice(0, 24) : undefined;
       const password = typeof payload.password === 'string' ? payload.password.slice(0, 100) : '';
+      if (
+        typeof payload.avatar === 'string' &&
+        (AVATARS as readonly string[]).includes(payload.avatar)
+      ) {
+        avatarChoice.set(playerId, payload.avatar);
+      }
       await joinRoom(playerId, code, nickname, password);
       break;
     }
@@ -624,6 +675,58 @@ export async function handleClientMessage(playerId: string, message: unknown): P
       break;
     case 'host_end':
       withControl(playerId, endEvent);
+      break;
+    case 'watch_room':
+      if (typeof payload.code === 'string' && typeof payload.key === 'string') {
+        await watchRoom(
+          playerId,
+          payload.code.trim().toUpperCase().slice(0, 12),
+          payload.key.slice(0, 64),
+        );
+      }
+      break;
+    case 'host_next_playlist':
+      if (typeof payload.playlistId === 'string') {
+        const playlistId = payload.playlistId.slice(0, 64);
+        const room = roomFor(playerId);
+        if (room?.event && room.hostId === playerId) await nextPlaylist(room, playlistId);
+        else
+          sendTo(playerId, {
+            type: 'error',
+            code: 'not_host',
+            message: 'Only the event host can do that.',
+          });
+      }
+      break;
+    case 'host_extend':
+      withControl(playerId, (room) => extendRound(room, Number(payload.seconds) || 10));
+      break;
+    case 'host_reveal':
+      withControl(playerId, (room) => {
+        if (room.phase === 'playing' && !room.paused) endRound(room);
+      });
+      break;
+    case 'host_lock':
+      withControl(playerId, (room) => {
+        room.locked = payload.locked === true;
+        broadcastRoomState(room);
+      });
+      break;
+    case 'host_players':
+      withControl(playerId, (room) => {
+        const q = typeof payload.q === 'string' ? payload.q.trim().toLowerCase().slice(0, 40) : '';
+        const rows = rankedPlayers(room)
+          .filter((p) => !q || p.displayName.toLowerCase().includes(q))
+          .slice(0, 60)
+          .map((p) => ({
+            playerId: p.playerId,
+            displayName: p.displayName,
+            avatar: p.avatar ?? null,
+            score: p.score,
+            connected: p.disconnectedAt === null,
+          }));
+        sendTo(playerId, { type: 'host_players', players: rows });
+      });
       break;
     case 'host_kick':
       if (typeof payload.playerId === 'string') {
@@ -734,6 +837,7 @@ async function joinRoom(
     scoreAtRoundStart: 0,
     totalAnswerMs: 0,
     joinedAt: Date.now(),
+    avatar: avatarChoice.get(playerId) ?? null,
   };
 
   room.players.set(playerId, player);
@@ -771,6 +875,9 @@ async function joinEvent(
   const seatKey = seatKeyFor(identity, playerId);
   if (room.kicked.has(seatKey)) return sendError(playerId, 'The host removed you from this event.');
   if (room.phase === 'finished') return sendError(playerId, 'That event has ended.');
+  if (room.locked && !room.seats.has(seatKey) && identity.userId !== event.ownerUserId) {
+    return sendError(playerId, 'The host has closed entry to this event.');
+  }
 
   const seat = room.seats.get(seatKey);
   const isOwner = identity.userId === event.ownerUserId;
@@ -810,6 +917,7 @@ async function joinEvent(
       scoreAtRoundStart: 0,
       totalAnswerMs: 0,
       joinedAt: Date.now(),
+      avatar: avatarChoice.get(playerId) ?? null,
     };
     room.seats.set(seatKey, player);
     room.players.set(playerId, player);
@@ -823,6 +931,7 @@ async function joinEvent(
     seat.playerId = playerId;
     seat.socket = sockets.get(playerId)!;
     seat.disconnectedAt = null;
+    seat.avatar = avatarChoice.get(playerId) ?? seat.avatar;
     room.players.set(playerId, seat);
   } else {
     seat.disconnectedAt = null;
@@ -834,9 +943,74 @@ async function joinEvent(
   broadcastRoomState(room);
 }
 
+/** A TV screen: it sees everything a player does and the music, and never answers. */
+const MAX_VIEWERS = 10;
+async function watchRoom(playerId: string, code: string, key: string): Promise<void> {
+  const found = rooms.get(code) ?? (await loadEventRoom(code));
+  const room = found && found !== 'ended' ? found : null;
+  if (!room?.event || !eventHooks?.checkScreenKey(room.event, key)) {
+    return sendTo(playerId, {
+      type: 'error',
+      code: 'screen_refused',
+      message: 'This screen link is not valid. Copy it again from the host console.',
+    });
+  }
+  if (!sockets.has(playerId)) return;
+  if (room.viewers.size >= MAX_VIEWERS)
+    return sendError(playerId, 'Too many screens on this event.');
+  room.viewers.add(playerId);
+  playerRooms.set(playerId, room.code);
+  room.lastActiveAt = Date.now();
+  sendCatchUp(room, playerId);
+  if (room.phase === 'round-reveal' && room.hostOnlyAudio) {
+    sendTo(playerId, {
+      type: 'reveal_audio',
+      previewUrl: room.previewUrls[room.currentRound] ?? null,
+    });
+  }
+}
+
+/** Puts the same room on another playlist after a game, keeping everyone in it. */
+async function nextPlaylist(room: MpRoom, playlistId: string): Promise<void> {
+  if (room.phase !== 'finished' && room.phase !== 'lobby') {
+    return sendError(room.hostId, 'Finish the current game first.');
+  }
+  const tracks = await eventHooks?.usePlaylist(room.event!, playlistId).catch(() => null);
+  if (!tracks || tracks.length < MP_CHOICE_OPTIONS) {
+    return sendError(room.hostId, `That playlist needs at least ${MP_CHOICE_OPTIONS} songs.`);
+  }
+  clearRoomTimers(room);
+  room.source = { ...room.source, loadCatalog: async () => tracks };
+  room.rounds = room.event!.rounds;
+  room.phase = 'lobby';
+  room.tracks = [];
+  room.previewUrls = [];
+  room.roundOptions = [];
+  room.currentRound = 0;
+  room.paused = null;
+  for (const p of room.players.values()) {
+    p.score = 0;
+    p.scoreAtRoundStart = 0;
+    p.totalAnswerMs = 0;
+    p.roundAnswered = false;
+    p.roundCorrect = null;
+    p.roundPoints = 0;
+  }
+  broadcastRoomState(room);
+}
+
 /** Everything a player arriving now needs: the room, and the round in progress if there is one. */
 function sendCatchUp(room: MpRoom, playerId: string): void {
   sendTo(playerId, { type: 'room_state', room: buildRoomSnapshot(room) });
+  if (room.viewers.has(playerId)) {
+    if (room.phase === 'playing' || room.phase === 'round-reveal') {
+      sendRoundFrame(room, playerId, 'screen', true);
+      sendTo(playerId, scoresFrame(room));
+    }
+    if (room.phase === 'round-reveal') sendTo(playerId, roundEndFrame(room));
+    if (room.paused) sendTo(playerId, { type: 'paused', remainingMs: room.paused.remainingMs });
+    return;
+  }
   const player = room.players.get(playerId);
   if ((room.phase === 'playing' || room.phase === 'round-reveal') && player) {
     sendRoundStart(room, player);
@@ -858,6 +1032,10 @@ function sendCatchUp(room: MpRoom, playerId: string): void {
 function dropFromRoom(playerId: string): void {
   const code = playerRooms.get(playerId);
   const room = code ? rooms.get(code) : undefined;
+  if (room?.viewers.delete(playerId)) {
+    playerRooms.delete(playerId);
+    return;
+  }
   if (!room?.event || room.phase === 'finished') return leaveRoom(playerId);
 
   playerRooms.delete(playerId);
@@ -898,7 +1076,7 @@ function resolveRoundIfComplete(room: MpRoom): void {
 async function attachHost(playerId: string, eventId: string, code: string): Promise<void> {
   const identity = identities.get(playerId);
   const userId = identity?.userId;
-  const loaded = rooms.get(code) ?? (await loadEventRoom(code));
+  const loaded = rooms.get(code) ?? (userId ? await loadEventRoom(code, userId) : null);
   const room = loaded && loaded !== 'ended' && loaded.event?.id === eventId ? loaded : null;
   const refuse = () =>
     sendTo(playerId, {
@@ -952,7 +1130,19 @@ function sendHostRound(room: MpRoom): void {
     title: track?.title ?? null,
     artist: track?.artist ?? null,
     albumArtUrl: track?.albumArtUrl ?? null,
+    options: room.roundOptions[room.currentRound] ?? [],
   });
+}
+
+/** More time on the clock for the round running now. Points still fall over the original time. */
+function extendRound(room: MpRoom, seconds: number): void {
+  if (room.phase !== 'playing' || room.paused) return;
+  const extra = Math.max(5, Math.min(60, Math.round(seconds))) * 1000;
+  const remaining = Math.max(0, room.phaseEndsAt - Date.now());
+  clearRoomTimers(room);
+  schedulePhaseEnd(room, remaining + extra);
+  broadcast(room, { type: 'round_extended', roundEndsAt: room.phaseEndsAt, serverNow: Date.now() });
+  sendHostRound(room);
 }
 
 function pauseRoom(room: MpRoom): void {
@@ -1076,6 +1266,7 @@ export function leaveRoom(playerId: string): void {
 
   const room = rooms.get(code);
   if (!room) return;
+  if (room.viewers.delete(playerId)) return;
 
   const leaver = room.players.get(playerId);
   room.players.delete(playerId);
@@ -1363,6 +1554,7 @@ function startRound(room: MpRoom, roundIndex: number): void {
   const lead = room.event ? EVENT_ROUND_LEAD_MS : 0;
   room.roundStartedAt = Date.now() + lead;
   room.speedCorrectCount = 0;
+  room.roundAnswers = new Map();
   room.roundRanks = new Map(rankedPlayers(room).map((p, i) => [p.seatKey, i + 1]));
 
   const roundDuration =
@@ -1381,6 +1573,7 @@ function startRound(room: MpRoom, roundIndex: number): void {
    * otherwise deal a new arrangement and move the answer out from under someone's finger.
    */
   for (const player of room.players.values()) sendRoundStart(room, player);
+  for (const viewer of room.viewers) sendRoundFrame(room, viewer, 'screen', true);
 
   /*
    * Publish the cleared per-round state.
@@ -1399,15 +1592,20 @@ function startRound(room: MpRoom, roundIndex: number): void {
 }
 
 function sendRoundStart(room: MpRoom, player: MpPlayer): void {
+  // Seeded on the seat, which a reconnect keeps, so the answers do not move under someone's finger.
+  const seed = room.event ? player.seatKey : player.playerId;
+  // Host-only audio: a player's device is never told what to play, not merely told not to.
+  const hearsAudio = !room.hostOnlyAudio || player.playerId === room.hostId;
+  sendRoundFrame(room, player.playerId, seed, hearsAudio);
+}
+
+function sendRoundFrame(room: MpRoom, to: string, seedKey: string, hearsAudio: boolean): void {
   const roundIndex = room.currentRound;
   const track = room.tracks[roundIndex];
   const isSpeed = room.gameMode === 'speed';
   const options = room.roundOptions[roundIndex] ?? [];
-  // Seeded on the seat, which a reconnect keeps, so the answers do not move under someone's finger.
-  const seed = `${room.event ? player.seatKey : player.playerId}:${roundIndex}`;
-  // Host-only audio: a player's device is never told what to play, not merely told not to.
-  const hearsAudio = !room.hostOnlyAudio || player.playerId === room.hostId;
-  sendTo(player.playerId, {
+  const seed = `${seedKey}:${roundIndex}`;
+  sendTo(to, {
     type: 'round_start',
     roundIndex,
     totalRounds: room.rounds,
@@ -1483,6 +1681,7 @@ function submitGuess(playerId: string, trackId: string): void {
   player.roundAnswered = true;
   player.roundCorrect = correct;
   player.roundPoints = points;
+  room.roundAnswers.set(trackId, (room.roundAnswers.get(trackId) ?? 0) + 1);
 
   /*
    * Deliberately does not say whether the guess was right.
@@ -1560,6 +1759,7 @@ function roundEndFrame(room: MpRoom): Record<string, unknown> {
         }
       : null,
     scores: buildScores(room, true),
+    answers: Object.fromEntries(room.roundAnswers),
   };
 }
 
@@ -1573,11 +1773,14 @@ function endRound(room: MpRoom): void {
   schedulePhaseEnd(room, room.revealDurationMs);
 
   broadcast(room, roundEndFrame(room));
-  if (room.hostOnlyAudio && room.hostId) {
-    sendTo(room.hostId, {
-      type: 'reveal_audio',
-      previewUrl: room.previewUrls[room.currentRound] ?? null,
-    });
+  if (room.hostOnlyAudio) {
+    for (const id of [room.hostId, ...room.viewers]) {
+      if (id)
+        sendTo(id, {
+          type: 'reveal_audio',
+          previewUrl: room.previewUrls[room.currentRound] ?? null,
+        });
+    }
   }
   // Each player's own place, since the scores frame stops at ten. One sort, one tiny frame each.
   rankedPlayers(room).forEach((p, i) =>
@@ -1610,8 +1813,14 @@ function finishGame(room: MpRoom): void {
     eventHooks?.onFinished(
       room.event.id,
       room.players.size,
-      scores.map((s) => ({ rank: s.rank, displayName: s.displayName, score: s.score })),
+      scores.map((s) => ({
+        rank: s.rank,
+        displayName: s.displayName,
+        score: s.score,
+        game: room.gamesPlayed + 1,
+      })),
     );
+    room.gamesPlayed += 1;
   }
   broadcast(room, {
     type: 'game_over',
@@ -1792,6 +2001,7 @@ function buildScores(room: MpRoom, reveal = false): MpScoreEntry[] {
       correctThisRound: reveal ? p.roundCorrect : null,
       stageIndex: p.stageIndex,
       rank: tied ? rows[i - 1]!.rank : i + 1,
+      avatar: p.avatar ?? null,
     });
   }
   return rows;
@@ -1851,6 +2061,7 @@ function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
       stageIndex: p.stageIndex,
       joinedAt: p.joinedAt,
       connected: p.disconnectedAt === null,
+      avatar: p.avatar ?? null,
     })),
     hostOnlyAudio: room.hostOnlyAudio,
     hostPlayable: room.hostPlayable,
@@ -1865,6 +2076,7 @@ function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
         }
       : null,
     paused: room.paused != null,
+    locked: room.locked,
   };
 }
 
@@ -1877,6 +2089,7 @@ function broadcastRoomState(room: MpRoom): void {
     if (room.hostId && !room.players.has(room.hostId)) {
       sendTo(room.hostId, { type: 'room_state', room: snapshot });
     }
+    for (const viewer of room.viewers) sendTo(viewer, { type: 'room_state', room: snapshot });
     return;
   }
   if (room.stateTimer) return;
@@ -1922,6 +2135,7 @@ function broadcast(room: MpRoom, payload: Record<string, unknown>): void {
   for (const p of room.players.values()) write(p.playerId);
   // The host of an event usually holds no seat, and still needs to see everything.
   if (room.hostId && !room.players.has(room.hostId)) write(room.hostId);
+  for (const viewer of room.viewers) write(viewer);
 }
 
 function sendTo(playerId: string, payload: Record<string, unknown>): void {
@@ -2021,6 +2235,7 @@ export function closeEventRoom(eventId: string, reason: string): void {
     broadcast(room, { type: 'room_closed', reason });
     const ids = [...room.players.keys()];
     if (room.hostId && !room.players.has(room.hostId)) ids.push(room.hostId);
+    ids.push(...room.viewers);
     for (const id of ids) {
       playerRooms.delete(id);
       try {
