@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { SyncedAudio } from '../features/events/SyncedAudio';
-import { Disc } from '../features/game/Disc';
+import { Disc, LabelCount } from '../features/game/Disc';
 import { Avatar } from '../features/multiplayer/MultiplayerScoreboard';
 import { useScores } from '../features/multiplayer/scoresStore';
 import { useCountdownTo } from '../features/multiplayer/useCountdownTo';
@@ -253,12 +253,7 @@ function Lobby({
           <span className="text-slate-400">Name the song first.</span>
         </p>
         <Disc size="calc(24*var(--u))" spinning arm className="mr-[calc(8*var(--u))]">
-          <span className="text-[calc(6*var(--u))] font-bold leading-none tabular-nums">
-            {count}
-          </span>
-          <span className="text-[calc(1.6*var(--u))] font-medium opacity-90">
-            {count === 1 ? 'player' : 'players'}
-          </span>
+          <LabelCount n={count} unit="players" unitOne="player" />
         </Disc>
         <ul
           className="flex max-h-[calc(18*var(--u))] flex-wrap gap-[calc(1*var(--u))] overflow-hidden"

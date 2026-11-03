@@ -90,14 +90,27 @@ function Tonearm({ on }: { on: boolean }) {
           strokeWidth="0.8"
         />
         <rect x="38.5" y="-9" width="11" height="1.2" fill="#80848e" />
-        {/* The tube: straight from the bearing to the headshell */}
-        <rect x="41.9" y="12" width="4.2" height="76" rx="2.1" fill="#26272c" />
-        <rect x="42.5" y="12" width="3" height="76" rx="1.5" fill={`url(#${id}m)`} />
+        {/* The tube: straight off the bearing, then a gentle bend in its last third towards the
+            headshell, the way most real arms are shaped. Ends exactly where the headshell starts. */}
+        <path
+          d="M44 12 L44 56 Q44 76 41.6 88"
+          fill="none"
+          stroke="#26272c"
+          strokeWidth="4.2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M44 12 L44 56 Q44 76 41.6 88"
+          fill="none"
+          stroke={`url(#${id}m)`}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
         {/* Pivot cap over the bearing */}
         <circle cx="44" cy="12" r="4.2" fill={`url(#${id}m)`} stroke="#3a3c44" strokeWidth="0.7" />
         <circle cx="44" cy="12" r="1.4" fill="#3a3c44" />
         {/* Headshell, angled off the tube, with finger lift and cartridge */}
-        <g transform="rotate(24 44 88)">
+        <g transform="translate(-2.4 0) rotate(30 44 88)">
           <path
             d="M39.5 87 h9 l-0.8 12 h-7.4 z"
             fill={`url(#${id}m)`}
@@ -110,5 +123,18 @@ function Tonearm({ on }: { on: boolean }) {
         </g>
       </g>
     </svg>
+  );
+}
+
+/**
+ * A number printed on a record's label, such as the players in a room. Sized from the record
+ * itself (container units), so it reads the same on a phone and on a projector.
+ */
+export function LabelCount({ n, unit, unitOne }: { n: number; unit: string; unitOne: string }) {
+  return (
+    <span className="disc-count">
+      <span className="disc-count-n">{n}</span>
+      <span className="disc-count-unit">{n === 1 ? unitOne : unit}</span>
+    </span>
   );
 }

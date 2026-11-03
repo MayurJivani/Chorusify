@@ -218,6 +218,10 @@ body {
   background: #0d0d0f;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
+.disc {
+  /* Lets what is printed on the label size itself from the record. */
+  container-type: inline-size;
+}
 .disc-center {
   display: flex;
   flex-direction: column;
@@ -677,4 +681,36 @@ main:has(.album-wall) {
   .disc-arm {
     transition: none;
   }
+}
+
+/* A count printed on the label: bold figure, spaced small caps, and a fine printed ring, as on a
+   real pressing. The label behind it is 36% of the record, so sizes are a share of that. */
+.disc-count {
+  display: flex;
+  width: 33cqw;
+  height: 33cqw;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6cqw;
+  border-radius: 9999px;
+  box-shadow:
+    inset 0 0 0 0.5cqw rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1.4cqw rgba(0, 0, 0, 0.08);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.disc-count-n {
+  font-size: 12.5cqw;
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.disc-count-unit {
+  font-size: 2.9cqw;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  padding-left: 0.22em;
 }

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { MultiplayerRoomSnapshot, MultiplayerScoreEntry } from '../../types/api';
 import { SharePanel } from '../events/SharePanel';
-import { Disc } from '../game/Disc';
+import { Disc, LabelCount } from '../game/Disc';
 import { Avatar, MultiplayerScoreboard } from './MultiplayerScoreboard';
 import { KnockAnnounceButton } from './KnockAnnounceButton';
 import { ensureMediaUnlocked } from '../game/SnippetPlayer';
@@ -38,10 +38,7 @@ function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onL
         <p className="text-sm text-slate-400">{room.event.description}</p>
       )}
       <Disc size={190} spinning arm className="mr-10">
-        <span className="text-3xl font-bold leading-none tabular-nums">{count}</span>
-        <span className="text-[10px] font-medium opacity-90">
-          {count === 1 ? 'player' : 'players'}
-        </span>
+        <LabelCount n={count} unit="players" unitOne="player" />
       </Disc>
       <p className="text-sm text-slate-300">The host starts when everyone is ready.</p>
       <ul className="flex min-h-9 flex-wrap justify-center gap-1.5" aria-label="Newest players">
@@ -118,12 +115,7 @@ export function MultiplayerLobby({ room, selfId, onStart, onLeave }: Multiplayer
         {/* The same record as an event lobby, its label counting the room in. */}
         <div className="flex w-full max-w-xs flex-col items-center gap-3">
           <Disc size={150} spinning arm className="mr-9">
-            <span className="text-2xl font-bold leading-none tabular-nums">
-              {room.players.length}
-            </span>
-            <span className="text-[9px] font-medium opacity-90">
-              {room.players.length === 1 ? 'player' : 'players'}
-            </span>
+            <LabelCount n={room.players.length} unit="players" unitOne="player" />
           </Disc>
           <p className="font-mono text-4xl font-black tracking-[0.3em] text-chorusify-accent2">
             {room.code}
