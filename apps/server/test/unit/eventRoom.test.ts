@@ -53,6 +53,12 @@ const tracks = Array.from({ length: 6 }, (_, i) => ({
   durationSeconds: 30,
 }));
 
+const secondTracks = tracks.map((t, i) => ({
+  ...t,
+  deezerTrackId: String(200 + i),
+  title: `Second ${i}`,
+}));
+
 let event: MpEvent;
 const finished = vi.fn();
 const conn = (id: string, userId: string | null, guestId: string | null = null) => {
@@ -86,6 +92,7 @@ beforeEach(() => {
     audioMode: 'everyone_plays',
     hostPlays: false,
     playbackSeconds: 10,
+    rounds: 3,
   };
   setEventHooks({
     load: async () => ({
@@ -95,6 +102,8 @@ beforeEach(() => {
     }),
     canHost: async (userId) => userId === 'owner',
     checkPassword: (_e, password) => password === 'open sesame',
+    checkScreenKey: (_e, key) => key === 'screen-key',
+    usePlaylist: async (_e, id) => (id === 'second' ? secondTracks : null),
     onStarted: vi.fn(),
     onFinished: finished,
   });
@@ -408,5 +417,102 @@ describe('event rooms', () => {
     expect(socks[0]!.of('scores').length - before).toBe(1);
     expect(socks[0]!.last('scores').answeredCount).toBe(30);
     expect(socks[0]!.last('scores').scores.length).toBe(10);
+  });
+
+  it('gives a screen with the right key the game and the music, even in host-only mode', async () => {
+    event.audioMode = 'host_only';
+    await hostUp();
+    const tv = conn('tv', null, 'gtv');
+    await msg('tv', { type: 'watch_room', code: 'EVENT1', key: 'wrong' });
+    expect(tv.last('error').code).toBe('screen_refused');
+    await msg('tv', { type: 'watch_room', code: 'EVENT1', key: 'screen-key' });
+    const a = conn('a', null, 'ga');
+    await join('a');
+    expect(tv.last('room_state').room.playerCount).toBe(1);
+
+    await start();
+    expect(tv.last('round_start').previewUrl).toContain('100.mp3');
+    expect(tv.last('round_start').options).toHaveLength(4);
+    expect(a.last('round_start').previewUrl).toBeNull();
+
+    // A screen never answers or holds a seat.
+    await vi.advanceTimersByTimeAsync(LEAD);
+    await msg('tv', { type: 'guess', trackId: '100' });
+    expect(tv.of('guess_result')).toHaveLength(0);
+    await msg('a', { type: 'guess', trackId: '100' });
+    expect(tv.last('round_end').scores.map((r: any) => r.playerId)).toEqual(['a']);
+    expect(tv.last('reveal_audio').previewUrl).toContain('100.mp3');
+  });
+
+  it('plays another playlist in the same room, keeping players and both results', async () => {
+    const host = await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    await start();
+    await msg('host', { type: 'host_end' });
+    expect(a.of('game_over')).toHaveLength(1);
+
+    await msg('host', { type: 'host_next_playlist', playlistId: 'nope' });
+    expect(host.last('error').message).toMatch(/at least/);
+    await msg('host', { type: 'host_next_playlist', playlistId: 'second' });
+    expect(a.last('room_state').room.phase).toBe('lobby');
+    expect(a.last('room_state').room.playerCount).toBe(1);
+
+    await start();
+    expect(host.last('host_round').title).toBe('Second 0');
+    await msg('host', { type: 'host_end' });
+    const games = finished.mock.calls.map((call) => call[2][0]?.game);
+    expect(games).toEqual([1, 2]);
+  });
+
+  it('refuses the next-playlist command from anyone but the host', async () => {
+    await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    await msg('a', { type: 'host_next_playlist', playlistId: 'second' });
+    expect(a.last('error').code).toBe('not_host');
+  });
+
+  it('keeps a chosen avatar, and drops one that is not on the list', async () => {
+    const host = await hostUp();
+    conn('a', null, 'ga');
+    conn('b', null, 'gb');
+    await join('a', { avatar: 'guitar' });
+    await join('b', { avatar: '<script>' });
+    const players = host.last('room_state').room.players;
+    expect(players.find((p: any) => p.playerId === 'a').avatar).toBe('guitar');
+    expect(players.find((p: any) => p.playerId === 'b').avatar).toBeNull();
+  });
+
+  it('lets the host add time, reveal early, lock entry and see the answer split', async () => {
+    const host = await hostUp();
+    const a = conn('a', null, 'ga');
+    conn('b', null, 'gb');
+    await join('a');
+    await join('b');
+    await start();
+    await vi.advanceTimersByTimeAsync(LEAD);
+    await msg('host', { type: 'host_extend', seconds: 10 });
+    expect(a.last('round_extended')).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(a.of('round_end')).toHaveLength(0);
+
+    await msg('a', { type: 'guess', trackId: '100' });
+    await msg('host', { type: 'host_reveal' });
+    const end = a.last('round_end');
+    expect(end.answers).toEqual({ '100': 1 });
+
+    await msg('host', { type: 'host_lock', locked: true });
+    const late = conn('c', null, 'gc');
+    await join('c');
+    expect(late.last('error').message).toMatch(/closed entry/);
+    // Someone who already had a seat still gets back in.
+    unregisterConnection('b');
+    const back = conn('b2', null, 'gb');
+    await join('b2');
+    expect(back.last('room_state')).toBeTruthy();
+
+    await msg('host', { type: 'host_players', q: 'player a' });
+    expect(host.last('host_players').players.map((p: any) => p.playerId)).toEqual(['a']);
   });
 });

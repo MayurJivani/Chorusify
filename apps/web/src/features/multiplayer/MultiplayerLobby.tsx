@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { MultiplayerRoomSnapshot, MultiplayerScoreEntry } from '../../types/api';
 import { SharePanel } from '../events/SharePanel';
-import { CassetteArt } from '../game/Cassette';
 import { Disc } from '../game/Disc';
 import { Avatar, MultiplayerScoreboard } from './MultiplayerScoreboard';
 import { KnockAnnounceButton } from './KnockAnnounceButton';
@@ -38,7 +37,7 @@ function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onL
       {room.event?.description && (
         <p className="text-sm text-slate-400">{room.event.description}</p>
       )}
-      <Disc size={190} spinning>
+      <Disc size={190} spinning arm className="mr-10">
         <span className="text-3xl font-bold leading-none tabular-nums">{count}</span>
         <span className="text-[10px] font-medium opacity-90">
           {count === 1 ? 'player' : 'players'}
@@ -56,7 +55,7 @@ function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onL
               transition={{ type: 'spring', stiffness: 460, damping: 28 }}
               className="flex items-center gap-1.5 rounded-full bg-white/[0.06] py-1 pl-1 pr-2.5 text-xs text-slate-200"
             >
-              <Avatar name={p.displayName} size={22} />
+              <Avatar name={p.displayName} avatar={p.avatar} size={22} />
               <span className="max-w-24 truncate">{p.displayName}</span>
             </motion.li>
           ))}
@@ -116,11 +115,16 @@ export function MultiplayerLobby({ room, selfId, onStart, onLeave }: Multiplayer
           </p>
         </div>
 
-        {/* The code is printed on a tape, turning while the room fills up. */}
-        <div className="flex w-full max-w-xs flex-col items-center gap-2">
-          <div className="w-full drop-shadow-[0_16px_24px_rgba(0,0,0,0.6)]">
-            <CassetteArt playing={false} progress={0.3} label={`Room ${room.code}`} spinIdle />
-          </div>
+        {/* The same record as an event lobby, its label counting the room in. */}
+        <div className="flex w-full max-w-xs flex-col items-center gap-3">
+          <Disc size={150} spinning arm className="mr-9">
+            <span className="text-2xl font-bold leading-none tabular-nums">
+              {room.players.length}
+            </span>
+            <span className="text-[9px] font-medium opacity-90">
+              {room.players.length === 1 ? 'player' : 'players'}
+            </span>
+          </Disc>
           <p className="font-mono text-4xl font-black tracking-[0.3em] text-chorusify-accent2">
             {room.code}
           </p>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
 import { ApiError } from '../../api/client';
-import { savePlaylist, searchEventSongs, type SearchField } from '../../api/events';
+import { importSpotify, savePlaylist, searchEventSongs, type SearchField } from '../../api/events';
 import { SongPreviewButton } from '../game/SongPreviewButton';
 import type { Playlist, PlaylistTrack, SongHit } from '../../types/api';
 
@@ -77,6 +77,36 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { results, status, message } = useSongSearch(query, field);
+  const [spotifyUrl, setSpotifyUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
+  const runImport = async () => {
+    setImporting(true);
+    setImportNote(null);
+    try {
+      const found = await importSpotify(spotifyUrl.trim());
+      let added = 0;
+      setTracks((prev) => {
+        const have = new Set(prev.map((t) => t.deezerTrackId));
+        const fresh = found.matched.filter((h) => !have.has(h.deezerTrackId)).map(toTrack);
+        const next = [...prev, ...fresh].slice(0, MAX_TRACKS);
+        added = next.length - prev.length;
+        return next;
+      });
+      if (!name.trim()) setName(found.name.slice(0, 80));
+      const missing = found.missing.map((t) => `${t.title} (${t.artist})`);
+      setImportNote(
+        `Added ${added} of ${found.matched.length + found.missing.length} songs.` +
+          (missing.length ? ` Not on Deezer with a preview: ${missing.join(', ')}.` : ''),
+      );
+      setSpotifyUrl('');
+    } catch (err) {
+      setImportNote(err instanceof Error ? err.message : 'Import failed. Try again.');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const inList = useMemo(() => new Set(tracks.map((t) => t.deezerTrackId)), [tracks]);
   const totalSeconds = useMemo(
@@ -131,6 +161,38 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section aria-label="Search songs" className="flex min-w-0 flex-col gap-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (spotifyUrl.trim()) void runImport();
+            }}
+            className="flex gap-2"
+          >
+            <input
+              value={spotifyUrl}
+              onChange={(e) => setSpotifyUrl(e.target.value)}
+              placeholder="Paste a Spotify playlist link"
+              aria-label="Spotify playlist link"
+              className="event-input min-w-0 flex-1"
+            />
+            <button
+              type="submit"
+              disabled={importing || !spotifyUrl.trim()}
+              className="btn-secondary !rounded-xl !px-3 !py-2 !text-sm"
+            >
+              {importing ? 'Importing…' : 'Import'}
+            </button>
+          </form>
+          {importing && (
+            <p aria-live="polite" className="text-xs text-slate-400">
+              Finding each song on Deezer. A long playlist takes up to a minute.
+            </p>
+          )}
+          {importNote && (
+            <p aria-live="polite" className="text-xs text-slate-300">
+              {importNote}
+            </p>
+          )}
           <div className="flex gap-2">
             <input
               value={query}

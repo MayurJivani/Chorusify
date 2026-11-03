@@ -9,6 +9,7 @@ import { validate } from '../middleware/validate';
 import { env } from '../env';
 import { searchSongs } from '../services/deezerService';
 import * as eventService from '../services/eventService';
+import { importSpotifyPlaylist, SpotifyImportError } from '../services/spotifyImport';
 import { EventError, MAX_PLAYLIST_TRACKS } from '../services/eventService';
 
 export const eventsRouter = Router();
@@ -29,7 +30,16 @@ eventsRouter.get(
 
 eventsRouter.get(
   '/join/:code',
-  validate(z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{4,12}$/) }), 'params'),
+  validate(
+    z.object({
+      code: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z0-9]{4,12}$/),
+    }),
+    'params',
+  ),
   asyncHandler(async (req, res) => {
     const info = await eventService.getJoinInfo((req.params.code as string).toUpperCase());
     // Not an error: most room codes are ordinary rooms, which the socket handles.
@@ -68,6 +78,30 @@ host.get(
   }),
 );
 
+/** An import is up to a couple of hundred Deezer lookups, so it gets a much smaller allowance. */
+const importLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: env.NODE_ENV === 'test' ? 100_000 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.session.userId ?? clientIp(req),
+  message: { error: 'Too many imports. Wait a minute and try again.' },
+});
+
+host.post(
+  '/import/spotify',
+  importLimiter,
+  validate(z.object({ url: z.string().trim().min(10).max(300) })),
+  asyncHandler(async (req, res) => {
+    try {
+      res.json(await importSpotifyPlaylist((req.body as { url: string }).url, MAX_PLAYLIST_TRACKS));
+    } catch (err) {
+      if (err instanceof SpotifyImportError) throw new HttpError(400, err.message);
+      throw err;
+    }
+  }),
+);
+
 const trackSchema = z.object({
   deezerTrackId: z.string().regex(/^\d{1,20}$/),
   title: z.string().min(1).max(300),
@@ -77,7 +111,10 @@ const trackSchema = z.object({
     .string()
     .url()
     .max(500)
-    .refine((url) => new URL(url).hostname.endsWith('.dzcdn.net') || new URL(url).hostname === 'api.deezer.com')
+    .refine(
+      (url) =>
+        new URL(url).hostname.endsWith('.dzcdn.net') || new URL(url).hostname === 'api.deezer.com',
+    )
     .nullable(),
   durationSeconds: z.number().int().min(0).max(36000),
 });
@@ -108,7 +145,9 @@ host.post(
   validate(playlistSchema),
   asyncHandler(async (req, res) => {
     const { name, tracks } = req.body as z.infer<typeof playlistSchema>;
-    res.status(201).json({ playlist: await eventService.createPlaylist(ownerId(req), name, tracks) });
+    res
+      .status(201)
+      .json({ playlist: await eventService.createPlaylist(ownerId(req), name, tracks) });
   }),
 );
 

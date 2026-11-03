@@ -3,7 +3,7 @@
  * multiplayerService, which this hands the event to through EventHooks.
  */
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { canHostEvents } from '../auth/roles';
 import { db } from '../db/client';
 import { events, playlists, type EventResultRow, type PlaylistTrack } from '../db/schema';
@@ -109,10 +109,19 @@ export interface EventInput {
 type EventRow = typeof events.$inferSelect;
 
 /** What the host's own screens see. The password hash stays on the server. */
+/** The key in the TV screen link. Derived, so there is nothing to store or rotate per event. */
+export function screenKeyFor(eventId: string): string {
+  return createHmac('sha256', env.SESSION_SECRET)
+    .update(`screen:${eventId}`)
+    .digest('hex')
+    .slice(0, 24);
+}
+
 function toHostView(row: EventRow) {
   const { passwordHash, tracks, ...rest } = row;
   return {
     ...rest,
+    screenKey: screenKeyFor(row.id),
     hasPassword: passwordHash != null,
     trackCount: tracks.length,
     tracks,
@@ -303,11 +312,12 @@ export async function getJoinInfo(code: string) {
 // --- The room's view of all this ----------------------------------------------------------
 
 setEventHooks({
-  async load(code) {
+  async load(code, ownerUserId) {
     const rows = await db.select().from(events).where(eq(events.code, code)).limit(1);
     const row = rows[0];
     if (!row) return null;
-    if (row.status === 'ended') return 'ended';
+    // Only the event's own host brings an ended event back.
+    if (row.status === 'ended' && row.ownerUserId !== ownerUserId) return 'ended';
     const event: MpEvent = {
       id: row.id,
       ownerUserId: row.ownerUserId,
@@ -317,6 +327,7 @@ setEventHooks({
       audioMode: row.audioMode as MpEvent['audioMode'],
       hostPlays: row.hostPlays,
       playbackSeconds: row.playbackSeconds,
+      rounds: row.rounds,
     };
     return {
       event,
@@ -331,6 +342,27 @@ setEventHooks({
     };
   },
   canHost: canHostEvents,
+  checkScreenKey: (event, key) => {
+    const a = Buffer.from(screenKeyFor(event.id));
+    const b = Buffer.from(key);
+    return a.length === b.length && timingSafeEqual(a, b);
+  },
+  async usePlaylist(event, playlistId) {
+    const rows = await db
+      .select({ tracks: playlists.tracks })
+      .from(playlists)
+      .where(and(eq(playlists.id, playlistId), eq(playlists.ownerUserId, event.ownerUserId)))
+      .limit(1);
+    const tracks = rows[0]?.tracks;
+    if (!tracks || tracks.length < MIN_EVENT_TRACKS) return null;
+    // The event is open again, on its new songs, so a restart or a late joiner finds this game.
+    await db
+      .update(events)
+      .set({ tracks, playlistId, status: 'open' })
+      .where(eq(events.id, event.id));
+    joinInfoCache.clear();
+    return tracks;
+  },
   checkPassword: (event, password) =>
     !!event.passwordHash && passwordMatches(event.id, password, event.passwordHash),
   onStarted(eventId) {
@@ -342,7 +374,13 @@ setEventHooks({
   },
   onFinished(eventId, playerCount, top: EventResultRow[]) {
     db.update(events)
-      .set({ status: 'ended', endedAt: new Date(), playerCount, results: top })
+      // Appended, tagged with the game number, so a second playlist keeps the first one's result.
+      .set({
+        status: 'ended',
+        endedAt: new Date(),
+        playerCount,
+        results: sql`coalesce(${events.results}, '[]'::jsonb) || ${JSON.stringify(top)}::jsonb`,
+      })
       .where(eq(events.id, eventId))
       .catch((err) => logger.error({ err, eventId }, 'Failed to store event result'));
   },
