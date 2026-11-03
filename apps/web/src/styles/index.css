@@ -658,7 +658,7 @@ main:has(.album-wall) {
    disc turns; the swing is a transform, so it costs the same as the spin. */
 .disc-arm {
   position: absolute;
-  top: -6%;
+  top: 6%;
   right: -22%;
   width: 34%;
   height: 62%;
