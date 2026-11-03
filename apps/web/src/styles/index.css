@@ -424,16 +424,8 @@ body {
   .album-wall-column img {
     cursor: pointer;
   }
-  /* Under the pointer the column greys cover by cover instead, so one cover can light up. */
-  .album-wall-column:hover {
-    filter: none;
-  }
-  .album-wall-column:hover img {
-    filter: grayscale(1) brightness(0.34);
-  }
-  .album-wall-column:hover img:hover {
+  .album-wall-column img:hover {
     z-index: 1;
-    filter: none;
     transform: scale(1.08);
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
   }
@@ -441,6 +433,14 @@ body {
     display: block;
   }
 }
+/* Columns near the pointer grey cover by cover, so colour can fade in around it (set in AlbumWall). */
+.album-wall-column-near {
+  filter: none;
+}
+.album-wall-column-near img {
+  filter: grayscale(1) brightness(0.34);
+}
+
 /* The song in the mini player keeps its colour on the wall, with a slow ring of light. */
 .album-wall-column-live {
   filter: none;

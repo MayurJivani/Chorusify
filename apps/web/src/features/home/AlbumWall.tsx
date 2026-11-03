@@ -6,6 +6,19 @@ const COLUMNS = 14;
 // A column holds at least this many, more when there are enough covers to fill them.
 const MIN_TILES_PER_LOOP = 8;
 
+// How far from the pointer colour reaches, in px.
+const COLOUR_RADIUS = 260;
+
+/** How grey a cover should be at a distance from the pointer: none at the centre, full at the edge. */
+export function tileFilter(distance: number): string {
+  const t = Math.max(0, 1 - distance / COLOUR_RADIUS);
+  if (t >= 0.9) return 'none';
+  // Rounded so a moving cover only gets a new filter when its colour visibly changes.
+  const grey = Math.round((1 - t) * 20) / 20;
+  const light = Math.round((0.34 + 0.66 * t) * 20) / 20;
+  return `grayscale(${grey}) brightness(${light})`;
+}
+
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -67,6 +80,9 @@ export function AlbumWall({
     let visible = true;
     let frame = 0;
 
+    const onLeave = () => {
+      pointer = null;
+    };
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
       const box = wall.getBoundingClientRect();
@@ -77,6 +93,7 @@ export function AlbumWall({
     });
     observer.observe(wall);
     window.addEventListener('pointermove', onMove);
+    document.documentElement.addEventListener('pointerleave', onLeave);
 
     const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
@@ -96,6 +113,28 @@ export function AlbumWall({
       spotX = nextX;
       spotY = nextY;
 
+      // Colour near the pointer. Only columns within reach colour cover by cover; the rest stay
+      // one grey image, so this costs a few dozen covers, not the whole wall.
+      const at = pointer;
+      for (const column of wall.querySelectorAll<HTMLElement>('.album-wall-column')) {
+        const box = column.getBoundingClientRect();
+        const wallBox = wall.getBoundingClientRect();
+        const near =
+          at !== null && Math.abs(box.left + box.width / 2 - (wallBox.left + at.x)) < COLOUR_RADIUS;
+        column.classList.toggle('album-wall-column-near', near);
+        for (const img of column.querySelectorAll<HTMLImageElement>('img')) {
+          if (!near || !at || img.classList.contains('album-wall-playing')) {
+            if (img.style.filter) img.style.filter = '';
+            continue;
+          }
+          const r = img.getBoundingClientRect();
+          const dx = r.left + r.width / 2 - (wallBox.left + at.x);
+          const dy = r.top + r.height / 2 - (wallBox.top + at.y);
+          const filter = tileFilter(Math.hypot(dx, dy));
+          if (img.style.filter !== filter) img.style.filter = filter;
+        }
+      }
+
       // Scrolling the page pushes the columns along, then they settle back to their own drift.
       const scrollTop = scroller?.scrollTop ?? 0;
       const push = Math.min(6, Math.abs(scrollTop - lastScroll));
@@ -113,6 +152,7 @@ export function AlbumWall({
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener('pointermove', onMove);
+      document.documentElement.removeEventListener('pointerleave', onLeave);
     };
   }, [ready, reduced]);
 
@@ -126,7 +166,7 @@ export function AlbumWall({
               key={c}
               className={`album-wall-column ${c % 2 ? 'album-wall-column-down' : ''} ${tiles.some((t) => t.id === playingId) ? 'album-wall-column-live' : ''}`}
               style={{
-                animationDuration: `${60 + (c % 5) * 14}s`,
+                animationDuration: `${52 + (c % 5) * 12}s`,
                 animationDelay: `${-13 * c}s`,
               }}
             >

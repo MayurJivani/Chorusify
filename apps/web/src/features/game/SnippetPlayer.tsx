@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Cassette } from './Cassette';
 import { Disc } from './Disc';
 import { Tonearm } from './Tonearm';
 import { snippetPlayback } from './ridges';
@@ -56,8 +55,6 @@ interface SnippetPlayerProps {
   /** When set, the snippet always starts at this offset instead of a random one, so all
    *  players hear the same slice of the clip (used for fair multiplayer rounds). */
   fixedOffsetSeconds?: number;
-  /** Desi Daily plays from a cassette, labelled with this. Everything else gets the record. */
-  cassetteLabel?: string;
   /** Multiplayer's header already counts the round down; a second clock here would compete. */
   hideClock?: boolean;
 }
@@ -76,7 +73,6 @@ export function SnippetPlayer({
   autoPlay,
   playSignal,
   fixedOffsetSeconds,
-  cassetteLabel,
   hideClock = false,
 }: SnippetPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -296,46 +292,34 @@ export function SnippetPlayer({
         onTimeUpdate={handleTimeUpdate}
         onEnded={() => setIsPlaying(false)}
       />
-
-      {cassetteLabel ? (
-        <Cassette
+      {/* Vinyl Record Player Container */}
+      <div className="relative">
+        <Tonearm
           playing={isPlaying}
           progress={progress}
-          label={cassetteLabel}
           disabled={disabled}
           onToggle={handlePlayPause}
         />
-      ) : (
-        /* Vinyl Record Player Container */
-        <div className="relative">
-          <Tonearm
-            playing={isPlaying}
-            progress={progress}
-            disabled={disabled}
-            onToggle={handlePlayPause}
+        {isPlaying && (
+          <span
+            className="absolute inset-0 rounded-full pointer-events-none scale-110 animate-pulse"
+            style={{
+              boxShadow: '0 0 30px rgba(139, 92, 246, 0.5), 0 0 60px rgba(139, 92, 246, 0.25)',
+            }}
           />
-          {isPlaying && (
-            <span
-              className="absolute inset-0 rounded-full pointer-events-none scale-110 animate-pulse"
-              style={{
-                boxShadow: '0 0 30px rgba(139, 92, 246, 0.5), 0 0 60px rgba(139, 92, 246, 0.25)',
-              }}
-            />
-          )}
-          {/* Stepped down on small screens: at 192px the record plus the transport, pips, input
+        )}
+        {/* Stepped down on small screens: at 192px the record plus the transport, pips, input
               and guess list overflowed a 375x812 viewport and cut off the Skip button. */}
-          <button
-            type="button"
-            onClick={handlePlayPause}
-            disabled={disabled}
-            aria-label={isPlaying ? 'Stop the snippet' : 'Play the snippet'}
-            className="block h-32 w-32 rounded-full transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56"
-          >
-            <Disc size="100%" spinning={isPlaying} art={artistPictureUrl} />
-          </button>
-        </div>
-      )}
-
+        <button
+          type="button"
+          onClick={handlePlayPause}
+          disabled={disabled}
+          aria-label={isPlaying ? 'Stop the snippet' : 'Play the snippet'}
+          className="block h-32 w-32 rounded-full transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:h-48 sm:w-48 lg:h-56 lg:w-56"
+        >
+          <Disc size="100%" spinning={isPlaying} art={artistPictureUrl} />
+        </button>
+      </div>
       {/* Play capsule with play button and soundwave visualizer */}
       <div className="flex items-center gap-4 bg-white/[0.04] border border-white/[0.08] rounded-full pl-3 pr-5 py-2 backdrop-blur-md shadow-lg">
         <button
@@ -388,7 +372,6 @@ export function SnippetPlayer({
           </span>
         )}
       </div>
-
       {/* Autoplay refusals used to be invisible: the record span and the state said "playing"
           while nothing came out of the speakers. Most likely on a multiplayer round, which
           starts from a socket message rather than a tap. */}
@@ -397,7 +380,6 @@ export function SnippetPlayer({
           Tap the record to play. Your browser blocked audio from starting on its own.
         </p>
       )}
-
       {/* Volume slider. Phones have volume buttons, and a round needs the room. */}
       <div className="hidden items-center gap-2 w-full max-w-[220px] sm:flex">
         {/* Speaker icon */}

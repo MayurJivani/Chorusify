@@ -118,7 +118,6 @@ export function PlayPage() {
             previewUrl={previewUrl}
             stageSeconds={stageSeconds}
             disabled={submitting}
-            cassetteLabel={edition === 'desi' ? `Desi Daily, track ${position}` : undefined}
           />
         )}
 

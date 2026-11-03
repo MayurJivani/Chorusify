@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SamplerSong } from '../../api/songs';
-import { buildColumns } from './AlbumWall';
+import { buildColumns, tileFilter } from './AlbumWall';
 
 const song = (id: number, art: string): SamplerSong => ({
   id,
@@ -28,5 +28,15 @@ describe('buildColumns', () => {
       .flat()
       .map((s) => s.id);
     expect(new Set(shown).size).toBe(200);
+  });
+});
+
+describe('tileFilter', () => {
+  it('is full colour at the pointer and full grey out of reach', () => {
+    expect(tileFilter(0)).toBe('none');
+    expect(tileFilter(500)).toBe('grayscale(1) brightness(0.35)');
+  });
+  it('fades in between, so nearby covers show some colour', () => {
+    expect(tileFilter(130)).toBe('grayscale(0.5) brightness(0.65)');
   });
 });

@@ -138,26 +138,3 @@ export function CassetteArt({ playing, progress, label, spinIdle = false }: Cass
     </svg>
   );
 }
-
-interface CassetteProps {
-  playing: boolean;
-  progress: number;
-  label: string;
-  disabled?: boolean;
-  onToggle: () => void;
-}
-
-/** The player for Desi Daily. The reels only turn while audio really plays. */
-export function Cassette({ playing, progress, label, disabled, onToggle }: CassetteProps) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      aria-label={playing ? 'Stop the snippet' : 'Play the snippet'}
-      className="block w-56 drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:w-80"
-    >
-      <CassetteArt playing={playing} progress={progress} label={label} />
-    </button>
-  );
-}
