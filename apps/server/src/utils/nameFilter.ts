@@ -165,8 +165,8 @@ function normalize(text: string): string {
   return (
     text
       .toLowerCase()
-      // A number after a word is a number (Player15, Ben10), not a letter in disguise.
-      .replace(/(?<=\p{L})\d+(?!\p{L})/gu, '')
+      // A number on its own or after a word is a number (Tester 45, Ben10), not letters in disguise.
+      .replace(/(?<!\p{L})\d+(?!\p{L})|(?<=\p{L})\d+(?!\p{L})/gu, '')
       .replace(/ß/g, 'ss')
       .normalize('NFKD')
       .replace(/\p{M}/gu, '')
