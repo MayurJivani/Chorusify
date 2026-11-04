@@ -1,4 +1,3 @@
-import { Disc } from '../features/game/Disc';
 import { AlbumWall } from '../features/home/AlbumWall';
 import { MiniPlayer } from '../features/home/MiniPlayer';
 import { getSampler, type SamplerSong } from '../api/songs';
@@ -235,7 +234,7 @@ function DailyLink({
   return (
     <Link
       to={to}
-      className="group glass flex flex-col gap-3 rounded-2xl border border-white/10 p-3 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
+      className="glass flex flex-col gap-3 rounded-2xl border border-white/10 p-3 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
     >
       <span className="min-w-0">
         <span className="block text-xl font-black text-white">{title}</span>
@@ -245,9 +244,9 @@ function DailyLink({
         </span>
       </span>
       <span className="btn-primary inline-flex shrink-0 items-center justify-center gap-1.5 !px-4 !py-1.5 !text-sm">
-        <span className="daily-play-disc">
-          <Disc size={16} />
-        </span>
+        <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden="true">
+          <path d="M4 2.8v10.4a.8.8 0 0 0 1.2.7l8.6-5.2a.8.8 0 0 0 0-1.4L5.2 2.1A.8.8 0 0 0 4 2.8Z" />
+        </svg>
         Play
       </span>
     </Link>

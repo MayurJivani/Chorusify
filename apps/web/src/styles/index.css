@@ -392,8 +392,8 @@ body {
   inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    circle 280px at var(--x, 50%) var(--y, 40%),
-    rgba(255, 255, 255, 0.09),
+    circle 380px at var(--x, 50%) var(--y, 40%),
+    rgba(255, 255, 255, 0.1),
     transparent 70%
   );
 }
@@ -474,15 +474,6 @@ body {
   }
 }
 
-/* The Play buttons carry a tiny record that starts turning when you reach for the card. */
-.daily-play-disc {
-  display: inline-flex;
-}
-.group:hover .daily-play-disc .disc-body,
-.group:focus-visible .daily-play-disc .disc-body {
-  animation: disc-turn 0.9s linear infinite;
-}
-
 @media (max-width: 639px) {
   .album-wall {
     height: 300px;
@@ -492,8 +483,7 @@ body {
   .album-wall-stage,
   .album-wall-column,
   .album-wall-playing,
-  .hop-word > span,
-  .daily-play-disc .disc-body {
+  .hop-word > span {
     animation: none !important;
   }
 }
