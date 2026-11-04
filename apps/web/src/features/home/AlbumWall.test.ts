@@ -37,6 +37,7 @@ describe('tileFilter', () => {
     expect(tileFilter(500)).toBe('grayscale(1) brightness(0.35)');
   });
   it('fades in between, so nearby covers show some colour', () => {
-    expect(tileFilter(130)).toBe('grayscale(0.5) brightness(0.65)');
+    expect(tileFilter(100)).toBe('none');
+    expect(tileFilter(210)).toBe('grayscale(0.5) brightness(0.65)');
   });
 });

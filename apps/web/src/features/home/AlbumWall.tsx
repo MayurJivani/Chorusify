@@ -7,12 +7,13 @@ const COLUMNS = 14;
 const MIN_TILES_PER_LOOP = 8;
 
 // How far from the pointer colour reaches, in px.
-const COLOUR_RADIUS = 260;
+const COLOUR_RADIUS = 420;
 
 /** How grey a cover should be at a distance from the pointer: none at the centre, full at the edge. */
 export function tileFilter(distance: number): string {
   const t = Math.max(0, 1 - distance / COLOUR_RADIUS);
-  if (t >= 0.9) return 'none';
+  // A wide full-colour core, so the covers around the pointer light up with it.
+  if (t >= 0.7) return 'none';
   // Rounded so a moving cover only gets a new filter when its colour visibly changes.
   const grey = Math.round((1 - t) * 20) / 20;
   const light = Math.round((0.34 + 0.66 * t) * 20) / 20;
