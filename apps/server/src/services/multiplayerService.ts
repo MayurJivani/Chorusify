@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { users } from '../db/schema';
+import { users, type PlaylistTrack } from '../db/schema';
 import type { Identity } from '../auth/identity';
 import { getFreshPreviewUrl, type ArtistTrack } from './deezerService';
 import { buildRoundOptions, type RoundOption } from './artistChallengeService';
@@ -203,6 +203,8 @@ export interface MpEvent {
   playbackSeconds: number;
   /** Rounds per game as the host set them; a short playlist plays fewer. */
   rounds: number;
+  trialTrack: PlaylistTrack | null;
+  showCovers: boolean;
 }
 
 export interface EventHooks {
@@ -299,6 +301,12 @@ interface MpRoom {
   speedCorrectCount: number;
   hostOnlyAudio: boolean;
   hostPlayable: boolean;
+  /** Album covers on the answer buttons. */
+  showCovers: boolean;
+  /** The event's trial song has not been played yet, so the next start plays it. */
+  trialPending: boolean;
+  /** The round in progress is the trial: its points are wiped when it ends. */
+  isTrial: boolean;
   /** Present only on rated 1v1 rooms created by the duel matchmaker. */
   duel?: MpDuel;
 }
@@ -346,6 +354,8 @@ export interface MpRoomSnapshot {
   } | null;
   paused: boolean;
   locked: boolean;
+  isTrial: boolean;
+  trialPending: boolean;
 }
 
 const emptyRoomExtras = () => ({
@@ -385,6 +395,7 @@ export async function createRoom(
   hostPlayable: boolean = true,
   /** Host-chosen game length. Omitted falls back to the admin default. */
   rounds?: number,
+  showCovers = false,
 ): Promise<{ code: string }> {
   let code = '';
   do {
@@ -430,6 +441,9 @@ export async function createRoom(
     speedCorrectCount: 0,
     hostOnlyAudio,
     hostPlayable,
+    showCovers,
+    trialPending: false,
+    isTrial: false,
     ...emptyRoomExtras(),
   });
 
@@ -528,6 +542,9 @@ async function createEventRoom(
     speedCorrectCount: 0,
     hostOnlyAudio: event.audioMode === 'host_only',
     hostPlayable: true,
+    showCovers: event.showCovers,
+    trialPending: event.trialTrack != null,
+    isTrial: false,
     ...emptyRoomExtras(),
   };
   rooms.set(code, room);
@@ -1493,7 +1510,13 @@ export async function startGame(playerId: string): Promise<void> {
     room.roundOptions =
       room.guessMode === 'choice'
         ? chosen.map((track) =>
-            buildRoundOptions(track, pool, MP_CHOICE_OPTIONS, room.source.answerIsTitle),
+            buildRoundOptions(
+              track,
+              pool,
+              MP_CHOICE_OPTIONS,
+              room.source.answerIsTitle,
+              room.showCovers,
+            ),
           )
         : [];
 
@@ -1519,22 +1542,63 @@ export async function startGame(playerId: string): Promise<void> {
 
 /** An event plays its playlist in the order the host set, for as many rounds as it asked for. */
 async function prepareEvent(room: MpRoom): Promise<void> {
-  const pool = await room.source.loadCatalog();
-  // The last round still needs its decoys from songs nobody has heard as an answer yet.
-  room.tracks = pool.slice(0, Math.min(room.rounds, pool.length - (MP_CHOICE_OPTIONS - 1)));
+  const pool = (await room.source.loadCatalog()) as PlaylistTrack[];
+  const trial = room.trialPending ? room.event!.trialTrack : null;
+  if (trial) {
+    // Practice first: one round, its decoys from the playlist, and nothing it scores is kept.
+    room.isTrial = true;
+    room.tracks = [trial];
+    room.roundOptions = [eventOptions(trial, pool, room.showCovers)];
+  } else {
+    // The last round still needs its decoys from songs nobody has heard as an answer yet.
+    room.tracks = pool.slice(0, Math.min(room.rounds, pool.length - (MP_CHOICE_OPTIONS - 1)));
+    // Round i plays pool[i], so pool.slice(i) is its answer plus every song not yet an answer.
+    room.roundOptions = room.tracks.map((track, i) =>
+      eventOptions(track as PlaylistTrack, pool.slice(i), room.showCovers),
+    );
+  }
   room.rounds = room.tracks.length;
   room.previewUrls = room.tracks.map(() => '');
-  // Round i plays pool[i], so pool.slice(i) is its answer plus every song not yet an answer.
-  room.roundOptions = room.tracks.map((track, i) =>
-    buildRoundOptions(track, pool.slice(i), MP_CHOICE_OPTIONS, false),
-  );
   for (const p of room.players.values()) {
     p.score = 0;
     p.scoreAtRoundStart = 0;
     p.totalAnswerMs = 0;
   }
-  eventHooks?.onStarted(room.event!.id);
+  if (!trial) eventHooks?.onStarted(room.event!.id);
   await startEventRound(room, 0);
+}
+
+/** The host's own wrong answers first; whatever they left empty is drawn from the pool. */
+export function eventOptions(
+  track: PlaylistTrack,
+  pool: readonly PlaylistTrack[],
+  withArt: boolean,
+): RoundOption[] {
+  const picked = (track.decoys ?? []).slice(0, MP_CHOICE_OPTIONS - 1).map((d) => ({
+    deezerTrackId: d.deezerTrackId,
+    title: d.title,
+    artist: d.artist,
+    ...(withArt ? { albumArtUrl: d.albumArtUrl } : {}),
+  }));
+  const pickedIds = new Set(picked.map((d) => d.deezerTrackId));
+  const answer = {
+    deezerTrackId: track.deezerTrackId,
+    title: track.title,
+    artist: track.artist,
+    ...(withArt ? { albumArtUrl: track.albumArtUrl } : {}),
+  };
+  if (picked.length === MP_CHOICE_OPTIONS - 1) return [answer, ...picked];
+  // Order does not matter here: every frame reshuffles the options with a seed.
+  return [
+    ...buildRoundOptions(
+      track,
+      pool.filter((t) => !pickedIds.has(t.deezerTrackId)),
+      MP_CHOICE_OPTIONS - picked.length,
+      false,
+      withArt,
+    ),
+    ...picked,
+  ];
 }
 
 function startRound(room: MpRoom, roundIndex: number): void {
@@ -1809,6 +1873,7 @@ function skipReveal(playerId: string): void {
 }
 
 function finishGame(room: MpRoom): void {
+  if (room.isTrial) return endTrial(room);
   room.phase = 'finished';
   const scores = buildScores(room, true);
   if (room.event) {
@@ -1844,6 +1909,32 @@ function finishGame(room: MpRoom): void {
   if (room.duel && !room.duel.settled) {
     void settleDuelRoomFromScores(room);
   }
+}
+
+/** Back to the lobby with every score at zero, for the host to start the real game. */
+function endTrial(room: MpRoom): void {
+  clearRoomTimers(room);
+  room.isTrial = false;
+  room.trialPending = false;
+  room.rounds = room.event!.rounds;
+  room.phase = 'lobby';
+  room.paused = null;
+  room.tracks = [];
+  room.previewUrls = [];
+  room.roundOptions = [];
+  room.currentRound = 0;
+  for (const p of room.players.values()) {
+    p.score = 0;
+    p.scoreAtRoundStart = 0;
+    p.totalAnswerMs = 0;
+    p.roundAnswerMs = 0;
+    p.roundAnswered = false;
+    p.roundCorrect = null;
+    p.roundPoints = 0;
+  }
+  broadcast(room, { type: 'stop_audio' });
+  broadcastRoomState(room);
+  publishScores(room);
 }
 
 /**
@@ -2079,6 +2170,8 @@ function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
       : null,
     paused: room.paused != null,
     locked: room.locked,
+    isTrial: room.isTrial,
+    trialPending: room.trialPending,
   };
 }
 

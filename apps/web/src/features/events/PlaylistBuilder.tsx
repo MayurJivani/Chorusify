@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, Reorder } from 'motion/react';
+import { AnimatePresence, motion, Reorder, useDragControls } from 'motion/react';
 import { ApiError } from '../../api/client';
 import { importSpotify, savePlaylist, searchEventSongs, type SearchField } from '../../api/events';
 import { SongPreviewButton } from '../game/SongPreviewButton';
-import type { Playlist, PlaylistTrack, SongHit } from '../../types/api';
+import type { Playlist, PlaylistDecoy, PlaylistTrack, SongHit } from '../../types/api';
 
 const SEARCH_DEBOUNCE_MS = 350;
 const MAX_TRACKS = 200;
@@ -278,66 +278,208 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
               Search and add songs. Drag to set the order they play in.
             </p>
           ) : (
-            <Reorder.Group
-              axis="y"
-              values={tracks}
-              onReorder={setTracks}
-              className="flex max-h-[28rem] flex-col gap-1.5 overflow-y-auto pr-1"
-            >
-              {tracks.map((track, i) => (
-                <Reorder.Item
-                  key={track.deezerTrackId}
-                  value={track}
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  whileDrag={{ scale: 1.02, boxShadow: '0 12px 28px rgba(0,0,0,0.45)' }}
-                  className="flex cursor-grab items-center gap-2.5 rounded-xl bg-chorusify-surface-2 p-2 active:cursor-grabbing"
-                >
-                  <span className="w-5 text-right text-xs tabular-nums text-slate-400">
-                    {i + 1}
-                  </span>
-                  <TrackArt url={track.albumArtUrl} />
-                  <TrackText track={track} />
-                  <span className="flex flex-col">
-                    <MoveButton
-                      label={`Move ${track.title} up`}
-                      disabled={i === 0}
-                      dir={-1}
-                      index={i}
-                      setTracks={setTracks}
-                    />
-                    <MoveButton
-                      label={`Move ${track.title} down`}
-                      disabled={i === tracks.length - 1}
-                      dir={1}
-                      index={i}
-                      setTracks={setTracks}
-                    />
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setTracks((prev) => prev.filter((t) => t !== track))}
-                    aria-label={`Remove ${track.title}`}
-                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 14 14"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      aria-hidden="true"
-                    >
-                      <path d="M2 2l10 10M12 2L2 12" />
-                    </svg>
-                  </button>
-                </Reorder.Item>
-              ))}
-            </Reorder.Group>
+            // The scrolling lives on a plain wrapper: a Reorder.Group that scrolls itself ignores the
+            // wheel, and rows drag by their grip only so a finger swipe scrolls instead.
+            <motion.div layoutScroll className="max-h-[28rem] overflow-y-auto pr-1">
+              <Reorder.Group
+                axis="y"
+                values={tracks}
+                onReorder={setTracks}
+                className="flex flex-col gap-1.5"
+              >
+                {tracks.map((track, i) => (
+                  <PlaylistRow
+                    key={track.deezerTrackId}
+                    track={track}
+                    index={i}
+                    last={i === tracks.length - 1}
+                    setTracks={setTracks}
+                  />
+                ))}
+              </Reorder.Group>
+            </motion.div>
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function PlaylistRow({
+  track,
+  index,
+  last,
+  setTracks,
+}: {
+  track: PlaylistTrack;
+  index: number;
+  last: boolean;
+  setTracks: React.Dispatch<React.SetStateAction<PlaylistTrack[]>>;
+}) {
+  const controls = useDragControls();
+  const [editing, setEditing] = useState(false);
+  const decoys = track.decoys ?? [];
+  const setDecoys = (next: PlaylistDecoy[]) =>
+    setTracks((prev) =>
+      prev.map((t) => (t === track ? { ...t, decoys: next.length ? next : undefined } : t)),
+    );
+
+  return (
+    <Reorder.Item
+      value={track}
+      dragListener={false}
+      dragControls={controls}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileDrag={{ scale: 1.02, boxShadow: '0 12px 28px rgba(0,0,0,0.45)' }}
+      className="rounded-xl bg-chorusify-surface-2 p-2"
+    >
+      <div className="flex items-center gap-2.5">
+        <span
+          onPointerDown={(e) => controls.start(e)}
+          aria-hidden="true"
+          title="Drag to reorder"
+          className="w-6 cursor-grab touch-none select-none text-right text-xs tabular-nums text-slate-400 active:cursor-grabbing"
+        >
+          ⠿{index + 1}
+        </span>
+        <TrackArt url={track.albumArtUrl} />
+        <TrackText track={track} />
+        <button
+          type="button"
+          onClick={() => setEditing((v) => !v)}
+          aria-expanded={editing}
+          aria-label={`Wrong answers for ${track.title}`}
+          className="rounded-lg px-2 py-1 text-[11px] text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          Options {decoys.length}/3
+        </button>
+        <span className="flex flex-col">
+          <MoveButton
+            label={`Move ${track.title} up`}
+            disabled={index === 0}
+            dir={-1}
+            index={index}
+            setTracks={setTracks}
+          />
+          <MoveButton
+            label={`Move ${track.title} down`}
+            disabled={last}
+            dir={1}
+            index={index}
+            setTracks={setTracks}
+          />
+        </span>
+        <button
+          type="button"
+          onClick={() => setTracks((prev) => prev.filter((t) => t !== track))}
+          aria-label={`Remove ${track.title}`}
+          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M2 2l10 10M12 2L2 12" />
+          </svg>
+        </button>
+      </div>
+      {editing && (
+        <div className="mt-2 flex flex-col gap-2 border-t border-white/5 pt-2">
+          <p className="text-xs text-slate-400">
+            Pick up to 3 wrong answers. Any you leave empty come from the rest of the playlist.
+          </p>
+          {decoys.map((d) => (
+            <div key={d.deezerTrackId} className="flex items-center gap-2.5">
+              <TrackArt url={d.albumArtUrl} />
+              <TrackText track={{ ...d, album: null, durationSeconds: 0 }} />
+              <button
+                type="button"
+                onClick={() => setDecoys(decoys.filter((x) => x !== d))}
+                aria-label={`Remove ${d.title} from the options`}
+                className="btn-ghost !rounded-lg !px-2.5 !py-1 !text-xs"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          {decoys.length < 3 && (
+            <SongPicker
+              exclude={[track.deezerTrackId, ...decoys.map((d) => d.deezerTrackId)]}
+              actionLabel="Use"
+              onPick={(hit) =>
+                setDecoys([
+                  ...decoys,
+                  {
+                    deezerTrackId: hit.deezerTrackId,
+                    title: hit.title,
+                    artist: hit.artist,
+                    albumArtUrl: hit.albumArtUrl,
+                  },
+                ])
+              }
+            />
+          )}
+        </div>
+      )}
+    </Reorder.Item>
+  );
+}
+
+/** A small song search with one action per result. */
+export function SongPicker({
+  exclude,
+  actionLabel,
+  onPick,
+}: {
+  exclude: string[];
+  actionLabel: string;
+  onPick: (hit: SongHit) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const { results, status, message } = useSongSearch(query, 'any');
+  return (
+    <div className="flex flex-col gap-1.5">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search songs"
+        aria-label="Search songs"
+        className="event-input"
+      />
+      <p aria-live="polite" className="text-xs text-slate-400 empty:hidden">
+        {status === 'loading' && 'Searching…'}
+        {status === 'error' && message}
+        {status === 'done' && results.length === 0 && 'Nothing found.'}
+      </p>
+      <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+        {results
+          .filter((hit) => !exclude.includes(hit.deezerTrackId))
+          .map((hit) => (
+            <li
+              key={hit.deezerTrackId}
+              className="flex items-center gap-2.5 rounded-lg bg-white/[0.03] p-1.5"
+            >
+              <TrackArt url={hit.albumArtUrl} />
+              <TrackText track={hit} />
+              <button
+                type="button"
+                onClick={() => {
+                  onPick(hit);
+                  setQuery('');
+                }}
+                className="btn-secondary !rounded-lg !px-2.5 !py-1 !text-xs"
+              >
+                {actionLabel}
+              </button>
+            </li>
+          ))}
+      </ul>
     </div>
   );
 }
@@ -378,7 +520,7 @@ function MoveButton({
   );
 }
 
-function TrackArt({ url }: { url: string | null }) {
+export function TrackArt({ url }: { url: string | null }) {
   return url ? (
     <img
       src={url}
@@ -393,7 +535,7 @@ function TrackArt({ url }: { url: string | null }) {
   );
 }
 
-function TrackText({ track }: { track: PlaylistTrack }) {
+export function TrackText({ track }: { track: PlaylistTrack }) {
   return (
     <span className="min-w-0 flex-1">
       <span className="block truncate text-sm font-medium text-white">{track.title}</span>

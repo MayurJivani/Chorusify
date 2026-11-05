@@ -618,7 +618,8 @@ async function main() {
   ) => {
     const { playlist } = await api.call('POST', '/api/events/playlists', {
       name,
-      tracks: playlistOf(Math.max(rounds, 4), withDeadSong),
+      // Three spare songs: the last round's wrong answers must not have been answers already.
+      tracks: playlistOf(Math.min(200, Math.max(rounds + 3, 4)), withDeadSong),
     });
     const { event } = await api.call('POST', '/api/events', {
       name,

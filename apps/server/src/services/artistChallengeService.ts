@@ -602,6 +602,8 @@ export interface RoundOption {
   deezerTrackId: string;
   title: string;
   artist: string;
+  /** Only on rooms whose host turned covers on. */
+  albumArtUrl?: string | null;
 }
 
 /**
@@ -618,7 +620,7 @@ export interface RoundOption {
  * lands too often to separate the field.
  */
 export function buildRoundOptions(
-  correct: { deezerTrackId: string; title: string; artist: string },
+  correct: { deezerTrackId: string; title: string; artist: string; albumArtUrl?: string | null },
   candidatePool: readonly ArtistTrack[],
   optionCount = 3,
   /**
@@ -628,7 +630,10 @@ export function buildRoundOptions(
    * one the mode asks. Deduping decoys by title also means no two options are the same film.
    */
   hideArtist = false,
+  withArt = false,
 ): RoundOption[] {
+  const art = (t: { albumArtUrl?: string | null }) =>
+    withArt ? { albumArtUrl: t.albumArtUrl ?? null } : {};
   const correctNormalized = normalizeTitle(correct.title);
   const seen = new Set<string>([correctNormalized]);
 
@@ -659,6 +664,7 @@ export function buildRoundOptions(
       deezerTrackId: t.deezerTrackId,
       title: t.title,
       artist: hideArtist ? '' : t.artist,
+      ...art(t),
     }));
 
   return shuffle([
@@ -666,6 +672,7 @@ export function buildRoundOptions(
       deezerTrackId: correct.deezerTrackId,
       title: correct.title,
       artist: hideArtist ? '' : correct.artist,
+      ...art(correct),
     },
     ...decoys,
   ]);

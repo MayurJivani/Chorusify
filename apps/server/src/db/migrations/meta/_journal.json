@@ -120,6 +120,13 @@
       "when": 1793590466291,
       "tag": "0016_modern_scream",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793895520755,
+      "tag": "0017_event_trial_covers",
+      "breakpoints": true
     }
   ]
 }

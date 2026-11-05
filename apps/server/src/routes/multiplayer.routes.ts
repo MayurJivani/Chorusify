@@ -24,6 +24,7 @@ const createRoomSchema = z
     hostOnlyAudio: z.boolean().optional().default(false),
     hostPlayable: z.boolean().optional().default(true),
     rounds: z.coerce.number().int().min(1).max(MP_MAX_ROUNDS).optional(),
+    showCovers: z.boolean().optional().default(false),
   })
   // Exactly one, so a request naming both can't quietly race over whichever the code checks
   // first while the player who sent it expects the other.
@@ -41,8 +42,16 @@ multiplayerRouter.post(
   '/rooms',
   validate(createRoomSchema),
   asyncHandler(async (req, res) => {
-    const { artistId, categoryId, guessMode, gameMode, hostOnlyAudio, hostPlayable, rounds } =
-      req.body as z.infer<typeof createRoomSchema>;
+    const {
+      artistId,
+      categoryId,
+      guessMode,
+      gameMode,
+      hostOnlyAudio,
+      hostPlayable,
+      rounds,
+      showCovers,
+    } = req.body as z.infer<typeof createRoomSchema>;
 
     let source;
     try {
@@ -66,6 +75,7 @@ multiplayerRouter.post(
       hostOnlyAudio,
       hostPlayable,
       rounds,
+      showCovers,
     );
     res.status(201).json({
       code,

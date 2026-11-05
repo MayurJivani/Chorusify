@@ -12,7 +12,6 @@ import { ensureMediaUnlocked } from '../features/game/SnippetPlayer';
 import { usePageTitle } from '../hooks/usePageTitle';
 import type { MultiplayerScoreEntry } from '../types/api';
 
-const LETTERS = ['A', 'B', 'C', 'D'];
 const TILE = [
   'bg-violet-500/20 ring-violet-400/40',
   'bg-cyan-500/20 ring-cyan-400/40',
@@ -135,6 +134,7 @@ export function ScreenPage() {
                 endsAt={roundEnd.revealEndsAt ?? null}
                 index={round.roundIndex}
                 total={round.totalRounds}
+                trial={!!room.isTrial}
               />
             ) : (
               <Playing
@@ -142,6 +142,7 @@ export function ScreenPage() {
                 endsAt={round.startedAt + round.roundDurationMs}
                 index={round.roundIndex}
                 total={round.totalRounds}
+                trial={!!room.isTrial}
                 paused={paused}
                 clipMs={(round.snippetSchedule[0] ?? 0) * 1000}
                 stopped={audioStopped}
@@ -153,7 +154,13 @@ export function ScreenPage() {
               <Board rows={roundEnd.scores} />
             ) : (
               <Options
-                options={round.options?.map((o) => ({ title: o.title, artist: o.artist })) ?? []}
+                options={
+                  round.options?.map((o) => ({
+                    title: o.title,
+                    artist: o.artist,
+                    albumArtUrl: o.albumArtUrl,
+                  })) ?? []
+                }
               />
             )}
           </motion.div>
@@ -301,11 +308,13 @@ function Playing({
   stopped,
   store,
   players,
+  trial,
 }: {
   startedAt: number;
   endsAt: number;
   index: number;
   total: number;
+  trial: boolean;
   paused: boolean;
   clipMs: number;
   stopped: boolean;
@@ -319,7 +328,7 @@ function Playing({
   return (
     <div className="flex flex-col items-center gap-[calc(3*var(--u))]">
       <p className="text-[calc(2.4*var(--u))] font-semibold uppercase tracking-[0.2em] text-slate-400">
-        Song {index + 1} of {total}
+        {trial ? 'Trial song · points do not count' : `Song ${index + 1} of ${total}`}
       </p>
       <Disc size="calc(34*var(--u))" spinning={playing} arm className="mr-[calc(10*var(--u))]" />
       {before ? (
@@ -357,7 +366,11 @@ function useNow(...moments: number[]) {
   return now;
 }
 
-function Options({ options }: { options: { title: string; artist: string }[] }) {
+function Options({
+  options,
+}: {
+  options: { title: string; artist: string; albumArtUrl?: string | null }[];
+}) {
   return (
     <div className="grid grid-cols-2 gap-[calc(2*var(--u))]">
       {options.map((o, i) => (
@@ -368,11 +381,15 @@ function Options({ options }: { options: { title: string; artist: string }[] }) 
           transition={{ delay: 0.08 * i, duration: 0.35, ease: EASE }}
           className={`flex min-h-[calc(16*var(--u))] items-center gap-[calc(2*var(--u))] rounded-[calc(2*var(--u))] p-[calc(2.4*var(--u))] ring-2 ${TILE[i]}`}
         >
-          <span className="flex h-[calc(6*var(--u))] w-[calc(6*var(--u))] shrink-0 items-center justify-center rounded-full bg-white/15 text-[calc(3*var(--u))] font-black">
-            {LETTERS[i]}
-          </span>
+          {o.albumArtUrl && (
+            <img
+              src={o.albumArtUrl}
+              alt=""
+              className="h-[calc(10*var(--u))] w-[calc(10*var(--u))] shrink-0 rounded-[calc(1*var(--u))] object-cover"
+            />
+          )}
           <span className="min-w-0">
-            <span className="line-clamp-2 block text-[calc(3*var(--u))] font-bold leading-tight text-white">
+            <span className="block break-words text-[calc(3*var(--u))] font-bold leading-tight text-white">
               {o.title}
             </span>
             <span className="block truncate text-[calc(2*var(--u))] text-slate-300">
@@ -407,6 +424,7 @@ function Reveal({
   endsAt,
   index,
   total,
+  trial,
 }: {
   share: number | null;
   art: string | null;
@@ -415,12 +433,13 @@ function Reveal({
   endsAt: number | null;
   index: number;
   total: number;
+  trial: boolean;
 }) {
   return (
     <div className="relative flex flex-col items-center gap-[calc(3*var(--u))] text-center">
       {art && <img src={art} alt="" className="reveal-glow" />}
       <p className="text-[calc(2.4*var(--u))] font-semibold uppercase tracking-[0.2em] text-slate-400">
-        Song {index + 1} of {total} was
+        {trial ? 'The trial song was' : `Song ${index + 1} of ${total} was`}
       </p>
       <div className="relative h-[calc(30*var(--u))] w-[calc(30*var(--u))]">
         <motion.span

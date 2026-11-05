@@ -39,14 +39,6 @@ interface MultipleChoiceGuessProps {
   emphasiseReveal?: boolean;
 }
 
-/** The same four tints as the TV screen, so "B" means the same tile on the wall and the phone. */
-const LETTER_TINT = [
-  'bg-violet-500/25 text-violet-100',
-  'bg-cyan-500/25 text-cyan-100',
-  'bg-amber-500/25 text-amber-100',
-  'bg-emerald-500/25 text-emerald-100',
-];
-
 export function MultipleChoiceGuess({
   options,
   onGuess,
@@ -92,7 +84,7 @@ export function MultipleChoiceGuess({
           (dense ? ' gap-1.5' : ' gap-2.5')
         }
       >
-        {options.map((option, index) => {
+        {options.map((option) => {
           const isSelected = roundEnded
             ? selectedGuessId === option.deezerTrackId
             : selectedId === option.deezerTrackId;
@@ -154,17 +146,24 @@ export function MultipleChoiceGuess({
                 dense ? 'px-3 py-2.5' : 'px-4 py-3.5'
               } ${styleClass} disabled:cursor-not-allowed`}
             >
-              {/* min-w-0 is what lets the truncation actually happen: without it this flex child
-                refuses to shrink below its content, and a long title ("Bang My Head (feat. Sia
-                & Fetty Wap)") pushes the result badge off a phone screen entirely. */}
-              <span
-                aria-hidden="true"
-                className={`flex shrink-0 items-center justify-center rounded-full font-bold ${LETTER_TINT[index % 4]} ${dense ? 'h-6 w-6 text-[11px]' : 'h-7 w-7 text-xs'}`}
-              >
-                {'ABCD'[index] ?? index + 1}
-              </span>
+              {'albumArtUrl' in option &&
+                (option.albumArtUrl ? (
+                  <img
+                    src={option.albumArtUrl}
+                    alt=""
+                    className={`shrink-0 rounded-md object-cover ${dense ? 'h-8 w-8' : 'h-11 w-11'}`}
+                  />
+                ) : (
+                  <span
+                    className={`shrink-0 rounded-md bg-white/10 ${dense ? 'h-8 w-8' : 'h-11 w-11'}`}
+                  />
+                ))}
+              {/* min-w-0 lets this shrink so a long title wraps instead of pushing the result
+                  badge off a phone screen. The title is never cut: it is the answer. */}
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className={`truncate font-semibold ${dense ? 'text-sm' : 'text-base'}`}>
+                <span
+                  className={`break-words font-semibold leading-tight ${dense ? 'text-sm' : 'text-base'}`}
+                >
                   {option.title}
                 </span>
                 {/* Guess the Movie sends options with no artist line - the option is a film, and

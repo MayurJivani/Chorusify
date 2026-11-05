@@ -104,6 +104,8 @@ export interface EventInput {
   minPoints: number;
   firstBonus: number;
   playlistId: string;
+  trialTrack: PlaylistTrack | null;
+  showCovers: boolean;
 }
 
 type EventRow = typeof events.$inferSelect;
@@ -196,6 +198,8 @@ export async function createEvent(ownerUserId: string, input: EventInput) {
           minPoints: input.minPoints,
           firstBonus: input.firstBonus,
           playlistId: input.playlistId,
+          trialTrack: input.trialTrack,
+          showCovers: input.showCovers,
           tracks,
         })
         .returning();
@@ -235,6 +239,8 @@ export async function updateEvent(ownerUserId: string, id: string, input: EventI
       minPoints: input.minPoints,
       firstBonus: input.firstBonus,
       playlistId: input.playlistId,
+      trialTrack: input.trialTrack,
+      showCovers: input.showCovers,
       tracks,
     })
     .where(and(eq(events.id, id), eq(events.status, 'open')))
@@ -329,6 +335,8 @@ setEventHooks({
       hostPlays: row.hostPlays,
       playbackSeconds: row.playbackSeconds,
       rounds: row.rounds,
+      trialTrack: row.trialTrack ?? null,
+      showCovers: row.showCovers,
     };
     return {
       event,

@@ -102,22 +102,38 @@ host.post(
   }),
 );
 
-const trackSchema = z.object({
+const deezerArtUrl = z
+  .string()
+  .url()
+  .max(500)
+  .refine(
+    (url) =>
+      new URL(url).hostname.endsWith('.dzcdn.net') || new URL(url).hostname === 'api.deezer.com',
+  )
+  .nullable();
+
+const decoySchema = z.object({
   deezerTrackId: z.string().regex(/^\d{1,20}$/),
   title: z.string().min(1).max(300),
   artist: z.string().min(1).max(300),
-  album: z.string().max(300).nullable(),
-  albumArtUrl: z
-    .string()
-    .url()
-    .max(500)
-    .refine(
-      (url) =>
-        new URL(url).hostname.endsWith('.dzcdn.net') || new URL(url).hostname === 'api.deezer.com',
-    )
-    .nullable(),
-  durationSeconds: z.number().int().min(0).max(36000),
+  albumArtUrl: deezerArtUrl,
 });
+
+const trackSchema = z
+  .object({
+    deezerTrackId: z.string().regex(/^\d{1,20}$/),
+    title: z.string().min(1).max(300),
+    artist: z.string().min(1).max(300),
+    album: z.string().max(300).nullable(),
+    albumArtUrl: deezerArtUrl,
+    durationSeconds: z.number().int().min(0).max(36000),
+    // Three wrong answers fill a four-option round.
+    decoys: z.array(decoySchema).max(3).optional(),
+  })
+  .refine(
+    (t) => !t.decoys?.some((d) => d.deezerTrackId === t.deezerTrackId),
+    'A song cannot be its own wrong answer',
+  );
 
 const playlistSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -189,6 +205,8 @@ const eventSchema = z
     minPoints: z.number().int().min(0).max(10000),
     firstBonus: z.number().int().min(0).max(10000),
     playlistId: z.string().uuid(),
+    trialTrack: trackSchema.nullable().default(null),
+    showCovers: z.boolean().default(false),
   })
   .refine((e) => e.minPoints <= e.maxPoints, 'Minimum points cannot be above maximum points');
 

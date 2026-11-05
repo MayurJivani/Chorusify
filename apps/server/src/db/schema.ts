@@ -91,6 +91,15 @@ export interface PlaylistTrack {
   album: string | null;
   albumArtUrl: string | null;
   durationSeconds: number;
+  /** Wrong answers the host picked for this song. Any left unfilled are drawn from the playlist. */
+  decoys?: PlaylistDecoy[];
+}
+
+export interface PlaylistDecoy {
+  deezerTrackId: string;
+  title: string;
+  artist: string;
+  albumArtUrl: string | null;
 }
 
 /**
@@ -148,6 +157,9 @@ export const events = pgTable(
     firstBonus: integer('first_bonus').notNull(),
     playlistId: text('playlist_id').references(() => playlists.id, { onDelete: 'set null' }),
     tracks: jsonb('tracks').notNull().$type<PlaylistTrack[]>(),
+    /** Played before the game as practice; nobody keeps its points. */
+    trialTrack: jsonb('trial_track').$type<PlaylistTrack>(),
+    showCovers: boolean('show_covers').notNull().default(false),
     status: text('status').notNull().default('open'),
     playerCount: integer('player_count').notNull().default(0),
     results: jsonb('results').$type<EventResultRow[]>(),

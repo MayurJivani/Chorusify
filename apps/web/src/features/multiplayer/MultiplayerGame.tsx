@@ -180,7 +180,14 @@ export function MultiplayerGame({
         <div className="flex w-full flex-col items-center gap-1 text-center">
           <h1 className="text-xl font-bold text-white">{room.label}</h1>
           <p className="text-xs text-slate-400">
-            Song {round.roundIndex + 1} of {round.totalRounds} ·{' '}
+            {room.isTrial ? (
+              <span className="font-semibold text-amber-200">Trial song, points do not count</span>
+            ) : (
+              <>
+                Song {round.roundIndex + 1} of {round.totalRounds}
+              </>
+            )}{' '}
+            ·{' '}
             {paused ? (
               <span className="font-semibold text-amber-200">paused by the host</span>
             ) : (

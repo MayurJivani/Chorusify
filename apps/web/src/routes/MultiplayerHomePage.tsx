@@ -66,6 +66,7 @@ export function MultiplayerHomePage() {
   const [rounds, setRounds] = useState<number>(10);
   const [hostOnlyAudio, setHostOnlyAudio] = useState(false);
   const [hostPlayable, setHostPlayable] = useState(true);
+  const [showCovers, setShowCovers] = useState(false);
   const [hostName, setHostName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +104,7 @@ export function MultiplayerHomePage() {
         hostOnlyAudio,
         hostPlayable,
         rounds,
+        showCovers,
       );
       navigate(`/room/${code}`, { state: { autoJoin: true, hostName: hostName.trim() } });
     } catch (err) {
@@ -117,6 +119,7 @@ export function MultiplayerHomePage() {
     hostOnlyAudio,
     hostPlayable,
     rounds,
+    showCovers,
     hostName,
     navigate,
   ]);
@@ -419,6 +422,18 @@ export function MultiplayerHomePage() {
               </div>
             </div>
           )}
+
+          {guessMode === 'choice' || gameMode === 'speed' ? (
+            <label className="mt-4 flex items-center gap-2.5 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={showCovers}
+                onChange={(e) => setShowCovers(e.target.checked)}
+                className="h-4 w-4 accent-white"
+              />
+              Show album covers on the answers
+            </label>
+          ) : null}
 
           {needsName ? (
             <div className="mt-4">

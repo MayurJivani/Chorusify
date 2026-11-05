@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { saveEvent } from '../../api/events';
+import { SongPicker, TrackArt, TrackText } from './PlaylistBuilder';
 import type { EventAudioMode, EventInput, HostedEvent, Playlist } from '../../types/api';
 
 const AUDIO_MODES: { value: EventAudioMode; title: string; body: string }[] = [
@@ -40,6 +41,8 @@ export function EventForm({
     minPoints: event?.minPoints ?? 200,
     firstBonus: event?.firstBonus ?? 100,
     playlistId: event?.playlistId ?? playlists[0]?.id ?? '',
+    trialTrack: event?.trialTrack ?? null,
+    showCovers: event?.showCovers ?? false,
   });
   const [password, setPassword] = useState('');
   const [clearPassword, setClearPassword] = useState(false);
@@ -149,6 +152,43 @@ export function EventForm({
         />
         I am playing too (puts me on the leaderboard)
       </label>
+
+      <label className="flex items-center gap-2.5 text-sm text-slate-200">
+        <input
+          type="checkbox"
+          checked={form.showCovers}
+          onChange={(e) => set('showCovers', e.target.checked)}
+          className="h-4 w-4 accent-white"
+        />
+        Show album covers on the answers
+      </label>
+
+      <section aria-label="Trial song" className="flex flex-col gap-1.5 text-sm">
+        <p className="font-medium text-slate-300">Trial song (optional)</p>
+        <p className="text-xs text-slate-400">
+          Plays first so everyone learns how it works. Its points do not count, and you start the
+          real game after it.
+        </p>
+        {form.trialTrack ? (
+          <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] p-2">
+            <TrackArt url={form.trialTrack.albumArtUrl} />
+            <TrackText track={form.trialTrack} />
+            <button
+              type="button"
+              onClick={() => set('trialTrack', null)}
+              className="btn-ghost !rounded-lg !px-2.5 !py-1 !text-xs"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <SongPicker
+            exclude={[]}
+            actionLabel="Use as trial"
+            onPick={({ previewUrl: _previewUrl, ...track }) => set('trialTrack', track)}
+          />
+        )}
+      </section>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <NumberField

@@ -7,6 +7,7 @@ import {
   unregisterConnection,
   __getCurrentTrack,
   __resetForTests,
+  eventOptions,
   type MpEvent,
   type MpSocket,
 } from '../../src/services/multiplayerService';
@@ -93,6 +94,8 @@ beforeEach(() => {
     hostPlays: false,
     playbackSeconds: 10,
     rounds: 3,
+    trialTrack: null,
+    showCovers: false,
   };
   setEventHooks({
     load: async () => ({
@@ -334,6 +337,66 @@ describe('event rooms', () => {
     expect(ids).toHaveLength(4);
     expect(ids).not.toContain('100');
     expect(ids).not.toContain('101');
+  });
+
+  it('plays the trial song first, wipes its points, then waits for the real start', async () => {
+    event.trialTrack = { ...tracks[0]!, deezerTrackId: '900', title: 'Trial', album: null };
+    const host = await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    expect(host.last('room_state').room.trialPending).toBe(true);
+    await start();
+    expect(host.last('host_round').title).toBe('Trial');
+    expect(a.last('room_state').room.isTrial).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(LEAD);
+    await msg('a', { type: 'guess', trackId: '900' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.last('round_end').scores[0].score).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(6_000);
+
+    const room = a.last('room_state').room;
+    expect(room.phase).toBe('lobby');
+    expect(room.isTrial).toBe(false);
+    expect(room.trialPending).toBe(false);
+    expect(a.last('scores').scores[0].score).toBe(0);
+    expect(a.of('game_over')).toHaveLength(0);
+    expect(finished).not.toHaveBeenCalled();
+
+    await start();
+    expect(host.last('host_round').title).toBe('Song 0');
+    expect(a.last('round_start').totalRounds).toBe(3);
+  });
+
+  it('puts album covers on the options only when the event asks for them', async () => {
+    await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    await start();
+    expect(a.last('round_start').options[0]).not.toHaveProperty('albumArtUrl');
+
+    __resetForTests();
+    event.showCovers = true;
+    await hostUp();
+    const b = conn('b', null, 'gb');
+    await join('b');
+    await start();
+    expect(b.last('round_start').options[0]).toHaveProperty('albumArtUrl');
+  });
+
+  it('uses the host-picked wrong answers and fills the rest from the playlist', () => {
+    const pick = (i: number) => ({ ...secondTracks[i]!, album: null });
+    const pool = tracks.map((t) => ({ ...t, album: null }));
+    const decoys = [pick(0), pick(1), pick(2)];
+    const all = eventOptions({ ...pool[0]!, decoys }, pool, false).map((o) => o.deezerTrackId);
+    expect(all.sort()).toEqual(['100', '200', '201', '202']);
+
+    const some = eventOptions({ ...pool[0]!, decoys: [pick(0)] }, pool, false);
+    const ids = some.map((o) => o.deezerTrackId);
+    expect(ids).toHaveLength(4);
+    expect(ids).toContain('100');
+    expect(ids).toContain('200');
+    expect(new Set(ids).size).toBe(4);
   });
 
   it('drops an unplayable song instead of stopping, and tells the host', async () => {

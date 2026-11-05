@@ -151,7 +151,11 @@ function Console({ event }: { event: HostedEvent }) {
             ) : !inRound ? (
               <motion.div key="lobby" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h2 className="text-lg font-bold text-white">
-                  {phase === 'starting' ? 'Starting…' : 'Waiting for players'}
+                  {phase === 'starting'
+                    ? 'Starting…'
+                    : event.trialTrack && room && !room.trialPending
+                      ? 'Trial done. Start the game when everyone is ready'
+                      : 'Waiting for players'}
                 </h2>
                 <p className="mt-1 text-sm text-slate-400">
                   {hostOnly
@@ -171,7 +175,7 @@ function Console({ event }: { event: HostedEvent }) {
                 >
                   {playerCount === 0
                     ? 'Waiting for the first player'
-                    : `Start with ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
+                    : `${room?.trialPending ? 'Play the trial song' : 'Start'} with ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
                 </button>
               </motion.div>
             ) : (
@@ -189,6 +193,7 @@ function Console({ event }: { event: HostedEvent }) {
                     revealing={!!roundEnd}
                     revealEndsAt={roundEnd?.revealEndsAt ?? null}
                     paused={paused}
+                    trial={!!room?.isTrial}
                   />
                 )}
                 {hostOnly && (
@@ -369,11 +374,13 @@ function NowPlaying({
   revealing,
   revealEndsAt,
   paused,
+  trial,
 }: {
   round: HostRound;
   revealing: boolean;
   revealEndsAt: number | null;
   paused: boolean;
+  trial: boolean;
 }) {
   const left = useCountdownTo(revealing ? revealEndsAt : round.roundEndsAt);
   return (
@@ -387,7 +394,9 @@ function NowPlaying({
       />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-slate-400">
-          Song {round.roundIndex + 1} of {round.totalRounds}
+          {trial
+            ? 'Trial song · points do not count'
+            : `Song ${round.roundIndex + 1} of ${round.totalRounds}`}
         </p>
         <p className="truncate font-bold text-white">{round.title}</p>
         <p className="truncate text-sm text-slate-400">{round.artist}</p>
@@ -463,15 +472,13 @@ function AnswerSplit({
   const total = Object.values(answers).reduce((a, b) => a + b, 0);
   return (
     <ul className="flex flex-col gap-1.5" aria-label="How the room answered">
-      {options.map((o, i) => {
+      {options.map((o) => {
         const n = answers[o.deezerTrackId] ?? 0;
         const right = o.title === correctTitle;
         return (
           <li key={o.deezerTrackId} className="text-sm">
             <div className="flex justify-between gap-2 text-slate-300">
-              <span className="truncate">
-                <span className="font-semibold text-slate-400">{'ABCD'[i]}</span> {o.title}
-              </span>
+              <span className="min-w-0 break-words">{o.title}</span>
               <span className="tabular-nums">{total ? Math.round((n / total) * 100) : 0}%</span>
             </div>
             <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-white/10">

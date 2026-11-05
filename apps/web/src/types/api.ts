@@ -122,6 +122,8 @@ export interface ArtistRoundOption {
   deezerTrackId: string;
   title: string;
   artist: string;
+  /** Sent only when the room shows album covers on its answers. */
+  albumArtUrl?: string | null;
 }
 
 interface ArtistChallengeBase {
@@ -272,6 +274,10 @@ export interface MultiplayerRoomSnapshot {
   event?: { id: string; name: string; description: string; audioMode: EventAudioMode } | null;
   paused?: boolean;
   locked?: boolean;
+  /** The round in progress is the event's trial song; its points are wiped. */
+  isTrial?: boolean;
+  /** The next start plays the trial song rather than the game. */
+  trialPending?: boolean;
 }
 
 export type EventAudioMode = 'everyone_plays' | 'host_only';
@@ -283,6 +289,15 @@ export interface PlaylistTrack {
   album: string | null;
   albumArtUrl: string | null;
   durationSeconds: number;
+  /** Wrong answers the host picked. Any left unfilled come from the playlist. */
+  decoys?: PlaylistDecoy[];
+}
+
+export interface PlaylistDecoy {
+  deezerTrackId: string;
+  title: string;
+  artist: string;
+  albumArtUrl: string | null;
 }
 
 export interface SongHit extends PlaylistTrack {
@@ -310,6 +325,8 @@ export interface EventInput {
   minPoints: number;
   firstBonus: number;
   playlistId: string;
+  trialTrack: PlaylistTrack | null;
+  showCovers: boolean;
 }
 
 export interface HostedEvent extends Omit<EventInput, 'password'> {

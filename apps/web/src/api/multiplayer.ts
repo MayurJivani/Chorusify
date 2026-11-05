@@ -15,6 +15,7 @@ export function createMultiplayerRoom(
   hostOnlyAudio: boolean = false,
   hostPlayable: boolean = true,
   rounds?: number,
+  showCovers = false,
 ): Promise<MultiplayerCreateRoomResponse> {
   return apiRequest<MultiplayerCreateRoomResponse>('/multiplayer/rooms', {
     method: 'POST',
@@ -24,6 +25,7 @@ export function createMultiplayerRoom(
       gameMode,
       hostOnlyAudio,
       hostPlayable,
+      showCovers,
       ...(rounds != null ? { rounds } : {}),
     },
   });
