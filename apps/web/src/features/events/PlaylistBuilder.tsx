@@ -72,7 +72,6 @@ interface PlaylistBuilderProps {
 export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [tracks, setTracks] = useState<PlaylistTrack[]>(initial?.tracks ?? []);
-  const [trialTrack, setTrialTrack] = useState<PlaylistTrack | null>(initial?.trialTrack ?? null);
   const [query, setQuery] = useState('');
   const [field, setField] = useState<SearchField>('any');
   const [saving, setSaving] = useState(false);
@@ -109,6 +108,8 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
     }
   };
 
+  const hasTrial = tracks.some((t) => t.trial);
+  const mainCount = tracks.length - (hasTrial ? 1 : 0);
   const inList = useMemo(() => new Set(tracks.map((t) => t.deezerTrackId)), [tracks]);
   const totalSeconds = useMemo(
     () => tracks.reduce((sum, t) => sum + t.durationSeconds, 0),
@@ -119,7 +120,7 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
     setSaving(true);
     setError(null);
     try {
-      const { playlist } = await savePlaylist(initial?.id ?? null, name.trim(), tracks, trialTrack);
+      const { playlist } = await savePlaylist(initial?.id ?? null, name.trim(), tracks);
       onSaved(playlist);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the playlist.');
@@ -266,37 +267,12 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
         </section>
 
         <section aria-label="Playlist" className="flex min-w-0 flex-col gap-3">
-          <section aria-label="Trial song" className="flex flex-col gap-1.5 text-sm">
-            <p className="font-medium text-slate-300">Trial song (optional)</p>
-            <p className="text-xs text-slate-400">
-              Plays before the game so everyone learns how it works. Its points do not count, and
-              you start the real game after it.
-            </p>
-            {trialTrack ? (
-              <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] p-2">
-                <TrackArt url={trialTrack.albumArtUrl} />
-                <TrackText track={trialTrack} />
-                <button
-                  type="button"
-                  onClick={() => setTrialTrack(null)}
-                  className="btn-ghost !rounded-lg !px-2.5 !py-1 !text-xs"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <SongPicker
-                exclude={tracks.map((t) => t.deezerTrackId)}
-                actionLabel="Use as trial"
-                onPick={(hit) => setTrialTrack(toTrack(hit))}
-              />
-            )}
-          </section>
           <p className="text-sm text-slate-300">
-            <span className="font-semibold tabular-nums text-white">{tracks.length}</span>{' '}
-            {tracks.length === 1 ? 'song' : 'songs'} ·{' '}
+            <span className="font-semibold tabular-nums text-white">{mainCount}</span>{' '}
+            {mainCount === 1 ? 'song' : 'songs'}
+            {hasTrial && ' + 1 trial'} ·{' '}
             <span className="tabular-nums">{formatDuration(totalSeconds)}</span>
-            {tracks.length > 0 && tracks.length < 4 && (
+            {mainCount > 0 && mainCount < 4 && (
               <span className="text-slate-400"> · an event needs at least 4</span>
             )}
           </p>
@@ -372,6 +348,30 @@ function PlaylistRow({
         </span>
         <TrackArt url={track.albumArtUrl} />
         <TrackText track={track} />
+        <button
+          type="button"
+          onClick={() =>
+            // One trial per playlist: ticking this one unticks any other.
+            setTracks((prev) =>
+              prev.map((t) =>
+                t === track
+                  ? { ...t, trial: !t.trial || undefined }
+                  : t.trial
+                    ? { ...t, trial: undefined }
+                    : t,
+              ),
+            )
+          }
+          aria-pressed={!!track.trial}
+          title="The trial plays first, before the game, and its points do not count"
+          className={`rounded-lg px-2 py-1 text-[11px] transition-colors ${
+            track.trial
+              ? 'bg-amber-400/15 font-semibold text-amber-200'
+              : 'text-slate-400 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          {track.trial ? 'Trial ✓' : 'Trial'}
+        </button>
         <button
           type="button"
           onClick={() => setEditing((v) => !v)}

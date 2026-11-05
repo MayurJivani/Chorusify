@@ -385,16 +385,19 @@ export function MultiplayerGame({
         )}
       </div>
 
-      <LiveScoreboard
-        store={scoresStore}
-        selfId={selfId}
-        hostId={room.hostId}
-        showRoundState
-        hideStage={isSpeed}
-        standing={standing}
-        limit={10}
-        title="Live standings"
-      />
+      {/* An event's standings belong on the big screen, not on hundreds of phones. */}
+      {!room.event && (
+        <LiveScoreboard
+          store={scoresStore}
+          selfId={selfId}
+          hostId={room.hostId}
+          showRoundState
+          hideStage={isSpeed}
+          standing={standing}
+          limit={10}
+          title="Live standings"
+        />
+      )}
 
       {/* Understated on purpose: leaving mid-race should be possible, not inviting. */}
       <button

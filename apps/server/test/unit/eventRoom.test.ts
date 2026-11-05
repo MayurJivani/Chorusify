@@ -364,6 +364,7 @@ describe('event rooms', () => {
     expect(room.phase).toBe('lobby');
     expect(room.isTrial).toBe(false);
     expect(room.trialPending).toBe(false);
+    expect(room.trialDone).toBe(true);
     expect(a.last('scores').scores[0].score).toBe(0);
     expect(a.of('game_over')).toHaveLength(0);
     expect(finished).not.toHaveBeenCalled();
@@ -371,6 +372,21 @@ describe('event rooms', () => {
     await start();
     expect(host.last('host_round').title).toBe('Song 0');
     expect(a.last('round_start').totalRounds).toBe(3);
+  });
+
+  it('starts the real game straight from the trial when the host asks', async () => {
+    event.trialTrack = { ...tracks[0]!, deezerTrackId: '900', title: 'Trial', album: null };
+    const host = await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    await start();
+    expect(host.last('host_round').title).toBe('Trial');
+    await vi.advanceTimersByTimeAsync(LEAD);
+    await msg('a', { type: 'guess', trackId: '900' });
+    await start();
+    expect(host.last('host_round').title).toBe('Song 0');
+    expect(a.last('room_state').room.isTrial).toBe(false);
+    expect(a.last('scores').scores[0].score).toBe(0);
   });
 
   it('puts album covers on the options only when the event asks for them', async () => {

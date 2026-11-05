@@ -50,8 +50,8 @@ export function EventForm({
     setForm((f) => ({ ...f, [key]: value }));
 
   const chosen = playlists.find((p) => p.id === form.playlistId);
-  const songCount = chosen?.tracks.length ?? 0;
-  const trialTitle = chosen?.trialTrack?.title;
+  const trialTitle = chosen?.tracks.find((t) => t.trial)?.title;
+  const songCount = (chosen?.tracks.length ?? 0) - (trialTitle ? 1 : 0);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +101,8 @@ export function EventForm({
         >
           {playlists.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} ({p.tracks.length} songs)
+              {p.name} ({p.tracks.filter((t) => !t.trial).length} songs
+              {p.tracks.some((t) => t.trial) ? ' + trial' : ''})
             </option>
           ))}
         </select>

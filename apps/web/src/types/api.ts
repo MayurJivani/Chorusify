@@ -278,6 +278,8 @@ export interface MultiplayerRoomSnapshot {
   isTrial?: boolean;
   /** The next start plays the trial song rather than the game. */
   trialPending?: boolean;
+  /** The trial just ended and every score went back to zero. */
+  trialDone?: boolean;
 }
 
 export type EventAudioMode = 'everyone_plays' | 'host_only';
@@ -291,6 +293,8 @@ export interface PlaylistTrack {
   durationSeconds: number;
   /** Wrong answers the host picked. Any left unfilled come from the playlist. */
   decoys?: PlaylistDecoy[];
+  /** Plays before the game as practice and is not one of its rounds. One per playlist. */
+  trial?: boolean;
 }
 
 export interface PlaylistDecoy {
@@ -308,8 +312,6 @@ export interface Playlist {
   id: string;
   name: string;
   tracks: PlaylistTrack[];
-  /** Played before the game as practice; its points do not count. */
-  trialTrack?: PlaylistTrack | null;
   updatedAt: string;
 }
 

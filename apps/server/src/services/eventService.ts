@@ -57,15 +57,10 @@ export function listPlaylists(ownerUserId: string) {
     .orderBy(desc(playlists.updatedAt));
 }
 
-export async function createPlaylist(
-  ownerUserId: string,
-  name: string,
-  tracks: PlaylistTrack[],
-  trialTrack: PlaylistTrack | null = null,
-) {
+export async function createPlaylist(ownerUserId: string, name: string, tracks: PlaylistTrack[]) {
   const [row] = await db
     .insert(playlists)
-    .values({ id: randomUUID(), ownerUserId, name, tracks, trialTrack })
+    .values({ id: randomUUID(), ownerUserId, name, tracks })
     .returning();
   return row!;
 }
@@ -75,11 +70,10 @@ export async function updatePlaylist(
   id: string,
   name: string,
   tracks: PlaylistTrack[],
-  trialTrack: PlaylistTrack | null = null,
 ) {
   const [row] = await db
     .update(playlists)
-    .set({ name, tracks, trialTrack, updatedAt: new Date() })
+    .set({ name, tracks, updatedAt: new Date() })
     .where(and(eq(playlists.id, id), eq(playlists.ownerUserId, ownerUserId)))
     .returning();
   if (!row) throw new EventError(404, 'Playlist not found');
@@ -159,22 +153,30 @@ export async function getEvent(ownerUserId: string, id: string) {
   return toHostView(await ownedEvent(ownerUserId, id));
 }
 
+/** The trial song is set apart: it plays first and is not one of the game's rounds. */
+function splitTrial(all: PlaylistTrack[]) {
+  return { tracks: all.filter((t) => !t.trial), trialTrack: all.find((t) => t.trial) ?? null };
+}
+
 /** Copies the playlist into the event. Later edits to the playlist do not reach it. */
 async function snapshotFor(
   ownerUserId: string,
   input: EventInput,
 ): Promise<{ tracks: PlaylistTrack[]; trialTrack: PlaylistTrack | null }> {
   const rows = await db
-    .select({ tracks: playlists.tracks, trialTrack: playlists.trialTrack })
+    .select({ tracks: playlists.tracks })
     .from(playlists)
     .where(and(eq(playlists.id, input.playlistId), eq(playlists.ownerUserId, ownerUserId)))
     .limit(1);
-  const tracks = rows[0]?.tracks;
-  if (!tracks) throw new EventError(404, 'Playlist not found');
-  if (tracks.length < MIN_EVENT_TRACKS) {
-    throw new EventError(400, `A playlist needs at least ${MIN_EVENT_TRACKS} songs for an event.`);
+  if (!rows[0]) throw new EventError(404, 'Playlist not found');
+  const split = splitTrial(rows[0].tracks);
+  if (split.tracks.length < MIN_EVENT_TRACKS) {
+    throw new EventError(
+      400,
+      `A playlist needs at least ${MIN_EVENT_TRACKS} songs for an event, not counting the trial.`,
+    );
   }
-  return { tracks, trialTrack: rows[0]!.trialTrack ?? null };
+  return split;
 }
 
 /** Each round's decoys are songs that have not been an answer yet, so three are kept back. */
@@ -366,13 +368,13 @@ setEventHooks({
   },
   async usePlaylist(event, playlistId) {
     const rows = await db
-      .select({ tracks: playlists.tracks, trialTrack: playlists.trialTrack })
+      .select({ tracks: playlists.tracks })
       .from(playlists)
       .where(and(eq(playlists.id, playlistId), eq(playlists.ownerUserId, event.ownerUserId)))
       .limit(1);
-    const tracks = rows[0]?.tracks;
-    if (!tracks || tracks.length < MIN_EVENT_TRACKS) return null;
-    const trialTrack = rows[0]!.trialTrack ?? null;
+    if (!rows[0]) return null;
+    const { tracks, trialTrack } = splitTrial(rows[0].tracks);
+    if (tracks.length < MIN_EVENT_TRACKS) return null;
     // The event is open again, on its new songs, so a restart or a late joiner finds this game.
     await db
       .update(events)

@@ -175,6 +175,7 @@ export function ScreenPage() {
                 avatar: p.avatar,
               }))}
               starting={phase === 'starting'}
+              trialDone={!!room.trialDone}
             />
           </motion.div>
         )}
@@ -229,11 +230,13 @@ function Lobby({
   count,
   names,
   starting,
+  trialDone,
 }: {
   code: string;
   count: number;
   names: { id: string; name: string; avatar?: string | null }[];
   starting: boolean;
+  trialDone: boolean;
 }) {
   const joinUrl = `${window.location.origin}/room/${code}`;
   return (
@@ -255,9 +258,11 @@ function Lobby({
       </div>
       <div className="flex min-w-0 flex-col items-start gap-[calc(3*var(--u))]">
         <p className="text-[calc(5.5*var(--u))] font-black leading-[1.05] tracking-tight">
-          {starting ? 'Here we go…' : 'Scan to join.'}
+          {starting ? 'Here we go…' : trialDone ? 'Trial over.' : 'Scan to join.'}
           <br />
-          <span className="text-slate-400">Name the song first.</span>
+          <span className={trialDone ? 'text-amber-200' : 'text-slate-400'}>
+            {trialDone ? 'Points reset to 0. The real game is next.' : 'Name the song first.'}
+          </span>
         </p>
         <Disc size="calc(24*var(--u))" spinning arm className="mr-[calc(8*var(--u))]">
           <LabelCount n={count} unit="players" unitOne="player" />
@@ -328,7 +333,13 @@ function Playing({
   return (
     <div className="flex flex-col items-center gap-[calc(3*var(--u))]">
       <p className="text-[calc(2.4*var(--u))] font-semibold uppercase tracking-[0.2em] text-slate-400">
-        {trial ? 'Trial song · points do not count' : `Song ${index + 1} of ${total}`}
+        {trial ? (
+          <span className="rounded-full bg-amber-400/15 px-[calc(2*var(--u))] py-[calc(0.6*var(--u))] text-amber-200">
+            Trial song · points do not count
+          </span>
+        ) : (
+          `Song ${index + 1} of ${total}`
+        )}
       </p>
       <Disc size="calc(34*var(--u))" spinning={playing} arm className="mr-[calc(10*var(--u))]" />
       {before ? (

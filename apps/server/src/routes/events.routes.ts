@@ -129,6 +129,7 @@ const trackSchema = z
     durationSeconds: z.number().int().min(0).max(36000),
     // Three wrong answers fill a four-option round.
     decoys: z.array(decoySchema).max(3).optional(),
+    trial: z.boolean().optional(),
   })
   .refine(
     (t) => !t.decoys?.some((d) => d.deezerTrackId === t.deezerTrackId),
@@ -137,14 +138,14 @@ const trackSchema = z
 
 const playlistSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  trialTrack: trackSchema.nullable().default(null),
   tracks: z
     .array(trackSchema)
     .max(MAX_PLAYLIST_TRACKS)
     .refine(
       (tracks) => new Set(tracks.map((t) => t.deezerTrackId)).size === tracks.length,
       'A song can only be in a playlist once',
-    ),
+    )
+    .refine((tracks) => tracks.filter((t) => t.trial).length <= 1, 'Only one trial song'),
 });
 
 const idParams = z.object({ id: z.string().uuid() });
@@ -161,10 +162,10 @@ host.post(
   '/playlists',
   validate(playlistSchema),
   asyncHandler(async (req, res) => {
-    const { name, tracks, trialTrack } = req.body as z.infer<typeof playlistSchema>;
-    res.status(201).json({
-      playlist: await eventService.createPlaylist(ownerId(req), name, tracks, trialTrack),
-    });
+    const { name, tracks } = req.body as z.infer<typeof playlistSchema>;
+    res
+      .status(201)
+      .json({ playlist: await eventService.createPlaylist(ownerId(req), name, tracks) });
   }),
 );
 
@@ -173,9 +174,9 @@ host.patch(
   validate(idParams, 'params'),
   validate(playlistSchema),
   asyncHandler(async (req, res) => {
-    const { name, tracks, trialTrack } = req.body as z.infer<typeof playlistSchema>;
+    const { name, tracks } = req.body as z.infer<typeof playlistSchema>;
     const playlist = await eventService
-      .updatePlaylist(ownerId(req), req.params.id as string, name, tracks, trialTrack)
+      .updatePlaylist(ownerId(req), req.params.id as string, name, tracks)
       .catch(mapEventErrors);
     res.json({ playlist });
   }),

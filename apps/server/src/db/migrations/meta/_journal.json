@@ -134,6 +134,13 @@
       "when": 1793898341682,
       "tag": "0018_playlist_trial",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793899073434,
+      "tag": "0019_trial_in_playlist",
+      "breakpoints": true
     }
   ]
 }

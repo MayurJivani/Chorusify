@@ -63,7 +63,7 @@ function Console({ event }: { event: HostedEvent }) {
 
   useEffect(() => {
     listPlaylists().then(
-      (r) => setPlaylists(r.playlists.filter((p) => p.tracks.length >= 4)),
+      (r) => setPlaylists(r.playlists.filter((p) => p.tracks.filter((t) => !t.trial).length >= 4)),
       () => undefined,
     );
   }, []);
@@ -128,7 +128,8 @@ function Console({ event }: { event: HostedEvent }) {
                     <option value="">Play another playlist…</option>
                     {playlists.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} ({p.tracks.length} songs)
+                        {p.name} ({p.tracks.filter((t) => !t.trial).length} songs
+                        {p.tracks.some((t) => t.trial) ? ' + trial' : ''})
                       </option>
                     ))}
                   </select>
@@ -153,8 +154,8 @@ function Console({ event }: { event: HostedEvent }) {
                 <h2 className="text-lg font-bold text-white">
                   {phase === 'starting'
                     ? 'Starting…'
-                    : event.trialTrack && room && !room.trialPending
-                      ? 'Trial done. Start the game when everyone is ready'
+                    : room?.trialDone
+                      ? 'Trial over. Every score is back to 0'
                       : 'Waiting for players'}
                 </h2>
                 <p className="mt-1 text-sm text-slate-400">
@@ -175,7 +176,7 @@ function Console({ event }: { event: HostedEvent }) {
                 >
                   {playerCount === 0
                     ? 'Waiting for the first player'
-                    : `${room?.trialPending ? 'Play the trial song' : 'Start'} with ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
+                    : `${room?.trialPending ? 'Play the trial song' : room?.trialDone ? 'Start the main event' : 'Start'} with ${playerCount} ${playerCount === 1 ? 'player' : 'players'}`}
                 </button>
               </motion.div>
             ) : (
@@ -195,6 +196,20 @@ function Console({ event }: { event: HostedEvent }) {
                     paused={paused}
                     trial={!!room?.isTrial}
                   />
+                )}
+                {room?.isTrial && (
+                  <div className="flex flex-wrap items-center gap-3 rounded-xl bg-amber-400/10 p-3">
+                    <p className="min-w-0 flex-1 text-sm text-amber-100">
+                      Trial song. Nobody keeps these points.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => hostCommand('start_game')}
+                      className="btn-primary !rounded-xl !py-2 !text-sm"
+                    >
+                      Start the main event
+                    </button>
+                  </div>
                 )}
                 {hostOnly && (
                   <label className="flex items-center gap-2 text-sm text-slate-300">

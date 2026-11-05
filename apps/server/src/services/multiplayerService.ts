@@ -359,6 +359,7 @@ export interface MpRoomSnapshot {
   locked: boolean;
   isTrial: boolean;
   trialPending: boolean;
+  trialDone: boolean;
 }
 
 const emptyRoomExtras = () => ({
@@ -1426,6 +1427,8 @@ export async function startGame(playerId: string): Promise<void> {
   const room = roomFor(playerId);
   if (!room) return;
   if (room.hostId !== playerId) return sendError(playerId, 'Only the host can start the game.');
+  // The host can cut the trial short and go straight to the real game.
+  if (room.isTrial) endTrial(room);
   if (room.phase !== 'lobby' && (room.phase !== 'finished' || room.event)) {
     return sendError(playerId, 'Game already in progress.');
   }
@@ -2179,6 +2182,8 @@ function buildRoomSnapshot(room: MpRoom): MpRoomSnapshot {
     locked: room.locked,
     isTrial: room.isTrial,
     trialPending: room.trialPending,
+    // Back in the lobby after the trial, everyone on zero: the screens say so.
+    trialDone: room.phase === 'lobby' && !room.trialPending && room.event?.trialTrack != null,
   };
 }
 

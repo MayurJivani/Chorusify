@@ -93,6 +93,8 @@ export interface PlaylistTrack {
   durationSeconds: number;
   /** Wrong answers the host picked for this song. Any left unfilled are drawn from the playlist. */
   decoys?: PlaylistDecoy[];
+  /** Plays before the game as practice and is not one of its rounds. One per playlist. */
+  trial?: boolean;
 }
 
 export interface PlaylistDecoy {
@@ -115,8 +117,6 @@ export const playlists = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     tracks: jsonb('tracks').notNull().$type<PlaylistTrack[]>(),
-    /** Played before the game as practice. Copied into an event with the tracks. */
-    trialTrack: jsonb('trial_track').$type<PlaylistTrack>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

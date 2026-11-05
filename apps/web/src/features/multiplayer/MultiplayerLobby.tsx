@@ -40,7 +40,13 @@ function EventLobby({ room, onLeave }: Pick<MultiplayerLobbyProps, 'room' | 'onL
       <Disc size={190} spinning arm className="mr-10">
         <LabelCount n={count} unit="players" unitOne="player" />
       </Disc>
-      <p className="text-sm text-slate-300">The host starts when everyone is ready.</p>
+      {room.trialDone ? (
+        <p role="status" className="rounded-xl bg-amber-400/10 px-4 py-2.5 text-sm text-amber-100">
+          Trial over. Everyone&rsquo;s points are back to 0. The real game starts soon.
+        </p>
+      ) : (
+        <p className="text-sm text-slate-300">The host starts when everyone is ready.</p>
+      )}
       <ul className="flex min-h-9 flex-wrap justify-center gap-1.5" aria-label="Newest players">
         <AnimatePresence initial={false} mode="popLayout">
           {room.players.slice(-12).map((p) => (

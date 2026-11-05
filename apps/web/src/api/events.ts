@@ -21,15 +21,10 @@ export function searchEventSongs(q: string, field: SearchField, signal: AbortSig
 export const listPlaylists = () =>
   apiRequest<{ playlists: Playlist[] }>('/events/playlists', { skipCache: true });
 
-export const savePlaylist = (
-  id: string | null,
-  name: string,
-  tracks: PlaylistTrack[],
-  trialTrack: PlaylistTrack | null,
-) =>
+export const savePlaylist = (id: string | null, name: string, tracks: PlaylistTrack[]) =>
   apiRequest<{ playlist: Playlist }>(id ? `/events/playlists/${id}` : '/events/playlists', {
     method: id ? 'PATCH' : 'POST',
-    body: { name, tracks, trialTrack },
+    body: { name, tracks },
   });
 
 export const deletePlaylist = (id: string) =>

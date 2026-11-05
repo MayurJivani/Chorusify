@@ -206,7 +206,8 @@ export function EventsPage() {
                     <div className="min-w-0 flex-1 basis-56">
                       <p className="truncate font-semibold text-white">{playlist.name}</p>
                       <p className="text-xs text-slate-400">
-                        {playlist.tracks.length} songs ·{' '}
+                        {playlist.tracks.filter((t) => !t.trial).length} songs
+                        {playlist.tracks.some((t) => t.trial) ? ' + trial' : ''} ·{' '}
                         {formatDuration(playlist.tracks.reduce((s, t) => s + t.durationSeconds, 0))}
                       </p>
                     </div>
