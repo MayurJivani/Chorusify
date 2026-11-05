@@ -71,13 +71,31 @@ export function EventForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
       <Field label="Event name">
-        <input required maxLength={80} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Freshers' music quiz" className="event-input" />
+        <input
+          required
+          maxLength={80}
+          value={form.name}
+          onChange={(e) => set('name', e.target.value)}
+          placeholder="Freshers' music quiz"
+          className="event-input"
+        />
       </Field>
       <Field label="Description" hint="Shown on the join page.">
-        <textarea maxLength={500} rows={2} value={form.description} onChange={(e) => set('description', e.target.value)} className="event-input" />
+        <textarea
+          maxLength={500}
+          rows={2}
+          value={form.description}
+          onChange={(e) => set('description', e.target.value)}
+          className="event-input"
+        />
       </Field>
       <Field label="Playlist">
-        <select required value={form.playlistId} onChange={(e) => set('playlistId', e.target.value)} className="event-input">
+        <select
+          required
+          value={form.playlistId}
+          onChange={(e) => set('playlistId', e.target.value)}
+          className="event-input"
+        >
           {playlists.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} ({p.tracks.length} songs)
@@ -112,7 +130,9 @@ export function EventForm({
                   checked={on}
                   onChange={() => set('audioMode', mode.value)}
                 />
-                <span className="relative block text-sm font-semibold text-white">{mode.title}</span>
+                <span className="relative block text-sm font-semibold text-white">
+                  {mode.title}
+                </span>
                 <span className="relative mt-0.5 block text-xs text-slate-400">{mode.body}</span>
               </label>
             );
@@ -121,46 +141,121 @@ export function EventForm({
       </fieldset>
 
       <label className="flex items-center gap-2.5 text-sm text-slate-200">
-        <input type="checkbox" checked={form.hostPlays} onChange={(e) => set('hostPlays', e.target.checked)} className="h-4 w-4 accent-white" />
+        <input
+          type="checkbox"
+          checked={form.hostPlays}
+          onChange={(e) => set('hostPlays', e.target.checked)}
+          className="h-4 w-4 accent-white"
+        />
         I am playing too (puts me on the leaderboard)
       </label>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <NumberField label="Rounds" hint={`Playlist has ${songCount}`} value={form.rounds} min={1} max={Math.max(1, songCount)} onChange={(v) => set('rounds', v)} />
-        <NumberField label="Song plays for" unit="s" value={form.playbackSeconds} min={3} max={30} onChange={(v) => set('playbackSeconds', v)} />
-        <NumberField label="Time to answer" unit="s" value={form.guessSeconds} min={5} max={120} onChange={(v) => set('guessSeconds', v)} />
-        <NumberField label="Instant answer" unit="pts" value={form.maxPoints} min={1} max={10000} onChange={(v) => set('maxPoints', v)} />
-        <NumberField label="Last-second answer" unit="pts" value={form.minPoints} min={0} max={10000} onChange={(v) => set('minPoints', v)} />
-        <NumberField label="First correct bonus" unit="pts" value={form.firstBonus} min={0} max={10000} onChange={(v) => set('firstBonus', v)} />
+        <NumberField
+          label="Rounds"
+          hint={`Needs ${(form.rounds || 1) + 3} songs, playlist has ${songCount}`}
+          value={form.rounds}
+          min={1}
+          max={Math.max(1, songCount - 3)}
+          onChange={(v) => set('rounds', v)}
+        />
+        <NumberField
+          label="Song plays for"
+          unit="s"
+          value={form.playbackSeconds}
+          min={3}
+          max={30}
+          onChange={(v) => set('playbackSeconds', v)}
+        />
+        <NumberField
+          label="Time to answer"
+          unit="s"
+          value={form.guessSeconds}
+          min={5}
+          max={120}
+          onChange={(v) => set('guessSeconds', v)}
+        />
+        <NumberField
+          label="Instant answer"
+          unit="pts"
+          value={form.maxPoints}
+          min={1}
+          max={10000}
+          onChange={(v) => set('maxPoints', v)}
+        />
+        <NumberField
+          label="Last-second answer"
+          unit="pts"
+          value={form.minPoints}
+          min={0}
+          max={10000}
+          onChange={(v) => set('minPoints', v)}
+        />
+        <NumberField
+          label="First correct bonus"
+          unit="pts"
+          value={form.firstBonus}
+          min={0}
+          max={10000}
+          onChange={(v) => set('firstBonus', v)}
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Who can find it">
-          <select value={form.visibility} onChange={(e) => set('visibility', e.target.value as EventInput['visibility'])} className="event-input">
+          <select
+            value={form.visibility}
+            onChange={(e) => set('visibility', e.target.value as EventInput['visibility'])}
+            className="event-input"
+          >
             <option value="unlisted">Only people with the link</option>
             <option value="public">Listed on the multiplayer page</option>
           </select>
         </Field>
         <Field
           label="Password (optional)"
-          hint={event?.hasPassword ? 'Set. Leave blank to keep it.' : 'Never included in the QR code or link.'}
+          hint={
+            event?.hasPassword
+              ? 'Set. Leave blank to keep it.'
+              : 'Never included in the QR code or link.'
+          }
         >
-          <input type="text" autoComplete="off" maxLength={100} value={password} onChange={(e) => setPassword(e.target.value)} className="event-input" />
+          <input
+            type="text"
+            autoComplete="off"
+            maxLength={100}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="event-input"
+          />
         </Field>
       </div>
       {event?.hasPassword && (
         <label className="flex items-center gap-2.5 text-sm text-slate-200">
-          <input type="checkbox" checked={clearPassword} onChange={(e) => setClearPassword(e.target.checked)} className="h-4 w-4 accent-white" />
+          <input
+            type="checkbox"
+            checked={clearPassword}
+            onChange={(e) => setClearPassword(e.target.checked)}
+            className="h-4 w-4 accent-white"
+          />
           Remove the password
         </label>
       )}
 
-      {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-300">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         <button type="button" onClick={onCancel} className="btn-ghost flex-1 !rounded-xl">
           Cancel
         </button>
-        <button type="submit" disabled={saving || !form.playlistId || songCount < 4} className="btn-primary flex-1 !rounded-xl">
+        <button
+          type="submit"
+          disabled={saving || !form.playlistId || songCount < 4}
+          className="btn-primary flex-1 !rounded-xl"
+        >
           {saving ? 'Saving…' : event ? 'Save changes' : 'Create event'}
         </button>
       </div>

@@ -319,6 +319,23 @@ describe('event rooms', () => {
     expect(__getCurrentTrack('EVENT1')?.title).toBe('Song 1');
   });
 
+  it('never offers an earlier answer as an option', async () => {
+    await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    await start();
+    await msg('host', { type: 'host_skip' });
+    await vi.advanceTimersByTimeAsync(0);
+    await msg('host', { type: 'host_skip' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const ids = a.last('round_start').options.map((o: any) => o.deezerTrackId);
+    expect(a.last('round_start').roundIndex).toBe(2);
+    expect(ids).toHaveLength(4);
+    expect(ids).not.toContain('100');
+    expect(ids).not.toContain('101');
+  });
+
   it('drops an unplayable song instead of stopping, and tells the host', async () => {
     getFreshPreviewUrl.mockImplementation(async (id: string) =>
       id === '100' ? null : { previewUrl: `https://x.dzcdn.net/${id}.mp3`, durationSeconds: 30 },

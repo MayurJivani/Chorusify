@@ -167,8 +167,9 @@ async function snapshotFor(ownerUserId: string, input: EventInput): Promise<Play
   return tracks;
 }
 
+/** Each round's decoys are songs that have not been an answer yet, so three are kept back. */
 const roundsFor = (input: EventInput, tracks: PlaylistTrack[]) =>
-  Math.min(input.rounds, tracks.length);
+  Math.min(input.rounds, tracks.length - (MIN_EVENT_TRACKS - 1));
 
 export async function createEvent(ownerUserId: string, input: EventInput) {
   const tracks = await snapshotFor(ownerUserId, input);

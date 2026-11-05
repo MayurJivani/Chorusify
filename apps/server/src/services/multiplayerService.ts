@@ -1520,11 +1520,13 @@ export async function startGame(playerId: string): Promise<void> {
 /** An event plays its playlist in the order the host set, for as many rounds as it asked for. */
 async function prepareEvent(room: MpRoom): Promise<void> {
   const pool = await room.source.loadCatalog();
-  room.tracks = pool.slice(0, room.rounds);
+  // The last round still needs its decoys from songs nobody has heard as an answer yet.
+  room.tracks = pool.slice(0, Math.min(room.rounds, pool.length - (MP_CHOICE_OPTIONS - 1)));
   room.rounds = room.tracks.length;
   room.previewUrls = room.tracks.map(() => '');
-  room.roundOptions = room.tracks.map((track) =>
-    buildRoundOptions(track, pool, MP_CHOICE_OPTIONS, false),
+  // Round i plays pool[i], so pool.slice(i) is its answer plus every song not yet an answer.
+  room.roundOptions = room.tracks.map((track, i) =>
+    buildRoundOptions(track, pool.slice(i), MP_CHOICE_OPTIONS, false),
   );
   for (const p of room.players.values()) {
     p.score = 0;
