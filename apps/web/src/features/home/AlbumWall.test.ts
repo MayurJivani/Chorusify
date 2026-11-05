@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SamplerSong } from '../../api/songs';
-import { buildColumns, tileFilter } from './AlbumWall';
+import { buildColumns, tileFilter, wanderTarget } from './AlbumWall';
 
 const song = (id: number, art: string): SamplerSong => ({
   id,
@@ -39,5 +39,17 @@ describe('tileFilter', () => {
   it('fades in between, so nearby covers show some colour', () => {
     expect(tileFilter(90)).toBe('none');
     expect(tileFilter(170)).toBe('grayscale(0.5) brightness(0.65)');
+  });
+});
+
+describe('wanderTarget', () => {
+  it('stays inside the visible band of the wall', () => {
+    for (const r of [0, 0.5, 0.999]) {
+      const { x, y } = wanderTarget(1000, 800, () => r);
+      expect(x).toBeGreaterThanOrEqual(120);
+      expect(x).toBeLessThanOrEqual(880);
+      expect(y).toBeGreaterThanOrEqual(176);
+      expect(y).toBeLessThanOrEqual(496);
+    }
   });
 });

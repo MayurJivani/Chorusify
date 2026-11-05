@@ -8,6 +8,13 @@ const MIN_TILES_PER_LOOP = 8;
 
 // How far from the pointer colour reaches, in px.
 const COLOUR_RADIUS = 340;
+// A still pointer hands the spotlight back to its wander after this long, unless it rests on a cover.
+const IDLE_MS = 2500;
+
+/** Somewhere new for the idle spotlight, kept in the visible band of the wall. */
+export function wanderTarget(width: number, height: number, rand = Math.random) {
+  return { x: width * (0.12 + 0.76 * rand()), y: height * (0.22 + 0.4 * rand()) };
+}
 
 /** How grey a cover should be at a distance from the pointer: none at the centre, full at the edge. */
 export function tileFilter(distance: number): string {
@@ -42,8 +49,9 @@ export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
 }
 
 /**
- * Real covers behind the hero, in columns drifting opposite ways, greyed until hovered, under a
- * soft light that follows the pointer (and wanders without one).
+ * Real covers behind the hero, in columns drifting opposite ways, greyed except around a spotlight:
+ * the hovered cover in full colour, its neighbours partly. The spotlight follows the pointer, and
+ * wanders to random spots when the pointer is still or away.
  * Everything moves through CSS variables and playback rate, so React never re-renders on a frame.
  */
 export function AlbumWall({
@@ -60,6 +68,7 @@ export function AlbumWall({
   const reduced = useReducedMotion();
   const wallRef = useRef<HTMLDivElement | null>(null);
   const [hovered, setHovered] = useState<SamplerSong | null>(null);
+  const onCover = useRef(false);
   // A fresh order each visit, so the covers are never in the same places twice.
   const columns = useMemo(() => buildColumns(shuffle(songs)), [songs]);
 
@@ -74,8 +83,11 @@ export function AlbumWall({
       .filter((a) => a instanceof CSSAnimation && a.animationName === 'album-wall-drift');
     let applied = 1;
     let pointer: { x: number; y: number } | null = null;
+    let movedAt = 0;
     let spotX = wall.clientWidth / 2;
     let spotY = wall.clientHeight / 3;
+    let wander = wanderTarget(wall.clientWidth, wall.clientHeight);
+    let wanderAt = 0;
     let speed = 1;
     let lastScroll = scroller?.scrollTop ?? 0;
     let visible = true;
@@ -88,6 +100,7 @@ export function AlbumWall({
       if (e.pointerType !== 'mouse') return;
       const box = wall.getBoundingClientRect();
       pointer = { x: e.clientX - box.left, y: e.clientY - box.top };
+      movedAt = performance.now();
     };
     const observer = new IntersectionObserver(([entry]) => {
       visible = entry?.isIntersecting ?? true;
@@ -101,9 +114,15 @@ export function AlbumWall({
       if (!visible) return;
       const width = wall.clientWidth;
       const height = wall.clientHeight;
-      const targetX = pointer?.x ?? width * (0.5 + 0.34 * Math.sin(now / 3100));
-      const targetY = pointer?.y ?? height * (0.42 + 0.26 * Math.cos(now / 3700));
-      const ease = pointer ? 0.14 : 0.04;
+      const live = pointer && (onCover.current || now - movedAt < IDLE_MS) ? pointer : null;
+      // Idle: glide to a random spot, then pick another a few seconds later.
+      if (!live && now - wanderAt > 2600 + Math.random() * 1800) {
+        wander = wanderTarget(width, height);
+        wanderAt = now;
+      }
+      const targetX = live?.x ?? wander.x;
+      const targetY = live?.y ?? wander.y;
+      const ease = live ? 0.14 : 0.025;
       const nextX = spotX + (targetX - spotX) * ease;
       const nextY = spotY + (targetY - spotY) * ease;
       // Repaint the glow only when it visibly moves; the covers themselves never repaint.
@@ -114,17 +133,16 @@ export function AlbumWall({
       spotX = nextX;
       spotY = nextY;
 
-      // Colour near the pointer. Only columns within reach colour cover by cover; the rest stay
-      // one grey image, so this costs a few dozen covers, not the whole wall.
-      const at = pointer;
+      // Colour near the spotlight (the pointer itself while it is live, so the hovered cover is
+      // exact). Only columns within reach colour cover by cover; the rest stay one grey image.
+      const at = live ?? { x: spotX, y: spotY };
       for (const column of wall.querySelectorAll<HTMLElement>('.album-wall-column')) {
         const box = column.getBoundingClientRect();
         const wallBox = wall.getBoundingClientRect();
-        const near =
-          at !== null && Math.abs(box.left + box.width / 2 - (wallBox.left + at.x)) < COLOUR_RADIUS;
+        const near = Math.abs(box.left + box.width / 2 - (wallBox.left + at.x)) < COLOUR_RADIUS;
         column.classList.toggle('album-wall-column-near', near);
         for (const img of column.querySelectorAll<HTMLImageElement>('img')) {
-          if (!near || !at || img.classList.contains('album-wall-playing')) {
+          if (!near || img.classList.contains('album-wall-playing')) {
             if (img.style.filter) img.style.filter = '';
             continue;
           }
@@ -184,8 +202,15 @@ export function AlbumWall({
                   className={song.id === playingId ? 'album-wall-playing' : undefined}
                   onLoad={(e) => e.currentTarget.classList.add('album-wall-loaded')}
                   onClick={() => onPlay(song)}
-                  onPointerEnter={(e) => e.pointerType === 'mouse' && setHovered(song)}
-                  onPointerLeave={() => setHovered(null)}
+                  onPointerEnter={(e) => {
+                    if (e.pointerType !== 'mouse') return;
+                    onCover.current = true;
+                    setHovered(song);
+                  }}
+                  onPointerLeave={() => {
+                    onCover.current = false;
+                    setHovered(null);
+                  }}
                 />
               ))}
             </div>
