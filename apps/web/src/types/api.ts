@@ -308,6 +308,8 @@ export interface Playlist {
   id: string;
   name: string;
   tracks: PlaylistTrack[];
+  /** Played before the game as practice; its points do not count. */
+  trialTrack?: PlaylistTrack | null;
   updatedAt: string;
 }
 
@@ -325,11 +327,12 @@ export interface EventInput {
   minPoints: number;
   firstBonus: number;
   playlistId: string;
-  trialTrack: PlaylistTrack | null;
   showCovers: boolean;
 }
 
 export interface HostedEvent extends Omit<EventInput, 'password'> {
+  /** Copied from the playlist when the event was saved. */
+  trialTrack: PlaylistTrack | null;
   id: string;
   code: string;
   status: 'open' | 'live' | 'ended';

@@ -106,7 +106,12 @@ beforeEach(() => {
     canHost: async (userId) => userId === 'owner',
     checkPassword: (_e, password) => password === 'open sesame',
     checkScreenKey: (_e, key) => key === 'screen-key',
-    usePlaylist: async (_e, id) => (id === 'second' ? secondTracks : null),
+    usePlaylist: async (_e, id) =>
+      id === 'second'
+        ? { tracks: secondTracks, trialTrack: null }
+        : id === 'with-trial'
+          ? { tracks: secondTracks, trialTrack: { ...tracks[5]!, title: 'Warmup', album: null } }
+          : null,
     onStarted: vi.fn(),
     onFinished: finished,
   });
@@ -543,6 +548,19 @@ describe('event rooms', () => {
     await msg('host', { type: 'host_end' });
     const games = finished.mock.calls.map((call) => call[2][0]?.game);
     expect(games).toEqual([1, 2]);
+  });
+
+  it('plays the trial song of a playlist loaded for the next game', async () => {
+    const host = await hostUp();
+    const a = conn('a', null, 'ga');
+    await join('a');
+    await start();
+    await msg('host', { type: 'host_end' });
+    await msg('host', { type: 'host_next_playlist', playlistId: 'with-trial' });
+    expect(a.last('room_state').room.trialPending).toBe(true);
+    await start();
+    expect(host.last('host_round').title).toBe('Warmup');
+    expect(a.last('room_state').room.isTrial).toBe(true);
   });
 
   it('refuses the next-playlist command from anyone but the host', async () => {

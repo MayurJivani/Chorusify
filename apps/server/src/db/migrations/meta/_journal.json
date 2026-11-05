@@ -127,6 +127,13 @@
       "when": 1793895520755,
       "tag": "0017_event_trial_covers",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793898341682,
+      "tag": "0018_playlist_trial",
+      "breakpoints": true
     }
   ]
 }

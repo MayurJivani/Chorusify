@@ -219,7 +219,10 @@ export interface EventHooks {
   /** The key in the host's TV screen link. Only the host's console is given it. */
   checkScreenKey(event: MpEvent, key: string): boolean;
   /** Another of the owner's playlists, copied into the event for its next game. */
-  usePlaylist(event: MpEvent, playlistId: string): Promise<ArtistTrack[] | null>;
+  usePlaylist(
+    event: MpEvent,
+    playlistId: string,
+  ): Promise<{ tracks: ArtistTrack[]; trialTrack: PlaylistTrack | null } | null>;
   onStarted(eventId: string): void;
   onFinished(
     eventId: string,
@@ -992,13 +995,17 @@ async function nextPlaylist(room: MpRoom, playlistId: string): Promise<void> {
   if (room.phase !== 'finished' && room.phase !== 'lobby') {
     return sendError(room.hostId, 'Finish the current game first.');
   }
-  const tracks = await eventHooks?.usePlaylist(room.event!, playlistId).catch(() => null);
+  const next = await eventHooks?.usePlaylist(room.event!, playlistId).catch(() => null);
+  const tracks = next?.tracks;
   if (!tracks || tracks.length < MP_CHOICE_OPTIONS) {
     return sendError(room.hostId, `That playlist needs at least ${MP_CHOICE_OPTIONS} songs.`);
   }
   clearRoomTimers(room);
   room.source = { ...room.source, loadCatalog: async () => tracks };
   room.rounds = room.event!.rounds;
+  // The new playlist brings its own practice round.
+  room.event!.trialTrack = next!.trialTrack;
+  room.trialPending = next!.trialTrack != null;
   room.phase = 'lobby';
   room.tracks = [];
   room.previewUrls = [];

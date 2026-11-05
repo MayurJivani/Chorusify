@@ -115,6 +115,8 @@ export const playlists = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     tracks: jsonb('tracks').notNull().$type<PlaylistTrack[]>(),
+    /** Played before the game as practice. Copied into an event with the tracks. */
+    trialTrack: jsonb('trial_track').$type<PlaylistTrack>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

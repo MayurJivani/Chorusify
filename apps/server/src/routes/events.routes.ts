@@ -137,6 +137,7 @@ const trackSchema = z
 
 const playlistSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  trialTrack: trackSchema.nullable().default(null),
   tracks: z
     .array(trackSchema)
     .max(MAX_PLAYLIST_TRACKS)
@@ -160,10 +161,10 @@ host.post(
   '/playlists',
   validate(playlistSchema),
   asyncHandler(async (req, res) => {
-    const { name, tracks } = req.body as z.infer<typeof playlistSchema>;
-    res
-      .status(201)
-      .json({ playlist: await eventService.createPlaylist(ownerId(req), name, tracks) });
+    const { name, tracks, trialTrack } = req.body as z.infer<typeof playlistSchema>;
+    res.status(201).json({
+      playlist: await eventService.createPlaylist(ownerId(req), name, tracks, trialTrack),
+    });
   }),
 );
 
@@ -172,9 +173,9 @@ host.patch(
   validate(idParams, 'params'),
   validate(playlistSchema),
   asyncHandler(async (req, res) => {
-    const { name, tracks } = req.body as z.infer<typeof playlistSchema>;
+    const { name, tracks, trialTrack } = req.body as z.infer<typeof playlistSchema>;
     const playlist = await eventService
-      .updatePlaylist(ownerId(req), req.params.id as string, name, tracks)
+      .updatePlaylist(ownerId(req), req.params.id as string, name, tracks, trialTrack)
       .catch(mapEventErrors);
     res.json({ playlist });
   }),
@@ -205,7 +206,6 @@ const eventSchema = z
     minPoints: z.number().int().min(0).max(10000),
     firstBonus: z.number().int().min(0).max(10000),
     playlistId: z.string().uuid(),
-    trialTrack: trackSchema.nullable().default(null),
     showCovers: z.boolean().default(false),
   })
   .refine((e) => e.minPoints <= e.maxPoints, 'Minimum points cannot be above maximum points');

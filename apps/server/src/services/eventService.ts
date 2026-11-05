@@ -57,10 +57,15 @@ export function listPlaylists(ownerUserId: string) {
     .orderBy(desc(playlists.updatedAt));
 }
 
-export async function createPlaylist(ownerUserId: string, name: string, tracks: PlaylistTrack[]) {
+export async function createPlaylist(
+  ownerUserId: string,
+  name: string,
+  tracks: PlaylistTrack[],
+  trialTrack: PlaylistTrack | null = null,
+) {
   const [row] = await db
     .insert(playlists)
-    .values({ id: randomUUID(), ownerUserId, name, tracks })
+    .values({ id: randomUUID(), ownerUserId, name, tracks, trialTrack })
     .returning();
   return row!;
 }
@@ -70,10 +75,11 @@ export async function updatePlaylist(
   id: string,
   name: string,
   tracks: PlaylistTrack[],
+  trialTrack: PlaylistTrack | null = null,
 ) {
   const [row] = await db
     .update(playlists)
-    .set({ name, tracks, updatedAt: new Date() })
+    .set({ name, tracks, trialTrack, updatedAt: new Date() })
     .where(and(eq(playlists.id, id), eq(playlists.ownerUserId, ownerUserId)))
     .returning();
   if (!row) throw new EventError(404, 'Playlist not found');
@@ -104,7 +110,6 @@ export interface EventInput {
   minPoints: number;
   firstBonus: number;
   playlistId: string;
-  trialTrack: PlaylistTrack | null;
   showCovers: boolean;
 }
 
@@ -155,9 +160,12 @@ export async function getEvent(ownerUserId: string, id: string) {
 }
 
 /** Copies the playlist into the event. Later edits to the playlist do not reach it. */
-async function snapshotFor(ownerUserId: string, input: EventInput): Promise<PlaylistTrack[]> {
+async function snapshotFor(
+  ownerUserId: string,
+  input: EventInput,
+): Promise<{ tracks: PlaylistTrack[]; trialTrack: PlaylistTrack | null }> {
   const rows = await db
-    .select({ tracks: playlists.tracks })
+    .select({ tracks: playlists.tracks, trialTrack: playlists.trialTrack })
     .from(playlists)
     .where(and(eq(playlists.id, input.playlistId), eq(playlists.ownerUserId, ownerUserId)))
     .limit(1);
@@ -166,7 +174,7 @@ async function snapshotFor(ownerUserId: string, input: EventInput): Promise<Play
   if (tracks.length < MIN_EVENT_TRACKS) {
     throw new EventError(400, `A playlist needs at least ${MIN_EVENT_TRACKS} songs for an event.`);
   }
-  return tracks;
+  return { tracks, trialTrack: rows[0]!.trialTrack ?? null };
 }
 
 /** Each round's decoys are songs that have not been an answer yet, so three are kept back. */
@@ -174,7 +182,7 @@ const roundsFor = (input: EventInput, tracks: PlaylistTrack[]) =>
   Math.min(input.rounds, tracks.length - (MIN_EVENT_TRACKS - 1));
 
 export async function createEvent(ownerUserId: string, input: EventInput) {
-  const tracks = await snapshotFor(ownerUserId, input);
+  const { tracks, trialTrack } = await snapshotFor(ownerUserId, input);
   const id = randomUUID();
   // The code space is 32^6: a collision is rare, and the unique index catches the one that happens.
   for (let attempt = 0; ; attempt += 1) {
@@ -198,7 +206,7 @@ export async function createEvent(ownerUserId: string, input: EventInput) {
           minPoints: input.minPoints,
           firstBonus: input.firstBonus,
           playlistId: input.playlistId,
-          trialTrack: input.trialTrack,
+          trialTrack,
           showCovers: input.showCovers,
           tracks,
         })
@@ -218,7 +226,7 @@ export async function createEvent(ownerUserId: string, input: EventInput) {
 export async function updateEvent(ownerUserId: string, id: string, input: EventInput) {
   const existing = await ownedEvent(ownerUserId, id);
   if (existing.status !== 'open') throw new EventError(409, 'This event has already started.');
-  const tracks = await snapshotFor(ownerUserId, input);
+  const { tracks, trialTrack } = await snapshotFor(ownerUserId, input);
   const [row] = await db
     .update(events)
     .set({
@@ -239,7 +247,7 @@ export async function updateEvent(ownerUserId: string, id: string, input: EventI
       minPoints: input.minPoints,
       firstBonus: input.firstBonus,
       playlistId: input.playlistId,
-      trialTrack: input.trialTrack,
+      trialTrack,
       showCovers: input.showCovers,
       tracks,
     })
@@ -358,19 +366,20 @@ setEventHooks({
   },
   async usePlaylist(event, playlistId) {
     const rows = await db
-      .select({ tracks: playlists.tracks })
+      .select({ tracks: playlists.tracks, trialTrack: playlists.trialTrack })
       .from(playlists)
       .where(and(eq(playlists.id, playlistId), eq(playlists.ownerUserId, event.ownerUserId)))
       .limit(1);
     const tracks = rows[0]?.tracks;
     if (!tracks || tracks.length < MIN_EVENT_TRACKS) return null;
+    const trialTrack = rows[0]!.trialTrack ?? null;
     // The event is open again, on its new songs, so a restart or a late joiner finds this game.
     await db
       .update(events)
-      .set({ tracks, playlistId, status: 'open' })
+      .set({ tracks, trialTrack, playlistId, status: 'open' })
       .where(eq(events.id, event.id));
     joinInfoCache.clear();
-    return tracks;
+    return { tracks, trialTrack };
   },
   checkPassword: (event, password) =>
     !!event.passwordHash && passwordMatches(event.id, password, event.passwordHash),

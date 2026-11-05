@@ -72,6 +72,7 @@ interface PlaylistBuilderProps {
 export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [tracks, setTracks] = useState<PlaylistTrack[]>(initial?.tracks ?? []);
+  const [trialTrack, setTrialTrack] = useState<PlaylistTrack | null>(initial?.trialTrack ?? null);
   const [query, setQuery] = useState('');
   const [field, setField] = useState<SearchField>('any');
   const [saving, setSaving] = useState(false);
@@ -118,7 +119,7 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
     setSaving(true);
     setError(null);
     try {
-      const { playlist } = await savePlaylist(initial?.id ?? null, name.trim(), tracks);
+      const { playlist } = await savePlaylist(initial?.id ?? null, name.trim(), tracks, trialTrack);
       onSaved(playlist);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the playlist.');
@@ -265,6 +266,32 @@ export function PlaylistBuilder({ initial, onSaved, onCancel }: PlaylistBuilderP
         </section>
 
         <section aria-label="Playlist" className="flex min-w-0 flex-col gap-3">
+          <section aria-label="Trial song" className="flex flex-col gap-1.5 text-sm">
+            <p className="font-medium text-slate-300">Trial song (optional)</p>
+            <p className="text-xs text-slate-400">
+              Plays before the game so everyone learns how it works. Its points do not count, and
+              you start the real game after it.
+            </p>
+            {trialTrack ? (
+              <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] p-2">
+                <TrackArt url={trialTrack.albumArtUrl} />
+                <TrackText track={trialTrack} />
+                <button
+                  type="button"
+                  onClick={() => setTrialTrack(null)}
+                  className="btn-ghost !rounded-lg !px-2.5 !py-1 !text-xs"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <SongPicker
+                exclude={tracks.map((t) => t.deezerTrackId)}
+                actionLabel="Use as trial"
+                onPick={(hit) => setTrialTrack(toTrack(hit))}
+              />
+            )}
+          </section>
           <p className="text-sm text-slate-300">
             <span className="font-semibold tabular-nums text-white">{tracks.length}</span>{' '}
             {tracks.length === 1 ? 'song' : 'songs'} ·{' '}

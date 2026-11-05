@@ -1,0 +1,1 @@
+ALTER TABLE "playlists" ADD COLUMN "trial_track" jsonb;

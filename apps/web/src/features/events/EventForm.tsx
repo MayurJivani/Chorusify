@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { saveEvent } from '../../api/events';
-import { SongPicker, TrackArt, TrackText } from './PlaylistBuilder';
 import type { EventAudioMode, EventInput, HostedEvent, Playlist } from '../../types/api';
 
 const AUDIO_MODES: { value: EventAudioMode; title: string; body: string }[] = [
@@ -41,7 +40,6 @@ export function EventForm({
     minPoints: event?.minPoints ?? 200,
     firstBonus: event?.firstBonus ?? 100,
     playlistId: event?.playlistId ?? playlists[0]?.id ?? '',
-    trialTrack: event?.trialTrack ?? null,
     showCovers: event?.showCovers ?? false,
   });
   const [password, setPassword] = useState('');
@@ -51,7 +49,9 @@ export function EventForm({
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const songCount = playlists.find((p) => p.id === form.playlistId)?.tracks.length ?? 0;
+  const chosen = playlists.find((p) => p.id === form.playlistId);
+  const songCount = chosen?.tracks.length ?? 0;
+  const trialTitle = chosen?.trialTrack?.title;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,32 +163,15 @@ export function EventForm({
         Show album covers on the answers
       </label>
 
-      <section aria-label="Trial song" className="flex flex-col gap-1.5 text-sm">
-        <p className="font-medium text-slate-300">Trial song (optional)</p>
-        <p className="text-xs text-slate-400">
-          Plays first so everyone learns how it works. Its points do not count, and you start the
-          real game after it.
+      {trialTitle && (
+        <p className="text-sm text-slate-300">
+          Trial song: <span className="font-semibold text-white">{trialTitle}</span>
+          <span className="text-slate-400">
+            {' '}
+            (from the playlist, plays first and does not count)
+          </span>
         </p>
-        {form.trialTrack ? (
-          <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] p-2">
-            <TrackArt url={form.trialTrack.albumArtUrl} />
-            <TrackText track={form.trialTrack} />
-            <button
-              type="button"
-              onClick={() => set('trialTrack', null)}
-              className="btn-ghost !rounded-lg !px-2.5 !py-1 !text-xs"
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <SongPicker
-            exclude={[]}
-            actionLabel="Use as trial"
-            onPick={({ previewUrl: _previewUrl, ...track }) => set('trialTrack', track)}
-          />
-        )}
-      </section>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <NumberField
