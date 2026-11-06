@@ -14,6 +14,7 @@ import { count } from './metrics';
 import {
   closeEventRoom,
   generateRoomCode,
+  maxEventRounds,
   setEventHooks,
   type MpEvent,
 } from './multiplayerService';
@@ -179,9 +180,8 @@ async function snapshotFor(
   return split;
 }
 
-/** Each round's decoys are songs that have not been an answer yet, so three are kept back. */
 const roundsFor = (input: EventInput, tracks: PlaylistTrack[]) =>
-  Math.min(input.rounds, tracks.length - (MIN_EVENT_TRACKS - 1));
+  Math.max(1, Math.min(input.rounds, maxEventRounds(tracks)));
 
 export async function createEvent(ownerUserId: string, input: EventInput) {
   const { tracks, trialTrack } = await snapshotFor(ownerUserId, input);

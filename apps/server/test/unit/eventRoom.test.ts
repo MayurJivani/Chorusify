@@ -8,6 +8,7 @@ import {
   __getCurrentTrack,
   __resetForTests,
   eventOptions,
+  maxEventRounds,
   type MpEvent,
   type MpSocket,
 } from '../../src/services/multiplayerService';
@@ -403,6 +404,16 @@ describe('event rooms', () => {
     await join('b');
     await start();
     expect(b.last('round_start').options[0]).toHaveProperty('albumArtUrl');
+  });
+
+  it('lets every song be a round once its wrong answers are picked', () => {
+    const pool = tracks.map((t) => ({ ...t, album: null }));
+    const three = secondTracks.slice(0, 3).map((t) => ({ ...t }));
+    expect(maxEventRounds(pool)).toBe(3);
+    expect(maxEventRounds(pool.map((t) => ({ ...t, decoys: three })))).toBe(6);
+    // Only the last three need picks: earlier songs have three or more songs after them.
+    const lastOnly = pool.map((t, i) => (i >= 3 ? { ...t, decoys: three } : t));
+    expect(maxEventRounds(lastOnly)).toBe(6);
   });
 
   it('uses the host-picked wrong answers and fills the rest from the playlist', () => {

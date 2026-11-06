@@ -1,7 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { saveEvent } from '../../api/events';
-import type { EventAudioMode, EventInput, HostedEvent, Playlist } from '../../types/api';
+import type {
+  EventAudioMode,
+  EventInput,
+  HostedEvent,
+  Playlist,
+  PlaylistTrack,
+} from '../../types/api';
 
 const AUDIO_MODES: { value: EventAudioMode; title: string; body: string }[] = [
   {
@@ -15,6 +21,16 @@ const AUDIO_MODES: { value: EventAudioMode; title: string; body: string }[] = [
     body: 'Only your device plays it, through the venue speakers. Phones just answer.',
   },
 ];
+
+/** Mirrors maxEventRounds on the server: picked wrong answers stand in for spare songs. */
+function maxEventRounds(pool: PlaylistTrack[]): number {
+  for (let i = 0; i < pool.length; i += 1) {
+    const picked = new Set((pool[i]!.decoys ?? []).map((d) => d.deezerTrackId));
+    const fresh = pool.slice(i + 1).filter((t) => !picked.has(t.deezerTrackId)).length;
+    if (picked.size + fresh < 3) return i;
+  }
+  return pool.length;
+}
 
 export function EventForm({
   playlists,
@@ -51,7 +67,9 @@ export function EventForm({
 
   const chosen = playlists.find((p) => p.id === form.playlistId);
   const trialTitle = chosen?.tracks.find((t) => t.trial)?.title;
-  const songCount = (chosen?.tracks.length ?? 0) - (trialTitle ? 1 : 0);
+  const mainTracks = chosen?.tracks.filter((t) => !t.trial) ?? [];
+  const songCount = mainTracks.length;
+  const maxRounds = maxEventRounds(mainTracks);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,10 +195,14 @@ export function EventForm({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <NumberField
           label="Rounds"
-          hint={`Needs ${(form.rounds || 1) + 3} songs, playlist has ${songCount}`}
+          hint={
+            maxRounds < songCount
+              ? `Up to ${maxRounds} of ${songCount}: the last songs need 3 wrong answers picked, or 3 more songs after them`
+              : `Up to ${maxRounds}, every song can be a round`
+          }
           value={form.rounds}
           min={1}
-          max={Math.max(1, songCount - 3)}
+          max={Math.max(1, maxRounds)}
           onChange={(v) => set('rounds', v)}
         />
         <NumberField

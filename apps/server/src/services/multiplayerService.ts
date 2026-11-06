@@ -1560,8 +1560,7 @@ async function prepareEvent(room: MpRoom): Promise<void> {
     room.tracks = [trial];
     room.roundOptions = [eventOptions(trial, pool, room.showCovers)];
   } else {
-    // The last round still needs its decoys from songs nobody has heard as an answer yet.
-    room.tracks = pool.slice(0, Math.min(room.rounds, pool.length - (MP_CHOICE_OPTIONS - 1)));
+    room.tracks = pool.slice(0, Math.min(room.rounds, maxEventRounds(pool)));
     // Round i plays pool[i], so pool.slice(i) is its answer plus every song not yet an answer.
     room.roundOptions = room.tracks.map((track, i) =>
       eventOptions(track as PlaylistTrack, pool.slice(i), room.showCovers),
@@ -1576,6 +1575,20 @@ async function prepareEvent(room: MpRoom): Promise<void> {
   }
   if (!trial) eventHooks?.onStarted(room.event!.id);
   await startEventRound(room, 0);
+}
+
+/**
+ * How many of the playlist's songs can be rounds, in order. A round's wrong answers are the host's
+ * picks plus songs that have not been an answer yet, so a song with all three picked can always
+ * play, and one with none needs three songs still to come. Mirrored in the web EventForm.
+ */
+export function maxEventRounds(pool: readonly PlaylistTrack[]): number {
+  for (let i = 0; i < pool.length; i += 1) {
+    const picked = new Set((pool[i]!.decoys ?? []).map((d) => d.deezerTrackId));
+    const fresh = pool.slice(i + 1).filter((t) => !picked.has(t.deezerTrackId)).length;
+    if (picked.size + fresh < MP_CHOICE_OPTIONS - 1) return i;
+  }
+  return pool.length;
 }
 
 /** The host's own wrong answers first; whatever they left empty is drawn from the pool. */
