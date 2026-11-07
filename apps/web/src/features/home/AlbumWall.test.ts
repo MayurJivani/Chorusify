@@ -22,7 +22,7 @@ describe('buildWall', () => {
 
 describe('flipTile', () => {
   it('flips a cell to a cover that is not on the wall yet', () => {
-    const covers = Array.from({ length: 80 }, (_, i) => song(i, `art-${i}`));
+    const covers = Array.from({ length: 120 }, (_, i) => song(i, `art-${i}`));
     const wall = buildWall(covers);
     const next = flipTile(wall, covers, 3, () => 0);
     expect(next[3]!.id).toBeGreaterThanOrEqual(wall.length);
