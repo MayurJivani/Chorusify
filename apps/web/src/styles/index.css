@@ -322,81 +322,66 @@ body {
   flex-shrink: 0;
 }
 
-/* The album wall on the home page. Fades out before the cards so they stay on plain ground. */
+/* The album wall on the home page: a still grid of covers, greyed except under a moving
+   spotlight. Fades out top and bottom so the bar and the cards stay on plain ground. */
 .album-wall {
-  --tile: clamp(84px, 11vw, 150px);
   position: absolute;
   inset: 0 0 auto;
   z-index: -1;
   height: min(680px, 100%);
   overflow: hidden;
   pointer-events: auto;
-  /* Fades out at the top too, so covers drift away under the bar instead of being cut by it. */
-  mask: linear-gradient(transparent, #000 110px, #000 60%, transparent);
+  mask: linear-gradient(transparent, #000 90px, #000 62%, transparent);
 }
 .album-wall-stage {
+  --cols: 11;
   position: absolute;
-  inset: -6%;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  animation: album-wall-in 1.6s ease-out both;
+  inset: -8%;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  align-content: start;
+  gap: 12px;
+  perspective: 900px;
 }
-@keyframes album-wall-in {
-  from {
-    opacity: 0;
-    scale: 1.06;
-  }
-}
-.album-wall-column {
-  flex: none;
-  width: var(--tile);
-  /* Greyed as one image. A filter per cover let colour bleed at each cover's top and bottom
-     edges as the column moved by fractions of a pixel. */
-  filter: grayscale(1) brightness(0.34);
-  animation: album-wall-drift linear infinite;
-  animation-name: album-wall-drift;
-  will-change: transform;
-}
-.album-wall-column-down {
-  animation-direction: reverse;
-}
-@keyframes album-wall-drift {
-  to {
-    transform: translateY(-50%);
-  }
-}
-/* Spacing lives on the tile, not the column, so half the column is exactly one loop. */
-.album-wall-column img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  margin-bottom: 10px;
-  object-fit: cover;
-  border-radius: 4px;
-  /* Always relative: switching position on hover would redraw the whole moving column. */
+.album-wall-cell {
   position: relative;
-  opacity: 0;
-  /* No filter transition: a column entering the spotlight would fade its covers from colour to
-     grey, a flash of colour at the edge. The filter is set every frame, so it needs none. */
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: #141418;
   transition:
-    opacity 700ms ease,
     transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 420ms ease;
 }
-.album-wall-column img.album-wall-loaded {
-  opacity: 1;
+.album-wall-cell img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  backface-visibility: hidden;
 }
-/* A soft light that follows the pointer. A plain gradient: no filter over the moving covers. */
-.album-wall-glow {
+/* Greys the whole wall except a soft hole at the spotlight (mask set in AlbumWall). Covers above
+   it, hovered or playing, keep their colour. */
+.album-wall-veil {
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  background: radial-gradient(
-    circle 380px at var(--x, 50%) var(--y, 40%),
-    rgba(255, 255, 255, 0.1),
-    transparent 70%
-  );
+  backdrop-filter: grayscale(1) brightness(0.36);
+  -webkit-backdrop-filter: grayscale(1) brightness(0.36);
+}
+.album-wall-hovered,
+.album-wall-playing {
+  z-index: 2;
+}
+@media (hover: hover) {
+  .album-wall-cell {
+    cursor: pointer;
+  }
+  .album-wall-hovered {
+    transform: scale(1.1);
+    box-shadow: 0 22px 44px -8px rgba(0, 0, 0, 0.85);
+  }
 }
 .album-wall-caption {
   /* Outside the wall so its fade doesn't touch it, and in the empty middle of the footer. */
@@ -422,43 +407,20 @@ body {
   color: #fff;
 }
 @media (hover: hover) {
-  .album-wall-column img {
-    cursor: pointer;
-  }
-  .album-wall-column img:hover {
-    z-index: 1;
-    transform: scale(1.08);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
-  }
   .album-wall-caption {
     display: block;
   }
 }
-/* Columns near the pointer grey cover by cover, so colour can fade in around it (set in AlbumWall). */
-.album-wall-column-near {
-  filter: none;
-}
-.album-wall-column-near img {
-  filter: grayscale(1) brightness(0.34);
-}
 
 /* The song in the mini player keeps its colour on the wall, with a slow ring of light. */
-.album-wall-column-live {
-  filter: none;
-}
-.album-wall-column-live img {
-  filter: grayscale(1) brightness(0.34);
-}
-.album-wall-column-live img.album-wall-playing {
-  z-index: 1;
-  filter: none;
+.album-wall-playing {
   animation: wall-playing 1.6s ease-in-out infinite;
 }
 @keyframes wall-playing {
   50% {
     box-shadow:
       0 0 0 3px rgba(167, 139, 250, 0.9),
-      0 0 28px rgba(139, 92, 246, 0.6);
+      0 10px 28px rgba(139, 92, 246, 0.6);
   }
 }
 
@@ -475,17 +437,27 @@ body {
   }
 }
 
+@media (max-width: 1023px) {
+  .album-wall-stage {
+    --cols: 8;
+  }
+}
 @media (max-width: 639px) {
   .album-wall {
     height: 300px;
   }
+  .album-wall-stage {
+    --cols: 5;
+    gap: 8px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .album-wall-stage,
-  .album-wall-column,
   .album-wall-playing,
   .hop-word > span {
     animation: none !important;
+  }
+  .album-wall-cell {
+    transition: none;
   }
 }
 

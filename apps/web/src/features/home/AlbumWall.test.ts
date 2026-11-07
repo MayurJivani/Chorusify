@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SamplerSong } from '../../api/songs';
-import { buildColumns, tileFilter, wanderPoint } from './AlbumWall';
+import { buildWall, flipTile, uniqueCovers, wanderPoint } from './AlbumWall';
 
 const song = (id: number, art: string): SamplerSong => ({
   id,
@@ -10,35 +10,28 @@ const song = (id: number, art: string): SamplerSong => ({
   dailyEdition: 'english',
 });
 
-describe('buildColumns', () => {
-  it('shows each cover once per column and offsets neighbours', () => {
-    const songs = Array.from({ length: 40 }, (_, i) => song(i, `art-${i}`));
-    const columns = buildColumns(songs);
-    expect(new Set(columns[0]!.map((s) => s.id)).size).toBe(columns[0]!.length);
-    expect(columns[0]![0]!.id).not.toBe(columns[1]![0]!.id);
-  });
-  it('drops songs that share a cover, and copes with few or none', () => {
-    expect(buildColumns([])).toEqual([]);
-    const columns = buildColumns([song(1, 'x'), song(2, 'x')]);
-    expect(new Set(columns.flat().map((s) => s.albumArtUrl)).size).toBe(1);
-  });
-  it('shows every cover before repeating once there are enough to fill the wall', () => {
-    const songs = Array.from({ length: 200 }, (_, i) => song(i, `art-${i}`));
-    const shown = buildColumns(songs)
-      .flat()
-      .map((s) => s.id);
-    expect(new Set(shown).size).toBe(200);
+describe('buildWall', () => {
+  it('shows every cover before repeating, one per album', () => {
+    expect(buildWall([])).toEqual([]);
+    const covers = uniqueCovers([song(1, 'x'), song(2, 'x'), song(3, 'y')]);
+    expect(covers.map((s) => s.id)).toEqual([2, 3]);
+    const wall = buildWall(Array.from({ length: 40 }, (_, i) => song(i, `art-${i}`)));
+    expect(new Set(wall.slice(0, 40).map((s) => s.id)).size).toBe(40);
   });
 });
 
-describe('tileFilter', () => {
-  it('is full colour at the pointer and full grey out of reach', () => {
-    expect(tileFilter(0)).toBe('none');
-    expect(tileFilter(500)).toBe('grayscale(1) brightness(0.35)');
+describe('flipTile', () => {
+  it('flips a cell to a cover that is not on the wall yet', () => {
+    const covers = Array.from({ length: 80 }, (_, i) => song(i, `art-${i}`));
+    const wall = buildWall(covers);
+    const next = flipTile(wall, covers, 3, () => 0);
+    expect(next[3]!.id).toBeGreaterThanOrEqual(wall.length);
+    expect(next.filter((s, i) => s !== wall[i])).toHaveLength(1);
   });
-  it('fades in between, so nearby covers show some colour', () => {
-    expect(tileFilter(40)).toBe('none');
-    expect(tileFilter(170)).toMatch(/^grayscale\(0\.[2-4]/);
+  it('trades two cells when every cover is already up', () => {
+    const covers = [song(1, 'a'), song(2, 'b'), song(3, 'c')];
+    const next = flipTile(covers, covers, 0, () => 0);
+    expect(next.map((s) => s.id)).toEqual([2, 1, 3]);
   });
 });
 

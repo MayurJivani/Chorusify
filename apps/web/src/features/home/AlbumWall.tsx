@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
+import {
+  motion,
+  useAnimationFrame,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+} from 'motion/react';
 import type { SamplerSong } from '../../api/songs';
 
-const COLUMNS = 14;
-// A column holds at least this many, more when there are enough covers to fill them.
-const MIN_TILES_PER_LOOP = 8;
-
-// How far from the pointer colour reaches, in px.
-const COLOUR_RADIUS = 340;
+// Enough cells to fill the widest wall (11 columns by 6 rows); narrower walls clip the rest.
+const TILES = 66;
+// How far from the spotlight colour reaches at most, in px.
+const COLOUR_RADIUS = 320;
 // A still pointer hands the spotlight back to its wander after this long, unless it rests on a cover.
 const IDLE_MS = 4000;
+// One cover flips to another song this often, like a departures board.
+const FLIP_MS = 2600;
 
 /** Where the idle spotlight drifts at `seconds`: a slow loop through the middle of the wall. */
 export function wanderPoint(seconds: number, width: number, height: number) {
@@ -17,18 +24,6 @@ export function wanderPoint(seconds: number, width: number, height: number) {
     x: width * (0.5 + 0.3 * Math.sin(0.33 * seconds)),
     y: height * (0.42 + 0.2 * Math.cos(0.27 * seconds)),
   };
-}
-
-/** How grey a cover should be at a distance from the spotlight: none at the centre, full at the edge. */
-export function tileFilter(distance: number): string {
-  // Smoothstep from a small full-colour core out to the radius, so colour fades with no edge.
-  const k = Math.min(1, Math.max(0, (distance - COLOUR_RADIUS * 0.15) / (COLOUR_RADIUS * 0.85)));
-  const t = 1 - k * k * (3 - 2 * k);
-  if (t >= 0.97) return 'none';
-  // Rounded so a moving cover only gets a new filter when its colour visibly changes.
-  const grey = Math.round((1 - t) * 20) / 20;
-  const light = Math.round((0.34 + 0.66 * t) * 20) / 20;
-  return `grayscale(${grey}) brightness(${light})`;
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -40,23 +35,44 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
-/** Column `c` starts at a different place in the list, so neighbours never line up. */
-export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
-  // Two songs from one album share a cover, and a wall showing it twice looks like a bug.
-  const covers = [...new Map(songs.map((s) => [s.albumArtUrl, s])).values()];
+/** One song per album, since two songs from one album share a cover and a doubled cover looks like a bug. */
+export function uniqueCovers(songs: SamplerSong[]): SamplerSong[] {
+  return [...new Map(songs.map((s) => [s.albumArtUrl, s])).values()];
+}
+
+/** The wall's cells: every cover once before any repeats. */
+export function buildWall(covers: SamplerSong[]): SamplerSong[] {
   if (covers.length === 0) return [];
-  // Long enough that every cover gets a slot of its own before anything repeats.
-  const perLoop = Math.max(MIN_TILES_PER_LOOP, Math.ceil(covers.length / COLUMNS));
-  return Array.from({ length: COLUMNS }, (_, c) =>
-    Array.from({ length: perLoop }, (_, t) => covers[(c * perLoop + t) % covers.length]!),
-  );
+  return Array.from({ length: TILES }, (_, i) => covers[i % covers.length]!);
 }
 
 /**
- * Real covers behind the hero, in columns drifting opposite ways, greyed except around a spotlight:
- * the hovered cover in full colour, its neighbours partly. The spotlight follows the pointer, and
- * drifts slowly on its own when the pointer is still or away.
- * Everything moves through CSS variables and playback rate, so React never re-renders on a frame.
+ * Cell `i` flips to a cover that is not on the wall. When every cover is already up, it trades
+ * places with another cell instead, so the wall still moves.
+ */
+export function flipTile(
+  tiles: SamplerSong[],
+  covers: SamplerSong[],
+  i: number,
+  rand: () => number = Math.random,
+): SamplerSong[] {
+  const next = [...tiles];
+  const shown = new Set(tiles.map((t) => t.albumArtUrl));
+  const unused = covers.filter((c) => !shown.has(c.albumArtUrl));
+  if (unused.length > 0) {
+    next[i] = unused[Math.floor(rand() * unused.length)]!;
+  } else if (tiles.length > 1) {
+    const j = (i + 1 + Math.floor(rand() * (tiles.length - 1))) % tiles.length;
+    [next[i], next[j]] = [next[j]!, next[i]!];
+  }
+  return next;
+}
+
+/**
+ * Real covers behind the hero in a still grid, greyed except around a spotlight that follows the
+ * pointer and drifts on its own when the pointer rests. One masked backdrop filter does the
+ * greying, so no cover repaints as the light moves; the hovered and playing covers rise above it
+ * in full colour. Every few seconds one cover flips over to another song.
  */
 export function AlbumWall({
   songs,
@@ -66,161 +82,178 @@ export function AlbumWall({
   songs: SamplerSong[];
   /** A cover was clicked: play that song. */
   onPlay: (song: SamplerSong) => void;
-  /** The song in the mini player, whose covers stay in colour. */
+  /** The song in the mini player, whose cover stays lit. */
   playingId?: number;
 }) {
   const reduced = useReducedMotion();
-  const wallRef = useRef<HTMLDivElement | null>(null);
-  const [hovered, setHovered] = useState<SamplerSong | null>(null);
-  const onCover = useRef(false);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   // A fresh order each visit, so the covers are never in the same places twice.
-  const columns = useMemo(() => buildColumns(shuffle(songs)), [songs]);
+  const covers = useMemo(() => uniqueCovers(shuffle(songs)), [songs]);
+  const [tiles, setTiles] = useState<SamplerSong[]>([]);
+  const [hovered, setHovered] = useState<number | null>(null);
+  // Covers arrive one by one in a scattered order, not row by row.
+  const delays = useMemo(() => Array.from({ length: TILES }, () => 0.15 + Math.random() * 1.3), []);
+  const [intro, setIntro] = useState(true);
 
-  const ready = columns.length > 0;
+  // Wait for the first screen of covers to decode, so the scattered reveal is not a scattered load.
   useEffect(() => {
-    const wall = wallRef.current;
-    if (!wall || !ready || reduced) return;
-    const scroller = wall.closest('main');
-    // Only the column drift: hover transitions and the intro must keep their own timing.
-    const drift = wall
-      .getAnimations({ subtree: true })
-      .filter((a) => a instanceof CSSAnimation && a.animationName === 'album-wall-drift');
-    let applied = 1;
-    let pointer: { x: number; y: number } | null = null;
-    let movedAt = 0;
-    let spotX = wall.clientWidth / 2;
-    let spotY = wall.clientHeight / 3;
-    let speed = 1;
-    let lastScroll = scroller?.scrollTop ?? 0;
-    let visible = true;
-    let frame = 0;
-
-    const onLeave = () => {
-      pointer = null;
+    const wall = buildWall(covers);
+    if (wall.length === 0) return;
+    let cancelled = false;
+    const decoded = wall.map((s) => {
+      const img = new Image();
+      img.src = s.albumArtUrl ?? '';
+      return img.decode().catch(() => undefined);
+    });
+    const timeout = new Promise((resolve) => setTimeout(resolve, 2500));
+    void Promise.race([Promise.all(decoded), timeout]).then(() => {
+      if (!cancelled) setTiles(wall);
+    });
+    const done = setTimeout(() => setIntro(false), 4500);
+    return () => {
+      cancelled = true;
+      clearTimeout(done);
     };
+  }, [covers]);
+
+  const locked = useRef<{ hovered: number | null; playingId?: number }>({ hovered: null });
+  locked.current = { hovered, playingId };
+  const ready = tiles.length > 0;
+  useEffect(() => {
+    if (!ready || reduced) return;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      setTiles((current) => {
+        const i = Math.floor(Math.random() * current.length);
+        const { hovered: h, playingId: p } = locked.current;
+        // Never pull a cover out from under the pointer or the player.
+        if (i === h || current[i]?.id === p) return current;
+        return flipTile(current, covers, i);
+      });
+    }, FLIP_MS);
+    return () => clearInterval(timer);
+  }, [ready, reduced, covers]);
+
+  // The spotlight and the parallax are motion values, so React never re-renders on a frame.
+  const spotX = useMotionValue(0);
+  const spotY = useMotionValue(0);
+  const radius = useMotionValue(COLOUR_RADIUS);
+  const shiftX = useSpring(0, { stiffness: 50, damping: 20 });
+  const shiftY = useSpring(0, { stiffness: 50, damping: 20 });
+  const veil = useMotionTemplate`radial-gradient(circle ${radius}px at ${spotX}px ${spotY}px, transparent 12%, rgba(0,0,0,0.6) 55%, #000 100%)`;
+  const pointer = useRef<{ x: number; y: number; at: number } | null>(null);
+  const onCover = useRef(false);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !ready) return;
+    spotX.set(stage.clientWidth / 2);
+    spotY.set(stage.clientHeight * 0.4);
+    // A phone's wall is short, so a full-size light would colour all of it.
+    radius.set(Math.min(COLOUR_RADIUS, stage.clientWidth * 0.3));
+    if (reduced) return;
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
-      const box = wall.getBoundingClientRect();
-      pointer = { x: e.clientX - box.left, y: e.clientY - box.top };
-      movedAt = performance.now();
+      const box = stage.getBoundingClientRect();
+      pointer.current = { x: e.clientX - box.left, y: e.clientY - box.top, at: performance.now() };
+      // A few pixels against the pointer, so the wall reads as a layer behind the page.
+      shiftX.set((0.5 - e.clientX / window.innerWidth) * 18);
+      shiftY.set((0.5 - e.clientY / window.innerHeight) * 12);
     };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry?.isIntersecting ?? true;
-    });
-    observer.observe(wall);
+    const onLeave = () => {
+      pointer.current = null;
+      shiftX.set(0);
+      shiftY.set(0);
+    };
     window.addEventListener('pointermove', onMove);
     document.documentElement.addEventListener('pointerleave', onLeave);
-
-    const tick = (now: number) => {
-      frame = requestAnimationFrame(tick);
-      if (!visible) return;
-      const width = wall.clientWidth;
-      const height = wall.clientHeight;
-      const live = pointer && (onCover.current || now - movedAt < IDLE_MS) ? pointer : null;
-      const target = live ?? wanderPoint(now / 1000, width, height);
-      const targetX = target.x;
-      const targetY = target.y;
-      // Idle glides in slowly, so letting go of the mouse never yanks the light across the wall.
-      const ease = live ? 0.14 : 0.012;
-      const nextX = spotX + (targetX - spotX) * ease;
-      const nextY = spotY + (targetY - spotY) * ease;
-      // Repaint the glow only when it visibly moves; the covers themselves never repaint.
-      if (Math.abs(nextX - spotX) + Math.abs(nextY - spotY) > 0.5) {
-        wall.style.setProperty('--x', `${nextX}px`);
-        wall.style.setProperty('--y', `${nextY}px`);
-      }
-      spotX = nextX;
-      spotY = nextY;
-
-      // Colour near the spotlight (the pointer itself while it is live, so the hovered cover is
-      // exact). Only columns within reach colour cover by cover; the rest stay one grey image.
-      const at = live ?? { x: spotX, y: spotY };
-      for (const column of wall.querySelectorAll<HTMLElement>('.album-wall-column')) {
-        const box = column.getBoundingClientRect();
-        const wallBox = wall.getBoundingClientRect();
-        const near = Math.abs(box.left + box.width / 2 - (wallBox.left + at.x)) < COLOUR_RADIUS;
-        column.classList.toggle('album-wall-column-near', near);
-        for (const img of column.querySelectorAll<HTMLImageElement>('img')) {
-          if (!near || img.classList.contains('album-wall-playing')) {
-            if (img.style.filter) img.style.filter = '';
-            continue;
-          }
-          const r = img.getBoundingClientRect();
-          const dx = r.left + r.width / 2 - (wallBox.left + at.x);
-          const dy = r.top + r.height / 2 - (wallBox.top + at.y);
-          const filter = tileFilter(Math.hypot(dx, dy));
-          if (img.style.filter !== filter) img.style.filter = filter;
-        }
-      }
-
-      // Scrolling the page pushes the columns along, then they settle back to their own drift.
-      const scrollTop = scroller?.scrollTop ?? 0;
-      const push = Math.min(6, Math.abs(scrollTop - lastScroll));
-      lastScroll = scrollTop;
-      speed += (1 + push - speed) * 0.08;
-      // updatePlaybackRate keeps each column where it is, and only when the speed really changed.
-      if (Math.abs(speed - applied) > 0.04) {
-        applied = speed;
-        for (const animation of drift) animation.updatePlaybackRate(speed);
-      }
-    };
-    frame = requestAnimationFrame(tick);
-
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
       window.removeEventListener('pointermove', onMove);
       document.documentElement.removeEventListener('pointerleave', onLeave);
     };
-  }, [ready, reduced]);
+  }, [ready, reduced, spotX, spotY, radius, shiftX, shiftY]);
+
+  useAnimationFrame((now) => {
+    const stage = stageRef.current;
+    if (!stage || reduced) return;
+    const p = pointer.current;
+    const live = p && (onCover.current || now - p.at < IDLE_MS) ? p : null;
+    const target = live ?? wanderPoint(now / 1000, stage.clientWidth, stage.clientHeight);
+    // Idle glides in slowly, so letting go of the mouse never yanks the light across the wall.
+    const ease = live ? 0.16 : 0.012;
+    const x = spotX.get();
+    const y = spotY.get();
+    if (Math.abs(target.x - x) + Math.abs(target.y - y) < 0.5) return;
+    spotX.set(x + (target.x - x) * ease);
+    spotY.set(y + (target.y - y) * ease);
+  });
 
   if (!ready) return null;
+  const cellAt = (target: EventTarget) =>
+    Number((target as HTMLElement).closest<HTMLElement>('[data-i]')?.dataset.i ?? NaN);
+  const caption = hovered !== null ? tiles[hovered] : undefined;
   return (
     <>
       <div className="album-wall" aria-hidden="true">
-        <div ref={wallRef} className="album-wall-stage">
-          {columns.map((tiles, c) => (
-            <div
-              key={c}
-              className={`album-wall-column ${c % 2 ? 'album-wall-column-down' : ''} ${tiles.some((t) => t.id === playingId) ? 'album-wall-column-live' : ''}`}
-              style={{
-                animationDuration: `${52 + (c % 5) * 12}s`,
-                animationDelay: `${-13 * c}s`,
-              }}
+        <motion.div
+          ref={stageRef}
+          className="album-wall-stage"
+          style={{ x: shiftX, y: shiftY }}
+          onPointerOver={(e) => {
+            if (e.pointerType !== 'mouse') return;
+            const i = cellAt(e.target);
+            onCover.current = !Number.isNaN(i);
+            setHovered(Number.isNaN(i) ? null : i);
+          }}
+          onPointerLeave={() => {
+            onCover.current = false;
+            setHovered(null);
+          }}
+          onClick={(e) => {
+            const song = tiles[cellAt(e.target)];
+            if (song) onPlay(song);
+          }}
+        >
+          {tiles.map((song, i) => (
+            <span
+              key={i}
+              data-i={i}
+              className={`album-wall-cell${i === hovered ? ' album-wall-hovered' : ''}${song.id === playingId ? ' album-wall-playing' : ''}`}
             >
-              {/* The list twice, so moving by half its height lands on an identical frame. */}
-              {[...tiles, ...tiles].map((song, t) => (
-                <img
-                  key={t}
-                  src={song.albumArtUrl ?? undefined}
-                  alt=""
-                  loading="eager"
-                  decoding="async"
-                  width={250}
-                  height={250}
-                  className={song.id === playingId ? 'album-wall-playing' : undefined}
-                  onLoad={(e) => e.currentTarget.classList.add('album-wall-loaded')}
-                  onClick={() => onPlay(song)}
-                  onPointerEnter={(e) => {
-                    if (e.pointerType !== 'mouse') return;
-                    onCover.current = true;
-                    setHovered(song);
-                  }}
-                  onPointerLeave={() => {
-                    onCover.current = false;
-                    setHovered(null);
-                  }}
-                />
-              ))}
-            </div>
+              {/* Keyed by cover, so a new song mounts fresh and flips in over the old one. */}
+              <motion.img
+                key={song.albumArtUrl}
+                src={song.albumArtUrl ?? undefined}
+                alt=""
+                decoding="async"
+                width={250}
+                height={250}
+                initial={
+                  reduced
+                    ? false
+                    : intro
+                      ? { opacity: 0, scale: 0.86, filter: 'blur(6px)' }
+                      : { opacity: 0, rotateX: -90 }
+                }
+                animate={{ opacity: 1, scale: 1, rotateX: 0, filter: 'blur(0px)' }}
+                transition={
+                  intro
+                    ? { delay: delays[i], duration: 0.9, ease: [0.16, 1, 0.3, 1] }
+                    : { type: 'spring', stiffness: 140, damping: 16 }
+                }
+              />
+            </span>
           ))}
-          <div className="album-wall-glow" />
-        </div>
+          <motion.div
+            className="album-wall-veil"
+            style={{ maskImage: veil, WebkitMaskImage: veil }}
+          />
+        </motion.div>
       </div>
-      {hovered && (
+      {caption && (
         <p className="album-wall-caption">
-          <span className="text-chorusify-accent">▶</span> <strong>{hovered.title}</strong> ·{' '}
-          {hovered.artist}
+          <span className="text-chorusify-accent">▶</span> <strong>{caption.title}</strong> ·{' '}
+          {caption.artist}
         </p>
       )}
     </>
