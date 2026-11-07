@@ -234,7 +234,7 @@ function DailyLink({
   return (
     <Link
       to={to}
-      className="glass flex flex-col gap-3 rounded-2xl border border-white/10 p-3 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
+      className="glass flex flex-col gap-3 rounded-2xl border border-chorusify-accent/25 p-3 shadow-[0_0_32px_-12px_rgba(139,92,246,0.55)] transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 duration-200 hover:-translate-y-0.5 hover:border-chorusify-accent/60"
     >
       <span className="min-w-0">
         <span className="block text-xl font-black text-white">{title}</span>

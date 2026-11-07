@@ -9,8 +9,8 @@ import {
 } from 'motion/react';
 import type { SamplerSong } from '../../api/songs';
 
-// Enough cells to fill the widest wall (11 columns by 6 rows); narrower walls clip the rest.
-const TILES = 66;
+// Enough cells to fill a full-height wall (11 columns by 8 rows); smaller walls clip the rest.
+const TILES = 88;
 // How far from the spotlight colour reaches at most, in px.
 const COLOUR_RADIUS = 320;
 // A still pointer hands the spotlight back to its wander after this long, unless it rests on a cover.
@@ -128,7 +128,10 @@ export function AlbumWall({
         const { hovered: h, playingId: p } = locked.current;
         // Never pull a cover out from under the pointer or the player.
         if (i === h || current[i]?.id === p) return current;
-        return flipTile(current, covers, i);
+        const next = flipTile(current, covers, i);
+        // A full wall swaps two cells, and the other one may be the hovered or playing cover.
+        const moved = next.some((t, k) => t !== current[k] && (k === h || current[k]?.id === p));
+        return moved ? current : next;
       });
     }, FLIP_MS);
     return () => clearInterval(timer);
@@ -155,7 +158,12 @@ export function AlbumWall({
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
       const box = stage.getBoundingClientRect();
-      pointer.current = { x: e.clientX - box.left, y: e.clientY - box.top, at: performance.now() };
+      const wall = stage.parentElement!.getBoundingClientRect();
+      // Below the wall's fade there are no covers to light, so the spotlight keeps wandering.
+      pointer.current =
+        e.clientY - wall.top < wall.height * 0.88
+          ? { x: e.clientX - box.left, y: e.clientY - box.top, at: performance.now() }
+          : null;
       // A few pixels against the pointer, so the wall reads as a layer behind the page.
       shiftX.set((0.5 - e.clientX / window.innerWidth) * 18);
       shiftY.set((0.5 - e.clientY / window.innerHeight) * 12);

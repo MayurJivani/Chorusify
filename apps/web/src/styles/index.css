@@ -323,15 +323,16 @@ body {
 }
 
 /* The album wall on the home page: a still grid of covers, greyed except under a moving
-   spotlight. Fades out top and bottom so the bar and the cards stay on plain ground. */
+   spotlight. Fills the screen and fades out top and bottom, under the bar and the footer. */
 .album-wall {
   position: absolute;
   inset: 0 0 auto;
   z-index: -1;
-  height: min(680px, 100%);
+  /* The whole screen, so there is no dead dark band under the covers for the pointer to fall into. */
+  height: 100%;
   overflow: hidden;
   pointer-events: auto;
-  mask: linear-gradient(transparent, #000 90px, #000 62%, transparent);
+  mask: linear-gradient(transparent, #000 90px, #000 82%, transparent);
 }
 .album-wall-stage {
   --cols: 11;
@@ -359,6 +360,21 @@ body {
   object-fit: cover;
   border-radius: inherit;
   backface-visibility: hidden;
+}
+/* A soft dark pool behind the hero and cards, so text reads cleanly and the colour shows around
+   the content rather than under it. */
+.album-wall::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse min(560px, 46%) 340px at 50% 46%,
+    rgba(10, 10, 14, 0.72),
+    rgba(10, 10, 14, 0.35) 60%,
+    transparent
+  );
 }
 /* Greys the whole wall except a soft hole at the spotlight (mask set in AlbumWall). Covers above
    it, hovered or playing, keep their colour. */
