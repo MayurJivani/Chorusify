@@ -377,9 +377,10 @@ body {
   /* Always relative: switching position on hover would redraw the whole moving column. */
   position: relative;
   opacity: 0;
+  /* No filter transition: a column entering the spotlight would fade its covers from colour to
+     grey, a flash of colour at the edge. The filter is set every frame, so it needs none. */
   transition:
     opacity 700ms ease,
-    filter 500ms ease,
     transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 420ms ease;
 }

@@ -9,18 +9,22 @@ const MIN_TILES_PER_LOOP = 8;
 // How far from the pointer colour reaches, in px.
 const COLOUR_RADIUS = 340;
 // A still pointer hands the spotlight back to its wander after this long, unless it rests on a cover.
-const IDLE_MS = 2500;
+const IDLE_MS = 4000;
 
-/** Somewhere new for the idle spotlight, kept in the visible band of the wall. */
-export function wanderTarget(width: number, height: number, rand = Math.random) {
-  return { x: width * (0.12 + 0.76 * rand()), y: height * (0.22 + 0.4 * rand()) };
+/** Where the idle spotlight drifts at `seconds`: a slow loop through the middle of the wall. */
+export function wanderPoint(seconds: number, width: number, height: number) {
+  return {
+    x: width * (0.5 + 0.3 * Math.sin(0.33 * seconds)),
+    y: height * (0.42 + 0.2 * Math.cos(0.27 * seconds)),
+  };
 }
 
-/** How grey a cover should be at a distance from the pointer: none at the centre, full at the edge. */
+/** How grey a cover should be at a distance from the spotlight: none at the centre, full at the edge. */
 export function tileFilter(distance: number): string {
-  const t = Math.max(0, 1 - distance / COLOUR_RADIUS);
-  // A wide full-colour core, so the covers around the pointer light up with it.
-  if (t >= 0.7) return 'none';
+  // Smoothstep from a small full-colour core out to the radius, so colour fades with no edge.
+  const k = Math.min(1, Math.max(0, (distance - COLOUR_RADIUS * 0.15) / (COLOUR_RADIUS * 0.85)));
+  const t = 1 - k * k * (3 - 2 * k);
+  if (t >= 0.97) return 'none';
   // Rounded so a moving cover only gets a new filter when its colour visibly changes.
   const grey = Math.round((1 - t) * 20) / 20;
   const light = Math.round((0.34 + 0.66 * t) * 20) / 20;
@@ -51,7 +55,7 @@ export function buildColumns(songs: SamplerSong[]): SamplerSong[][] {
 /**
  * Real covers behind the hero, in columns drifting opposite ways, greyed except around a spotlight:
  * the hovered cover in full colour, its neighbours partly. The spotlight follows the pointer, and
- * wanders to random spots when the pointer is still or away.
+ * drifts slowly on its own when the pointer is still or away.
  * Everything moves through CSS variables and playback rate, so React never re-renders on a frame.
  */
 export function AlbumWall({
@@ -86,8 +90,6 @@ export function AlbumWall({
     let movedAt = 0;
     let spotX = wall.clientWidth / 2;
     let spotY = wall.clientHeight / 3;
-    let wander = wanderTarget(wall.clientWidth, wall.clientHeight);
-    let wanderAt = 0;
     let speed = 1;
     let lastScroll = scroller?.scrollTop ?? 0;
     let visible = true;
@@ -115,14 +117,11 @@ export function AlbumWall({
       const width = wall.clientWidth;
       const height = wall.clientHeight;
       const live = pointer && (onCover.current || now - movedAt < IDLE_MS) ? pointer : null;
-      // Idle: glide to a random spot, then pick another a few seconds later.
-      if (!live && now - wanderAt > 2600 + Math.random() * 1800) {
-        wander = wanderTarget(width, height);
-        wanderAt = now;
-      }
-      const targetX = live?.x ?? wander.x;
-      const targetY = live?.y ?? wander.y;
-      const ease = live ? 0.14 : 0.025;
+      const target = live ?? wanderPoint(now / 1000, width, height);
+      const targetX = target.x;
+      const targetY = target.y;
+      // Idle glides in slowly, so letting go of the mouse never yanks the light across the wall.
+      const ease = live ? 0.14 : 0.012;
       const nextX = spotX + (targetX - spotX) * ease;
       const nextY = spotY + (targetY - spotY) * ease;
       // Repaint the glow only when it visibly moves; the covers themselves never repaint.

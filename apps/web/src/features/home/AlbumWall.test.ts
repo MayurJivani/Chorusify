@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SamplerSong } from '../../api/songs';
-import { buildColumns, tileFilter, wanderTarget } from './AlbumWall';
+import { buildColumns, tileFilter, wanderPoint } from './AlbumWall';
 
 const song = (id: number, art: string): SamplerSong => ({
   id,
@@ -37,19 +37,24 @@ describe('tileFilter', () => {
     expect(tileFilter(500)).toBe('grayscale(1) brightness(0.35)');
   });
   it('fades in between, so nearby covers show some colour', () => {
-    expect(tileFilter(90)).toBe('none');
-    expect(tileFilter(170)).toBe('grayscale(0.5) brightness(0.65)');
+    expect(tileFilter(40)).toBe('none');
+    expect(tileFilter(170)).toMatch(/^grayscale\(0\.[2-4]/);
   });
 });
 
-describe('wanderTarget', () => {
+describe('wanderPoint', () => {
   it('stays inside the visible band of the wall', () => {
-    for (const r of [0, 0.5, 0.999]) {
-      const { x, y } = wanderTarget(1000, 800, () => r);
-      expect(x).toBeGreaterThanOrEqual(120);
-      expect(x).toBeLessThanOrEqual(880);
+    for (let sec = 0; sec < 120; sec += 0.7) {
+      const { x, y } = wanderPoint(sec, 1000, 800);
+      expect(x).toBeGreaterThanOrEqual(200);
+      expect(x).toBeLessThanOrEqual(800);
       expect(y).toBeGreaterThanOrEqual(176);
       expect(y).toBeLessThanOrEqual(496);
     }
+  });
+  it('moves slowly: under a tenth of the wall per second', () => {
+    const a = wanderPoint(10, 1000, 800);
+    const b = wanderPoint(11, 1000, 800);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThan(100);
   });
 });
