@@ -98,7 +98,7 @@ export function HomePage() {
           <RisingWord text="favourite" start={9} className="hop-word text-purple-400" />{' '}
           <RisingWord text="music!" start={18} />
         </h1>
-        <p className="home-lede [@media(max-height:720px)]:hidden max-w-md text-sm leading-relaxed text-slate-100 sm:text-base">
+        <p className="home-lede [@media(max-height:720px)]:hidden max-w-2xl rounded-xl bg-[#0c0c10]/60 px-4 py-1.5 text-[15px] font-medium leading-relaxed text-white backdrop-blur-sm sm:text-lg">
           Hear a growing snippet and name the song in as few listens as you can.
         </p>
       </motion.div>

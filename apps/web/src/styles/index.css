@@ -346,6 +346,7 @@ body {
   will-change: transform;
 }
 .album-wall-tile {
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
@@ -393,11 +394,27 @@ body {
   .album-wall-cell {
     cursor: pointer;
   }
+  /* Lifts, tilts toward the pointer (--rx/--ry set in AlbumWall), glows, and catches a sheen. */
   .album-wall-hovered .album-wall-tile {
-    transform: scale(1.12);
+    transform: perspective(600px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1.16);
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.25),
-      0 24px 48px -10px rgba(0, 0, 0, 0.9);
+      0 0 0 2px rgba(167, 139, 250, 0.85),
+      0 0 40px 4px rgba(139, 92, 246, 0.5),
+      0 28px 56px -10px rgba(0, 0, 0, 0.95);
+    transition-duration: 160ms, 300ms;
+  }
+  .album-wall-hovered .album-wall-tile::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      circle at var(--mx, 50%) var(--my, 50%),
+      rgba(255, 255, 255, 0.32),
+      transparent 55%
+    );
+    mix-blend-mode: overlay;
   }
 }
 .album-wall-caption {

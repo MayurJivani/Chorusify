@@ -14,9 +14,9 @@ const COLOUR_RADIUS = 300;
 // A still pointer lets its light fade after this long, unless it rests on a cover.
 const IDLE_MS = 2500;
 // One cover flips to another song this often, like a departures board.
-const FLIP_MS = 2600;
+const FLIP_MS = 1500;
 // The wall's drift, in px per second: slowly up and to the left, like a page being leafed through.
-const DRIFT = { x: -16, y: -9 };
+const DRIFT = { x: -34, y: -19 };
 
 /** Cell size and count for a wall this big: a cell's width of spare on each side, so wrapping is never seen. */
 export function wallGrid(width: number, height: number) {
@@ -254,6 +254,19 @@ export function AlbumWall({
               const i = cellAt(e.target);
               onCover.current = !Number.isNaN(i);
               setHovered(Number.isNaN(i) ? null : i);
+            }}
+            onPointerMove={(e) => {
+              // The hovered cover tilts toward the pointer and a sheen follows it across the art.
+              if (e.pointerType !== 'mouse') return;
+              const tile = (e.target as HTMLElement).closest<HTMLElement>('.album-wall-tile');
+              if (!tile) return;
+              const box = tile.getBoundingClientRect();
+              const px = (e.clientX - box.left) / box.width;
+              const py = (e.clientY - box.top) / box.height;
+              tile.style.setProperty('--rx', `${((0.5 - py) * 22).toFixed(1)}deg`);
+              tile.style.setProperty('--ry', `${((px - 0.5) * 22).toFixed(1)}deg`);
+              tile.style.setProperty('--mx', `${(px * 100).toFixed(0)}%`);
+              tile.style.setProperty('--my', `${(py * 100).toFixed(0)}%`);
             }}
             onPointerLeave={() => {
               onCover.current = false;
