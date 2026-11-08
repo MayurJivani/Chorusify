@@ -151,6 +151,9 @@ export function createApp(): Express {
         return;
       }
 
+      // The page names the hashed bundles, so browsers must re-check it on every visit or a deploy
+      // stays invisible until someone hard-refreshes.
+      res.set('Cache-Control', 'no-cache');
       renderIndexWithPreview(indexPath, req)
         .then((html) => res.type('html').send(html))
         .catch((err) => {
