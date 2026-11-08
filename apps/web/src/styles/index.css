@@ -369,7 +369,8 @@ body {
    Covers above it, hovered or playing, keep their colour. */
 .album-wall-veil {
   position: absolute;
-  inset: 0;
+  /* VEIL_PAD in AlbumWall: past the edge, so the parallax shift never bares a row of colour. */
+  inset: -40px;
   z-index: 1;
   pointer-events: none;
   /* Plain black and white at rest; colour only around the pointer. */

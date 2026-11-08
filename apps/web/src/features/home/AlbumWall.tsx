@@ -6,9 +6,12 @@ import {
   useMotionValue,
   useReducedMotion,
   useSpring,
+  useTransform,
 } from 'motion/react';
 import type { SamplerSong } from '../../api/songs';
 
+// How far the grey veil overhangs the stage, in px: more than the parallax ever shifts it.
+const VEIL_PAD = 40;
 // How far from the pointer colour reaches at most, in px.
 const COLOUR_RADIUS = 380;
 // One cover flips to another song this often, like a departures board.
@@ -198,7 +201,11 @@ export function AlbumWall({
   const radius = useMotionValue(0);
   const shiftX = useSpring(0, { stiffness: 50, damping: 20 });
   const shiftY = useSpring(0, { stiffness: 50, damping: 20 });
-  const veil = useMotionTemplate`radial-gradient(circle ${radius}px at ${spotX}px ${spotY}px, transparent 8%, rgba(0,0,0,0.3) 35%, rgba(0,0,0,0.72) 70%, #000 100%)`;
+  // The veil overhangs the stage by VEIL_PAD (see .album-wall-veil), so the parallax shift never
+  // bares an edge row of covers in colour; its mask is offset to match.
+  const veilX = useTransform(spotX, (v) => v + VEIL_PAD);
+  const veilY = useTransform(spotY, (v) => v + VEIL_PAD);
+  const veil = useMotionTemplate`radial-gradient(circle ${radius}px at ${veilX}px ${veilY}px, transparent 8%, rgba(0,0,0,0.3) 35%, rgba(0,0,0,0.72) 70%, #000 100%)`;
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const onCover = useRef(false);
   const speed = useRef(1);
