@@ -11,8 +11,6 @@ import type { SamplerSong } from '../../api/songs';
 
 // How far from the pointer colour reaches at most, in px.
 const COLOUR_RADIUS = 380;
-// A still pointer lets its light fade after this long, unless it rests on a cover.
-const IDLE_MS = 2500;
 // One cover flips to another song this often, like a departures board.
 const FLIP_MS = 1500;
 // The wall's drift, in px per second: slowly up and to the left, like a page being leafed through.
@@ -181,7 +179,7 @@ export function AlbumWall({
   const shiftX = useSpring(0, { stiffness: 50, damping: 20 });
   const shiftY = useSpring(0, { stiffness: 50, damping: 20 });
   const veil = useMotionTemplate`radial-gradient(circle ${radius}px at ${spotX}px ${spotY}px, transparent 8%, rgba(0,0,0,0.3) 35%, rgba(0,0,0,0.72) 70%, #000 100%)`;
-  const pointer = useRef<{ x: number; y: number; at: number } | null>(null);
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   const onCover = useRef(false);
   const speed = useRef(1);
 
@@ -191,7 +189,7 @@ export function AlbumWall({
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
       const box = stage.getBoundingClientRect();
-      pointer.current = { x: e.clientX - box.left, y: e.clientY - box.top, at: performance.now() };
+      pointer.current = { x: e.clientX - box.left, y: e.clientY - box.top };
       // A few pixels against the pointer, so the wall reads as a layer behind the page.
       shiftX.set((0.5 - e.clientX / window.innerWidth) * 18);
       shiftY.set((0.5 - e.clientY / window.innerHeight) * 12);
@@ -209,7 +207,7 @@ export function AlbumWall({
     };
   }, [ready, reduced, shiftX, shiftY]);
 
-  useAnimationFrame((now, delta) => {
+  useAnimationFrame((_, delta) => {
     const stage = stageRef.current;
     if (!stage || !grid || reduced) return;
     // The drift eases to a stop under a hovered cover, and eases back when it is let go.
@@ -225,7 +223,8 @@ export function AlbumWall({
 
     // The light follows a moving pointer and fades once it rests, so it never sits behind the text.
     const p = pointer.current;
-    const live = p && (onCover.current || now - p.at < IDLE_MS) ? p : null;
+    // Colour only while the pointer is on a cover; the rest of the time the wall is black and white.
+    const live = p && onCover.current ? p : null;
     const full = Math.min(COLOUR_RADIUS, stage.clientWidth * 0.3);
     const r = radius.get();
     const targetR = live ? full : 0;
