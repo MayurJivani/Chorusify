@@ -343,6 +343,16 @@ body {
   align-content: start;
   gap: 12px;
   perspective: 900px;
+  animation: album-wall-pan 40s ease-in-out infinite alternate;
+}
+/* A slow drift inside the stage's spare margin, so the wall is never quite still. */
+@keyframes album-wall-pan {
+  from {
+    translate: -2.5% -3%;
+  }
+  to {
+    translate: 2.5% 3%;
+  }
 }
 .album-wall-cell {
   position: relative;
@@ -361,7 +371,7 @@ body {
   border-radius: inherit;
   backface-visibility: hidden;
 }
-/* A soft dark pool behind the hero and cards, so text reads cleanly and the colour shows around
+/* A soft dark band behind the hero and cards, so text reads cleanly and the colour shows beside
    the content rather than under it. */
 .album-wall::after {
   content: '';
@@ -369,11 +379,13 @@ body {
   inset: 0;
   z-index: 3;
   pointer-events: none;
-  background: radial-gradient(
-    ellipse min(560px, 46%) 340px at 50% 46%,
-    rgba(10, 10, 14, 0.72),
-    rgba(10, 10, 14, 0.35) 60%,
-    transparent
+  /* A band as wide as the content column (max-w-4xl), soft at its sides. */
+  background: linear-gradient(
+    90deg,
+    transparent calc(50% - 600px),
+    rgba(10, 10, 14, 0.86) calc(50% - 430px),
+    rgba(10, 10, 14, 0.86) calc(50% + 430px),
+    transparent calc(50% + 600px)
   );
 }
 /* Greys the whole wall except a soft hole at the spotlight (mask set in AlbumWall). Covers above
@@ -468,6 +480,7 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .album-wall-stage,
   .album-wall-playing,
   .hop-word > span {
     animation: none !important;
@@ -688,6 +701,28 @@ main:has(.album-wall) {
     rgba(34, 211, 238, 0.4),
     transparent
   );
+  /* The light sweeps slowly along the edge and breathes, so the bar feels alive, not lit once. */
+  background-size: 160% 100%;
+  box-shadow: 0 0 12px 1px rgba(139, 92, 246, 0.35);
+  animation: top-bar-sweep 9s ease-in-out infinite alternate;
+}
+@keyframes top-bar-sweep {
+  from {
+    background-position: 0% 0;
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    background-position: 100% 0;
+    opacity: 0.7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .top-bar::after {
+    animation: none;
+  }
 }
 
 /* The tonearm. It sits off the top right of the record and swings in from its pivot while the

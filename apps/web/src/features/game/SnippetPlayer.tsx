@@ -244,7 +244,11 @@ export function SnippetPlayer({
         // From the audio clock, not the wall clock: the arm must not move if the audio stalls.
         const audio = audioRef.current;
         if (audio)
-          setProgress(Math.min(1, (audio.currentTime - seekOffsetRef.current) / stageSeconds));
+          // Clamped below too: until the seek lands, currentTime sits before the offset and the arm
+          // would swing the wrong way round.
+          setProgress(
+            Math.max(0, Math.min(1, (audio.currentTime - seekOffsetRef.current) / stageSeconds)),
+          );
       };
       tick();
       countdownRef.current = setInterval(tick, 200);

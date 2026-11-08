@@ -39,15 +39,15 @@ describe('wanderPoint', () => {
   it('stays inside the visible band of the wall', () => {
     for (let sec = 0; sec < 120; sec += 0.7) {
       const { x, y } = wanderPoint(sec, 1000, 800);
-      expect(x).toBeGreaterThanOrEqual(200);
-      expect(x).toBeLessThanOrEqual(800);
+      expect(x).toBeGreaterThanOrEqual(140);
+      expect(x).toBeLessThanOrEqual(860);
       expect(y).toBeGreaterThanOrEqual(176);
       expect(y).toBeLessThanOrEqual(496);
     }
   });
-  it('moves slowly: under a tenth of the wall per second', () => {
+  it('moves slowly: under an eighth of the wall per second', () => {
     const a = wanderPoint(10, 1000, 800);
     const b = wanderPoint(11, 1000, 800);
-    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThan(100);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThan(125);
   });
 });

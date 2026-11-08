@@ -18,10 +18,13 @@ const IDLE_MS = 4000;
 // One cover flips to another song this often, like a departures board.
 const FLIP_MS = 2600;
 
-/** Where the idle spotlight drifts at `seconds`: a slow loop through the middle of the wall. */
+/**
+ * Where the idle spotlight drifts at `seconds`: a slow loop that lingers on the sides of the wall,
+ * where the covers show, and only passes behind the content in the middle.
+ */
 export function wanderPoint(seconds: number, width: number, height: number) {
   return {
-    x: width * (0.5 + 0.3 * Math.sin(0.33 * seconds)),
+    x: width * (0.5 + 0.36 * Math.sin(0.33 * seconds)),
     y: height * (0.42 + 0.2 * Math.cos(0.27 * seconds)),
   };
 }
