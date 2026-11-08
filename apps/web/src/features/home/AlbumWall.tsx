@@ -10,7 +10,7 @@ import {
 import type { SamplerSong } from '../../api/songs';
 
 // How far from the pointer colour reaches at most, in px.
-const COLOUR_RADIUS = 300;
+const COLOUR_RADIUS = 380;
 // A still pointer lets its light fade after this long, unless it rests on a cover.
 const IDLE_MS = 2500;
 // One cover flips to another song this often, like a departures board.
@@ -180,7 +180,7 @@ export function AlbumWall({
   const radius = useMotionValue(0);
   const shiftX = useSpring(0, { stiffness: 50, damping: 20 });
   const shiftY = useSpring(0, { stiffness: 50, damping: 20 });
-  const veil = useMotionTemplate`radial-gradient(circle ${radius}px at ${spotX}px ${spotY}px, transparent 15%, rgba(0,0,0,0.65) 60%, #000 100%)`;
+  const veil = useMotionTemplate`radial-gradient(circle ${radius}px at ${spotX}px ${spotY}px, transparent 8%, rgba(0,0,0,0.3) 35%, rgba(0,0,0,0.72) 70%, #000 100%)`;
   const pointer = useRef<{ x: number; y: number; at: number } | null>(null);
   const onCover = useRef(false);
   const speed = useRef(1);
