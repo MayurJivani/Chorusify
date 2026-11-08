@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { SamplerSong } from '../../api/songs';
-import { buildWall, cellPosition, flipTile, uniqueCovers, wallGrid } from './AlbumWall';
+import {
+  buildWall,
+  cellPosition,
+  flipTile,
+  uniqueCovers,
+  wallGrid,
+  wanderPoint,
+} from './AlbumWall';
 
 const song = (id: number, art: string): SamplerSong => ({
   id,
@@ -68,6 +75,20 @@ describe('the drifting grid', () => {
       }
       // Still one column per slot: no two columns pile up on the same spot.
       expect(xs.size).toBe(cols);
+    }
+  });
+});
+
+describe('wanderPoint', () => {
+  it('stays on the wall and moves slowly', () => {
+    for (let sec = 0; sec < 120; sec += 0.7) {
+      const { x, y } = wanderPoint(sec, 1000, 800);
+      expect(x).toBeGreaterThanOrEqual(80);
+      expect(x).toBeLessThanOrEqual(920);
+      expect(y).toBeGreaterThanOrEqual(96);
+      expect(y).toBeLessThanOrEqual(672);
+      const next = wanderPoint(sec + 1, 1000, 800);
+      expect(Math.hypot(next.x - x, next.y - y)).toBeLessThan(150);
     }
   });
 });

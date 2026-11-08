@@ -16,6 +16,14 @@ const FLIP_MS = 1500;
 // The wall's drift, in px per second: slowly up and to the left, like a page being leafed through.
 const DRIFT = { x: -34, y: -19 };
 
+/** Where the idle spotlight is at `seconds`: a slow loop that sweeps the whole wall. */
+export function wanderPoint(seconds: number, width: number, height: number) {
+  return {
+    x: width * (0.5 + 0.42 * Math.sin(0.23 * seconds)),
+    y: height * (0.48 + 0.36 * Math.cos(0.31 * seconds)),
+  };
+}
+
 /** Cell size and count for a wall this big: a cell's width of spare on each side, so wrapping is never seen. */
 export function wallGrid(width: number, height: number) {
   const across = width < 640 ? 4.5 : width < 1024 ? 7 : 9.5;
@@ -127,23 +135,35 @@ export function AlbumWall({
     return () => observer.disconnect();
   }, []);
 
-  // Wait for the covers to decode, so the scattered reveal is not a scattered load.
+  // Wait for the covers to decode once, so the scattered reveal is not a scattered load. The wait
+  // must not restart on resize: while the page settles its size changes every few frames, and a
+  // restarting wait left the wall blank.
+  const countRef = useRef(count);
+  countRef.current = count;
+  const revealed = useRef(false);
+  const hasCount = count > 0;
   useEffect(() => {
-    const wall = buildWall(covers, count);
-    if (wall.length === 0) return;
+    const first = buildWall(covers, countRef.current);
+    if (first.length === 0) return;
     let cancelled = false;
-    const decoded = wall.map((s) => {
+    const decoded = first.map((s) => {
       const img = new Image();
       img.src = s.albumArtUrl ?? '';
       return img.decode().catch(() => undefined);
     });
     const timeout = new Promise((resolve) => setTimeout(resolve, 2500));
     void Promise.race([Promise.all(decoded), timeout]).then(() => {
-      if (!cancelled) setTiles(wall);
+      if (cancelled) return;
+      revealed.current = true;
+      setTiles(buildWall(covers, countRef.current));
     });
     return () => {
       cancelled = true;
     };
+  }, [covers, hasCount]);
+  // After the reveal a resize only resizes the wall, straight away.
+  useEffect(() => {
+    if (revealed.current) setTiles(buildWall(covers, count));
   }, [covers, count]);
 
   const ready = tiles.length > 0;
@@ -207,7 +227,7 @@ export function AlbumWall({
     };
   }, [ready, reduced, shiftX, shiftY]);
 
-  useAnimationFrame((_, delta) => {
+  useAnimationFrame((now, delta) => {
     const stage = stageRef.current;
     if (!stage || !grid || reduced) return;
     // The drift eases to a stop under a hovered cover, and eases back when it is let go.
@@ -221,20 +241,16 @@ export function AlbumWall({
       cell.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     });
 
-    // The light follows a moving pointer and fades once it rests, so it never sits behind the text.
+    // On a cover the light sits under the pointer; otherwise it wanders slowly over the wall.
     const p = pointer.current;
-    // Colour only while the pointer is on a cover; the rest of the time the wall is black and white.
     const live = p && onCover.current ? p : null;
+    const target = live ?? wanderPoint(now / 1000, stage.clientWidth, stage.clientHeight);
     const full = Math.min(COLOUR_RADIUS, stage.clientWidth * 0.3);
     const r = radius.get();
-    const targetR = live ? full : 0;
-    if (Math.abs(targetR - r) > 0.5) radius.set(r + (targetR - r) * (live ? 0.12 : 0.04));
-    if (live) {
-      // The first move puts the light straight under the pointer rather than sliding it in.
-      const ease = r < 1 ? 1 : 0.2;
-      spotX.set(spotX.get() + (live.x - spotX.get()) * ease);
-      spotY.set(spotY.get() + (live.y - spotY.get()) * ease);
-    }
+    if (Math.abs(full - r) > 0.5) radius.set(r + (full - r) * 0.04);
+    const ease = live ? 0.2 : 0.03;
+    spotX.set(spotX.get() + (target.x - spotX.get()) * ease);
+    spotY.set(spotY.get() + (target.y - spotY.get()) * ease);
   });
 
   const cellAt = (target: EventTarget) =>

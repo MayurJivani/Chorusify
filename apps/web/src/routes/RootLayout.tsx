@@ -57,7 +57,7 @@ function NavLink({ to, children }: { to: string; children: ReactNode }) {
     <Link
       to={to}
       className={
-        'relative text-sm font-medium transition-colors duration-200 ' +
+        'nav-link relative text-sm font-medium transition-colors duration-200 ' +
         (isActive ? 'text-white' : 'text-slate-400 hover:text-white')
       }
     >
@@ -299,9 +299,15 @@ export function RootLayout() {
         </Suspense>
       </main>
 
-      <footer className="shrink-0 border-t border-white/[0.06] py-2 sm:py-4">
+      <footer className="site-footer relative shrink-0 border-t border-white/[0.06] py-2 sm:py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-500 sm:justify-start">
+            <span aria-hidden="true" className="footer-eq hidden sm:inline-flex">
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
             <span className="hidden sm:inline">&copy; {new Date().getFullYear()} Chorusify</span>
             <Link to="/privacy" className="hover:text-slate-300">
               Privacy
