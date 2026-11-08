@@ -322,8 +322,8 @@ body {
   flex-shrink: 0;
 }
 
-/* The album wall on the home page: a still grid of covers, greyed except under a moving
-   spotlight. Fills the screen and fades out top and bottom, under the bar and the footer. */
+/* The album wall on the home page: a drifting grid of dim grey covers, lit in colour around the
+   pointer. Fills the screen and fades out top and bottom, under the bar and the footer. */
 .album-wall {
   position: absolute;
   inset: 0 0 auto;
@@ -335,35 +335,28 @@ body {
   mask: linear-gradient(transparent, #000 90px, #000 82%, transparent);
 }
 .album-wall-stage {
-  --cols: 11;
   position: absolute;
-  inset: -8%;
-  display: grid;
-  grid-template-columns: repeat(var(--cols), 1fr);
-  align-content: start;
-  gap: 12px;
-  perspective: 900px;
-  animation: album-wall-pan 40s ease-in-out infinite alternate;
+  inset: 0;
 }
-/* A slow drift inside the stage's spare margin, so the wall is never quite still. */
-@keyframes album-wall-pan {
-  from {
-    translate: -2.5% -3%;
-  }
-  to {
-    translate: 2.5% 3%;
-  }
-}
+/* Placed and moved by AlbumWall, which wraps each cell round once it leaves the wall. */
 .album-wall-cell {
-  position: relative;
-  aspect-ratio: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+.album-wall-tile {
+  display: block;
+  width: 100%;
+  height: 100%;
   border-radius: 3px;
   background: #141418;
+  perspective: 600px;
   transition:
     transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 420ms ease;
 }
-.album-wall-cell img {
+.album-wall-tile img {
   display: block;
   width: 100%;
   height: 100%;
@@ -371,44 +364,40 @@ body {
   border-radius: inherit;
   backface-visibility: hidden;
 }
-/* A soft dark band behind the hero and cards, so text reads cleanly and the colour shows beside
-   the content rather than under it. */
-.album-wall::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  /* A band as wide as the content column (max-w-4xl), soft at its sides. */
-  background: linear-gradient(
-    90deg,
-    transparent calc(50% - 600px),
-    rgba(10, 10, 14, 0.86) calc(50% - 430px),
-    rgba(10, 10, 14, 0.86) calc(50% + 430px),
-    transparent calc(50% + 600px)
-  );
-}
-/* Greys the whole wall except a soft hole at the spotlight (mask set in AlbumWall). Covers above
-   it, hovered or playing, keep their colour. */
+/* Greys and dims the whole wall except a soft hole at the pointer (mask set in AlbumWall).
+   Covers above it, hovered or playing, keep their colour. */
 .album-wall-veil {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  backdrop-filter: grayscale(1) brightness(0.36);
-  -webkit-backdrop-filter: grayscale(1) brightness(0.36);
+  backdrop-filter: grayscale(1) brightness(0.3);
+  -webkit-backdrop-filter: grayscale(1) brightness(0.3);
+}
+/* A soft dark pool behind the headline and the cards' gaps, so text reads over any cover, while
+   the wall still shows through it. Above the light too, so colour never fights the words. */
+.album-wall-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse min(560px, 70%) 260px at 50% 190px, rgba(8, 8, 11, 0.72), transparent),
+    linear-gradient(transparent 55%, rgba(8, 8, 11, 0.6));
 }
 .album-wall-hovered,
 .album-wall-playing {
-  z-index: 2;
+  z-index: 4;
 }
 @media (hover: hover) {
   .album-wall-cell {
     cursor: pointer;
   }
-  .album-wall-hovered {
-    transform: scale(1.1);
-    box-shadow: 0 22px 44px -8px rgba(0, 0, 0, 0.85);
+  .album-wall-hovered .album-wall-tile {
+    transform: scale(1.12);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.25),
+      0 24px 48px -10px rgba(0, 0, 0, 0.9);
   }
 }
 .album-wall-caption {
@@ -465,27 +454,26 @@ body {
   }
 }
 
-@media (max-width: 1023px) {
-  .album-wall-stage {
-    --cols: 8;
-  }
-}
 @media (max-width: 639px) {
   .album-wall {
     height: 300px;
   }
-  .album-wall-stage {
-    --cols: 5;
-    gap: 8px;
+  /* The hero fills a phone's whole strip of wall, and there is no pointer to light it, so the
+     covers sit a little brighter and the pool is lighter. */
+  .album-wall-veil {
+    backdrop-filter: grayscale(1) brightness(0.48);
+    -webkit-backdrop-filter: grayscale(1) brightness(0.48);
+  }
+  .album-wall-scrim {
+    background: radial-gradient(ellipse 80% 90px at 50% 150px, rgba(8, 8, 11, 0.6), transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .album-wall-stage,
   .album-wall-playing,
   .hop-word > span {
     animation: none !important;
   }
-  .album-wall-cell {
+  .album-wall-tile {
     transition: none;
   }
 }
