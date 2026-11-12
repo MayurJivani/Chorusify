@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { searchArtistTracks } from '../api/artists';
 import { searchCategoryTracks } from '../api/categories';
@@ -30,8 +30,12 @@ export function MultiplayerRoomPage() {
   const { user, loading: sessionLoading } = useSession();
   const autoJoin = location.state?.autoJoin === true;
   const hostName = typeof location.state?.hostName === 'string' ? location.state.hostName : '';
-  const [name, setName] = useState('');
-  const [nickname, setNickname] = useState<string | null>(autoJoin ? hostName : null);
+  const [urlName] = useState(() =>
+    (new URLSearchParams(location.search).get('name') ?? '').trim().slice(0, 24),
+  );
+  const urlJoinRef = useRef(urlName !== '');
+  const [name, setName] = useState(urlName);
+  const [nickname, setNickname] = useState<string | null>(autoJoin ? hostName : urlName || null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<AvatarId>(savedAvatar);
   const [password, setPassword] = useState('');
@@ -94,12 +98,23 @@ export function MultiplayerRoomPage() {
   });
 
   // Back to the form with the reason. An account's own name is changed on the profile page instead.
+  // A ?name= link joins once on its own; if that fails it falls back to the form.
   useEffect(() => {
-    if ((errorCode === 'name_required' || errorCode === 'name_rejected') && !user) {
+    const urlJoinFailed =
+      urlJoinRef.current &&
+      !room &&
+      !!error &&
+      errorCode !== 'password_required' &&
+      errorCode !== 'wrong_password';
+    if (room || urlJoinFailed) urlJoinRef.current = false;
+    if (
+      ((errorCode === 'name_required' || errorCode === 'name_rejected') && !user) ||
+      urlJoinFailed
+    ) {
       setNameError(error);
       setNickname(null);
     }
-  }, [errorCode, error, user]);
+  }, [errorCode, error, user, room]);
 
   // The typeahead has to search whatever the room races over, not always an artist.
   const sourceType = room?.sourceType;
