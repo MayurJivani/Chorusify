@@ -25,15 +25,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "concurrently": "^10.0.6",
-    "eslint": "^10.14.0",
+    "concurrently": "^10.0.7",
+    "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.7",
+    "eslint-plugin-react-refresh": "^0.5.8",
     "globals": "^17.14.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.6.0",
-    "prettier": "^3.9.10",
+    "lint-staged": "^17.6.1",
+    "prettier": "^3.10.1",
     "typescript": "^7.0.2"
   },
   "lint-staged": {
@@ -45,7 +45,7 @@
     ]
   },
   "dependencies": {
-    "ws": "^8.22.1"
+    "ws": "^8.23.0"
   },
   "overrides": {
     "esbuild": "^0.25.0"
